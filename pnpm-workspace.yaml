@@ -1,6 +1,11 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+overrides:
+  # googleapis 173 pulls google-auth-library ^10.2.0 (10.9.0) while its own
+  # googleapis-common pins 10.5.0 exactly — two copies make the OAuth2Client
+  # types incompatible. Dedupe to a single (latest) version.
+  google-auth-library: 10.9.0
 allowBuilds:
   '@prisma/engines': true
   '@scarf/scarf': false
@@ -9,3 +14,5 @@ allowBuilds:
   prisma: true
   sharp: true
   unrs-resolver: true
+minimumReleaseAgeExclude:
+  - '@nestjs/cli@11.0.24'

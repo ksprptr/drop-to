@@ -6,7 +6,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import archiver from 'archiver';
+import { Archiver, ZipArchive } from 'archiver';
 import { drive_v3, google } from 'googleapis';
 import { Readable } from 'node:stream';
 
@@ -322,7 +322,7 @@ export class GoogleDriveProvider implements StorageProvider {
     }
 
     const name = meta.data.name ?? 'folder';
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    const archive = new ZipArchive({ zlib: { level: 9 } });
 
     void this.appendFolderToArchive(drive, folderId, '', archive).then(
       () => archive.finalize(),
@@ -344,7 +344,7 @@ export class GoogleDriveProvider implements StorageProvider {
     drive: drive_v3.Drive,
     folderId: string,
     prefix: string,
-    archive: archiver.Archiver,
+    archive: Archiver,
   ): Promise<void> {
     const res = await drive.files.list({
       q: `'${folderId}' in parents and trashed = false`,

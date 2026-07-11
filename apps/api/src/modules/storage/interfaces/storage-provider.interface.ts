@@ -1,4 +1,4 @@
-import archiver from 'archiver';
+import { Archiver } from 'archiver';
 import { Readable } from 'node:stream';
 
 import { AllowedFolderEntity } from '@/modules/google-auth/entities/allowed-folder.entity';
@@ -39,7 +39,7 @@ export interface StorageDownload {
  * A folder streamed as a ZIP archive plus the folder name for the file name.
  */
 export interface StorageArchive {
-  archive: archiver.Archiver;
+  archive: Archiver;
   name: string;
 }
 

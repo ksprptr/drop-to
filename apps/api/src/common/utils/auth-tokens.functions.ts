@@ -1,4 +1,4 @@
-import * as cookie from 'cookie';
+import { parseCookie } from 'cookie';
 import type { Request } from 'express';
 
 type AuthTokenType = 'accessToken' | 'refreshToken';
@@ -24,5 +24,5 @@ export const extractTokenFromCookies = ({
     return;
   }
 
-  return cookie.parse(rawCookie)[type];
+  return parseCookie(rawCookie)[type];
 };

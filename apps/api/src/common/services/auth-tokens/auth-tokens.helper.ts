@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import * as cookie from 'cookie';
+import { stringifySetCookie } from 'cookie';
 import type { Response } from 'express';
 
 import { type AppConfig, appConfig } from '@/config/app.config';
@@ -44,7 +44,9 @@ export class AuthTokensHelper {
     const maxAge =
       type === 'accessToken' ? ACCESS_TOKEN_TTL_SECONDS : REFRESH_TOKEN_TTL_SECONDS;
 
-    const serialized = cookie.serialize(type, value, {
+    const serialized = stringifySetCookie({
+      name: type,
+      value,
       ...(this.cookieDomain ? { domain: this.cookieDomain } : {}),
       httpOnly: true,
       secure: this.isProduction,
