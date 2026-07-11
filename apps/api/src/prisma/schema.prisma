@@ -1,0 +1,69 @@
+// Prisma schema for dropto.
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider     = "prisma-client"
+  output       = "./generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+//
+// Enums
+//
+enum UploadStatus {
+  SUCCESS
+  FAILED
+}
+
+//
+// Models
+//
+
+/// The single authorized Google account whose Drive quota is used for uploads.
+/// The refresh token is stored encrypted (AES-256-GCM), never in plaintext.
+model DriveAccount {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  refreshTokenEnc String   @map("refresh_token_enc")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  allowedFolders AllowedFolder[]
+
+  @@map("drive_accounts")
+}
+
+/// A folder the account owner explicitly authorized via the Google Picker.
+/// All Drive operations are validated to stay within this set (or descendants).
+model AllowedFolder {
+  id             String   @id @default(uuid())
+  driveAccountId String   @map("drive_account_id")
+  folderId       String   @map("folder_id")
+  name           String
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  driveAccount DriveAccount @relation(fields: [driveAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([driveAccountId, folderId])
+  @@index([driveAccountId], map: "idx_allowed_folder_drive_account_id")
+  @@map("allowed_folders")
+}
+
+/// Audit trail of upload attempts for the history view.
+model UploadLog {
+  id        String       @id @default(uuid())
+  fileName  String       @map("file_name")
+  folderId  String       @map("folder_id")
+  fileId    String?      @map("file_id")
+  size      BigInt?
+  status    UploadStatus
+  error     String?
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  @@index([createdAt], map: "idx_upload_log_created_at")
+  @@map("upload_logs")
+}

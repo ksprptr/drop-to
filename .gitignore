@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+next-env.d.ts
+.turbo/
+out/
+build/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+!.env.test.example
+
+# Claude
+CLAUDE.md
+**/CLAUDE.md
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Misc
+*.tsbuildinfo
+apps/api/src/prisma/generated/
+
+# Reference material (not part of the app)
+example/

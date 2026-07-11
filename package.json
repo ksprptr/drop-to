@@ -1,0 +1,29 @@
+{
+  "name": "dropto",
+  "version": "1.0.0",
+  "description": "Self-hosted file uploader that lets you route uploads through your own storage backends (Google Drive, S3, and more) instead of your app server's disk.",
+  "private": true,
+  "author": {
+    "name": "Petr Kašpar",
+    "url": "https://github.com/ksprptr"
+  },
+  "packageManager": "pnpm@11.5.1",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=11"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "prettier": "^3.9.5",
+    "turbo": "^2.10.4",
+    "typescript": "^6.0.3"
+  }
+}

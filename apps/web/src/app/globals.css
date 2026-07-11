@@ -1,0 +1,31 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  * {
+    @apply scroll-smooth;
+  }
+
+  a,
+  svg,
+  img,
+  input,
+  label,
+  select,
+  button {
+    @apply select-none;
+  }
+
+  button {
+    @apply hover:cursor-pointer disabled:cursor-not-allowed;
+  }
+
+  ::-webkit-scrollbar {
+    @apply h-1.5 w-1.5 bg-zinc-100 dark:bg-zinc-900;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-zinc-300 dark:bg-zinc-700;
+  }
+}

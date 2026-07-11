@@ -1,0 +1,16 @@
+import { SetMetadata } from '@nestjs/common';
+
+export const RATE_LIMIT_META_KEY = 'rate_limit:rule';
+
+export type RateLimitRule = {
+  points: number;
+  duration: number;
+  errorMessage?: string;
+};
+
+/**
+ * Applies a per-route rate limit rule.
+ * @param rule - The points (max requests), duration (window seconds) and optional error message
+ * @returns A decorator that attaches the rule metadata to the handler
+ */
+export const RateLimit = (rule: RateLimitRule) => SetMetadata(RATE_LIMIT_META_KEY, rule);

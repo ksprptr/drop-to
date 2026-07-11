@@ -1,0 +1,91 @@
+# docker-compose.yml
+# Runs the full infrastructure + all applications.
+#
+# Usage:
+#   docker compose up -d                       # all services
+#   docker compose up -d dropto-pg             # infrastructure only
+#   docker compose logs -f dropto-api          # stream logs for a service
+#
+# Infrastructure + web build args: root .env (see .env.example)
+# API env vars: apps/api/.env (see apps/api/.env.example)
+
+services:
+  dropto-pg:
+    image: postgres:17-alpine
+    container_name: dropto-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: '${DB_USER}'
+      POSTGRES_PASSWORD: '${DB_PASS}'
+      POSTGRES_DB: '${DB_NAME}'
+    ports:
+      - '${DB_PORT}:5432'
+    volumes:
+      - dropto_pg_data:/var/lib/postgresql/data
+    networks:
+      - dropto_net
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER} -d ${DB_NAME}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dropto-api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: dropto-api
+    restart: unless-stopped
+    env_file:
+      - apps/api/.env
+    environment:
+      NODE_ENV: 'production'
+      # Database — reach Postgres over the compose network
+      DB_HOST: 'dropto-pg'
+    ports:
+      - '4000:4000'
+    networks:
+      - dropto_net
+    depends_on:
+      dropto-pg:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:4000/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dropto-web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: '${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}'
+        NEXT_PUBLIC_GOOGLE_API_KEY: '${NEXT_PUBLIC_GOOGLE_API_KEY:-}'
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: '${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}'
+        NEXT_PUBLIC_GOOGLE_APP_ID: '${NEXT_PUBLIC_GOOGLE_APP_ID:-}'
+    container_name: dropto-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: 'production'
+      PORT: '3000'
+    ports:
+      - '3000:3000'
+    networks:
+      - dropto_net
+    depends_on:
+      dropto-api:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000 || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  dropto_pg_data:
+
+networks:
+  dropto_net:
+    driver: bridge
+    name: dropto_net
