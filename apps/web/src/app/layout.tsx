@@ -22,7 +22,8 @@ export default function RootLayout({ children }: Readonly<PropsWithChildren>) {
   return (
     <html lang='en' data-scroll-behavior='smooth' suppressHydrationWarning>
       <body
-        className={`${poppins.className} min-h-screen bg-zinc-100 text-zinc-950 antialiased dark:bg-zinc-900 dark:text-zinc-50`}>
+        className={`${poppins.className} min-h-screen bg-zinc-100 text-zinc-950 antialiased dark:bg-zinc-900 dark:text-zinc-50`}
+        suppressHydrationWarning>
         <ThemeProvider>
           <ToastProvider>{children}</ToastProvider>
         </ThemeProvider>
