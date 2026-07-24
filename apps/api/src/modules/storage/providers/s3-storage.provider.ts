@@ -45,6 +45,13 @@ import {
 /** Marker used for zero-byte "folder" objects (a prefix ending in a slash). */
 const FOLDER_SUFFIX = '/';
 
+/**
+ * How long a probed backend status is cached. Status is polled frequently by the
+ * sidebar, so caching avoids re-probing S3 (and re-logging when it is down) on
+ * every request while still reflecting a change within a few seconds.
+ */
+const STATUS_CACHE_TTL_MS = 30_000;
+
 /** Common extension → MIME map so previews (images especially) work in the UI. */
 const MIME_BY_EXT: Record<string, string> = {
   jpg: 'image/jpeg',
@@ -148,6 +155,8 @@ export class S3StorageProvider implements StorageProvider {
   private readonly logger = new Logger(S3StorageProvider.name);
   private readonly allowedBuckets: Set<string>;
   private client: S3Client | null = null;
+  private statusCache: { entity: StorageStatusEntity; expiresAt: number } | null = null;
+  private loggedUnavailable = false;
 
   constructor(
     @Inject(s3Config.KEY) private readonly cfg: S3Config,
@@ -171,15 +180,38 @@ export class S3StorageProvider implements StorageProvider {
       return { backend: this.backend, label: 'S3 Storage', connected: false, email: null, roots: [] };
     }
 
+    const now = Date.now();
+    if (this.statusCache && this.statusCache.expiresAt > now) {
+      return this.statusCache.entity;
+    }
+
+    let entity: StorageStatusEntity;
+
     try {
       const client = this.getClient();
       for (const bucket of this.cfg.buckets) {
         await client.send(new ListObjectsV2Command({ Bucket: bucket, MaxKeys: 1 }));
       }
-    } catch (error) {
-      this.logger.warn(`S3 storage is unavailable: ${(error as Error).message}`);
 
-      return {
+      entity = {
+        backend: this.backend,
+        label: 'S3 Storage',
+        connected: true,
+        email: null,
+        roots: this.cfg.buckets.map((bucket) => ({
+          id: encodeId({ bucket, key: '' }),
+          name: bucket,
+        })),
+      };
+      this.loggedUnavailable = false;
+    } catch (error) {
+      // Log only when the backend first becomes unavailable, not on every poll.
+      if (!this.loggedUnavailable) {
+        this.logger.warn(`S3 storage is unavailable: ${(error as Error).message}`);
+        this.loggedUnavailable = true;
+      }
+
+      entity = {
         backend: this.backend,
         label: 'S3 Storage',
         connected: false,
@@ -189,13 +221,9 @@ export class S3StorageProvider implements StorageProvider {
       };
     }
 
-    return {
-      backend: this.backend,
-      label: 'S3 Storage',
-      connected: true,
-      email: null,
-      roots: this.cfg.buckets.map((bucket) => ({ id: encodeId({ bucket, key: '' }), name: bucket })),
-    };
+    this.statusCache = { entity, expiresAt: now + STATUS_CACHE_TTL_MS };
+
+    return entity;
   }
 
   /**
