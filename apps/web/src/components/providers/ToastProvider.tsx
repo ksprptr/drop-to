@@ -1,7 +1,7 @@
 'use client';
 
-import { CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 import { AnimatePresence, motion } from 'framer-motion';
+import { CircleAlert, CircleCheck } from 'lucide-react';
 import {
   createContext,
   type PropsWithChildren,
@@ -78,9 +78,9 @@ export default function ToastProvider({ children }: PropsWithChildren) {
                   : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200'
               }`}>
               {toast.variant === 'success' ? (
-                <CheckCircleIcon className='h-5 w-5 shrink-0' />
+                <CircleCheck className='h-5 w-5 shrink-0' />
               ) : (
-                <ExclamationCircleIcon className='h-5 w-5 shrink-0' />
+                <CircleAlert className='h-5 w-5 shrink-0' />
               )}
               <span className='min-w-0'>{toast.message}</span>
             </motion.button>
