@@ -63,6 +63,31 @@ const pickDefaultBackend = (statuses: StorageStatus[]): StorageBackend | null =>
   statuses.find((status) => status.connected)?.backend ?? null;
 
 /**
+ * Splits a file name into its base and extension (the extension includes the
+ * leading dot, e.g. `.png`). A leading dot (hidden files) or a trailing dot is
+ * treated as "no extension", matching how a desktop file manager sees it.
+ */
+const splitExtension = (name: string): { base: string; ext: string } => {
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0 || dot === name.length - 1) {
+    return { base: name, ext: '' };
+  }
+  return { base: name.slice(0, dot), ext: name.slice(dot) };
+};
+
+/** A pending extension change awaiting confirmation (the "modal on a modal"). */
+interface ExtensionWarning {
+  /** The name exactly as typed (keeps the new extension). */
+  use: string;
+  /** The typed base name but with the original extension kept. */
+  keep: string;
+  /** The original extension (`''` when the file had none). */
+  fromExt: string;
+  /** The new extension (`''` when the new name has none). */
+  toExt: string;
+}
+
+/**
  * The main workspace: a Finder-like three-pane view (storage sidebar, file
  * browser, preview panel) with drag-and-drop uploads and account management. The
  * sidebar switches between storage backends (Google Drive, S3); the active
@@ -92,6 +117,8 @@ export default function WorkspaceClient({ username }: Props) {
   const [renameTarget, setRenameTarget] = useState<ViewEntry | null>(null);
   const [renameName, setRenameName] = useState('');
   const [renaming, setRenaming] = useState(false);
+  const [pendingRename, setPendingRename] = useState<string | null>(null);
+  const [extWarning, setExtWarning] = useState<ExtensionWarning | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -644,19 +671,21 @@ export default function WorkspaceClient({ username }: Props) {
     setRenameName(entry.name);
   }, []);
 
-  const handleRename = useCallback(
-    async (event: FormEvent) => {
-      event.preventDefault();
-      const name = renameName.trim();
-      if (!renameTarget || activeBackend === null || !name || renaming) {
+  const runRename = useCallback(
+    async (name: string) => {
+      if (!renameTarget || activeBackend === null) {
         return;
       }
+      // Renaming to the exact current name is a no-op — and for S3 (copy+delete)
+      // it would delete the file, so guard it here for every path into rename.
       if (name === renameTarget.name) {
         setRenameTarget(null);
+        setExtWarning(null);
         return;
       }
 
       setRenaming(true);
+      setPendingRename(name);
       try {
         await renameItem(activeBackend, renameTarget.id, name);
         await loadEntries();
@@ -675,13 +704,43 @@ export default function WorkspaceClient({ username }: Props) {
         });
         toast.success(`Renamed to "${name}".`);
         setRenameTarget(null);
+        setExtWarning(null);
       } catch (error) {
         toast.error(extractApiErrorMessage(error));
       } finally {
         setRenaming(false);
+        setPendingRename(null);
       }
     },
-    [activeBackend, renameTarget, renameName, renaming, selected, loadEntries, toast],
+    [activeBackend, renameTarget, selected, loadEntries, toast],
+  );
+
+  const handleRename = useCallback(
+    (event: FormEvent) => {
+      event.preventDefault();
+      const name = renameName.trim();
+      if (!renameTarget || activeBackend === null || !name || renaming) {
+        return;
+      }
+      if (name === renameTarget.name) {
+        setRenameTarget(null);
+        return;
+      }
+
+      // Warn (Finder-style) before changing a file's extension, since it changes
+      // how the file is typed/opened. Folders have no extension, so skip them.
+      if (!renameTarget.isFolder) {
+        const fromExt = splitExtension(renameTarget.name).ext;
+        const { base, ext: toExt } = splitExtension(name);
+        if (fromExt.toLowerCase() !== toExt.toLowerCase()) {
+          setExtWarning({ use: name, keep: `${base}${fromExt}`, fromExt, toExt });
+          return;
+        }
+      }
+
+      void runRename(name);
+    },
+    [renameName, renameTarget, activeBackend, renaming, runRename],
   );
 
   const handleManageFolders = useCallback(async () => {
@@ -840,7 +899,10 @@ export default function WorkspaceClient({ username }: Props) {
       {/* Rename modal */}
       <Modal
         open={renameTarget !== null}
-        onClose={() => setRenameTarget(null)}
+        onClose={() => {
+          setRenameTarget(null);
+          setExtWarning(null);
+        }}
         title={renameTarget?.isFolder ? 'Rename folder' : 'Rename file'}>
         <form onSubmit={handleRename} className='flex flex-col gap-y-4'>
           <Input
@@ -851,18 +913,63 @@ export default function WorkspaceClient({ username }: Props) {
             autoFocus
           />
           <div className='flex justify-end gap-x-2'>
-            <Button variant='transparent' onClick={() => setRenameTarget(null)}>
+            <Button
+              variant='transparent'
+              onClick={() => {
+                setRenameTarget(null);
+                setExtWarning(null);
+              }}>
               Cancel
             </Button>
             <Button
               type='submit'
               variant='primary'
-              loading={renaming}
+              loading={renaming && extWarning === null}
               disabled={!renameName.trim() || renameName.trim() === renameTarget?.name}>
               Rename
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Extension-change confirmation (a modal on top of the rename modal) */}
+      <Modal
+        open={extWarning !== null}
+        onClose={() => setExtWarning(null)}
+        title='Change extension?'>
+        <div className='flex flex-col gap-y-5'>
+          <div className='flex gap-x-3'>
+            <div className='inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-500'>
+              <Icon icon='ExclamationTriangle' className='h-5 w-5' />
+            </div>
+            <p className='text-sm text-zinc-600 dark:text-zinc-400'>
+              {extWarning?.toExt === ''
+                ? `Removing the "${extWarning?.fromExt}" extension may change how this file opens.`
+                : extWarning?.fromExt === ''
+                  ? `Adding the "${extWarning?.toExt}" extension may change this file's type.`
+                  : `Changing the extension from "${extWarning?.fromExt}" to "${extWarning?.toExt}" may change this file's type.`}
+            </p>
+          </div>
+          <div className='flex flex-wrap justify-end gap-2'>
+            <Button variant='transparent' onClick={() => setExtWarning(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant='normal'
+              loading={renaming && pendingRename === extWarning?.keep}
+              disabled={renaming}
+              onClick={() => extWarning && void runRename(extWarning.keep)}>
+              {extWarning?.fromExt ? `Keep "${extWarning.fromExt}"` : 'Keep without extension'}
+            </Button>
+            <Button
+              variant='primary'
+              loading={renaming && pendingRename === extWarning?.use}
+              disabled={renaming}
+              onClick={() => extWarning && void runRename(extWarning.use)}>
+              {extWarning?.toExt ? `Use "${extWarning.toExt}"` : 'Remove extension'}
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* Bulk delete confirmation modal */}
