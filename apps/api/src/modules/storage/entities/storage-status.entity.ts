@@ -38,4 +38,12 @@ export class StorageStatusEntity {
     description: 'Connected account email (Drive only)',
   })
   email?: string | null;
+
+  @ApiProperty({
+    type: 'string',
+    nullable: true,
+    required: false,
+    description: 'Why a configured backend is unusable (revoked token / unreachable bucket)',
+  })
+  error?: string | null;
 }

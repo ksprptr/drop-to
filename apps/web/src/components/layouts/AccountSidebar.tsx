@@ -84,14 +84,20 @@ export default function AccountSidebar({
             </div>
           ) : !driveStatus?.connected ? (
             <div className='flex flex-col gap-y-3 rounded-xl bg-zinc-100 p-3 dark:bg-zinc-900'>
-              <p className='text-xs text-zinc-600 dark:text-zinc-400'>
-                No account connected. Connect a Google account to pick folders and upload.
+              <p
+                className={`text-xs ${
+                  driveStatus?.error
+                    ? 'font-medium text-amber-600 dark:text-amber-500'
+                    : 'text-zinc-600 dark:text-zinc-400'
+                }`}>
+                {driveStatus?.error ??
+                  'No account connected. Connect a Google account to pick folders and upload.'}
               </p>
               <a
                 href={getGoogleAuthUrl()}
                 className='inline-flex items-center justify-center gap-x-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-green-700'>
                 <Icon icon='LinkIcon' className='h-4 w-4' />
-                Connect Drive
+                {driveStatus?.error ? 'Reconnect Drive' : 'Connect Drive'}
               </a>
             </div>
           ) : (
@@ -131,11 +137,17 @@ export default function AccountSidebar({
             </div>
           ) : !s3Status?.connected ? (
             <div className='flex flex-col gap-y-1.5 rounded-xl bg-zinc-100 p-3 dark:bg-zinc-900'>
-              <p className='text-xs font-medium text-zinc-950 dark:text-zinc-50'>
-                No S3 storage connected
+              <p
+                className={`text-xs font-medium ${
+                  s3Status?.error
+                    ? 'text-amber-600 dark:text-amber-500'
+                    : 'text-zinc-950 dark:text-zinc-50'
+                }`}>
+                {s3Status?.error ? 'S3 storage unavailable' : 'No S3 storage connected'}
               </p>
               <p className='text-[11px] text-zinc-600 dark:text-zinc-400'>
-                Enable and configure S3 in the API environment to browse buckets.
+                {s3Status?.error ??
+                  'Enable and configure S3 in the API environment to browse buckets.'}
               </p>
             </div>
           ) : (

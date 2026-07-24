@@ -24,6 +24,11 @@ import {
   StorageProvider,
   StorageUpload,
 } from '../interfaces/storage-provider.interface';
+import {
+  DRIVE_DISCONNECTED_MESSAGE,
+  isInvalidGrant,
+  StorageDisconnectedException,
+} from '../storage.errors';
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const MAX_ANCESTOR_DEPTH = 50;
@@ -55,10 +60,35 @@ export class GoogleDriveProvider implements StorageProvider {
   async status(): Promise<StorageStatusEntity> {
     const status = await this.googleAuthService.getStatus();
 
+    if (!status.connected) {
+      return { backend: this.backend, label: 'Google Drive', connected: false, email: null, roots: [] };
+    }
+
+    // A stored account can still carry a dead refresh token (revoked, or expired
+    // in Google's Testing mode). Probe it so the sidebar shows a "reconnect"
+    // prompt instead of a green "connected" that fails on the first click.
+    try {
+      const accountId = await this.googleAuthService.getActiveAccountId();
+      const auth = await this.googleAuthService.getAuthorizedClient(accountId);
+      await auth.getAccessToken();
+    } catch (error) {
+      if (isInvalidGrant(error)) {
+        return {
+          backend: this.backend,
+          label: 'Google Drive',
+          connected: false,
+          email: status.email,
+          error: DRIVE_DISCONNECTED_MESSAGE,
+          roots: [],
+        };
+      }
+      // A transient error shouldn't nuke a working connection — report it as connected.
+    }
+
     return {
       backend: this.backend,
       label: 'Google Drive',
-      connected: status.connected,
+      connected: true,
       email: status.email,
       roots: status.allowedFolders.map((folder) => ({ id: folder.folderId, name: folder.name })),
     };
@@ -71,6 +101,18 @@ export class GoogleDriveProvider implements StorageProvider {
    */
   private async getDrive(driveAccountId: string): Promise<drive_v3.Drive> {
     const auth = await this.googleAuthService.getAuthorizedClient(driveAccountId);
+
+    // Force the access-token refresh up front so a revoked/expired refresh token
+    // surfaces as a clean "reconnect" error (424) instead of a raw googleapis 500
+    // on the first Drive call.
+    try {
+      await auth.getAccessToken();
+    } catch (error) {
+      if (isInvalidGrant(error)) {
+        throw new StorageDisconnectedException(DRIVE_DISCONNECTED_MESSAGE);
+      }
+      throw error;
+    }
 
     return google.drive({ version: 'v3', auth });
   }

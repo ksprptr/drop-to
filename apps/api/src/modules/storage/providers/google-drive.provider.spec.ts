@@ -39,7 +39,9 @@ describe('GoogleDriveProvider', () => {
 
     googleAuth = {
       getActiveAccountId: jest.fn().mockResolvedValue('account-1'),
-      getAuthorizedClient: jest.fn().mockResolvedValue({}),
+      getAuthorizedClient: jest
+        .fn()
+        .mockResolvedValue({ getAccessToken: jest.fn().mockResolvedValue({ token: 'access-token' }) }),
     };
     prisma = {
       allowedFolder: { findMany: jest.fn() },

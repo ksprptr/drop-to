@@ -85,4 +85,11 @@ export interface StorageStatus {
   connected: boolean;
   roots: StorageRoot[];
   email?: string | null;
+  /**
+   * A human-readable reason the backend is not usable despite being configured
+   * (a revoked Drive token, an unreachable/misconfigured S3 bucket). Present only
+   * when `connected` is false because the connection broke, not because it was
+   * never set up.
+   */
+  error?: string | null;
 }

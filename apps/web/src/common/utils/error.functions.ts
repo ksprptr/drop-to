@@ -31,3 +31,13 @@ export const extractApiErrorMessage = (error: unknown): string => {
  * @returns True when the request was cancelled rather than failed
  */
 export const isCanceledError = (error: unknown): boolean => axios.isCancel(error);
+
+/**
+ * Function to detect a "storage backend disconnected/unavailable" error — a
+ * revoked Drive token or an unreachable/misconfigured S3 bucket, which the API
+ * signals with HTTP 424. Lets the UI prompt a reconnect and refresh the sidebar.
+ * @param error - The caught error
+ * @returns True when the active storage backend is no longer usable
+ */
+export const isStorageDisconnectedError = (error: unknown): boolean =>
+  axios.isAxiosError(error) && error.response?.status === 424;

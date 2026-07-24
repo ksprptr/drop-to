@@ -23,7 +23,11 @@ import type {
   UploadTask,
   ViewEntry,
 } from '@/common/types/workspace.types';
-import { extractApiErrorMessage, isCanceledError } from '@/common/utils/error.functions';
+import {
+  extractApiErrorMessage,
+  isCanceledError,
+  isStorageDisconnectedError,
+} from '@/common/utils/error.functions';
 import { isTopLevelFolder, topLevelName, uniqueName } from '@/common/utils/upload.functions';
 import Button from '@/components/common/Button';
 import Icon from '@/components/common/Icon';
@@ -206,10 +210,15 @@ export default function WorkspaceClient({ username }: Props) {
       );
     } catch (error) {
       toast.error(extractApiErrorMessage(error));
+      // The active storage went away mid-session (revoked Drive token / dead S3):
+      // refresh the statuses so the sidebar flips to its reconnect/unavailable state.
+      if (isStorageDisconnectedError(error)) {
+        void loadStatus();
+      }
     } finally {
       setLoadingEntries(false);
     }
-  }, [activeBackend, currentFolderId, roots, toast]);
+  }, [activeBackend, currentFolderId, roots, toast, loadStatus]);
 
   useEffect(() => {
     void loadEntries();

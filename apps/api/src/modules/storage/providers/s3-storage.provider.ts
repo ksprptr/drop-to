@@ -35,6 +35,11 @@ import {
   StorageProvider,
   StorageUpload,
 } from '../interfaces/storage-provider.interface';
+import {
+  isS3Unavailable,
+  S3_UNAVAILABLE_MESSAGE,
+  StorageDisconnectedException,
+} from '../storage.errors';
 
 /** Marker used for zero-byte "folder" objects (a prefix ending in a slash). */
 const FOLDER_SUFFIX = '/';
@@ -151,17 +156,45 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Function to report whether S3 is enabled and expose the configured buckets as roots.
+   * Function to report whether S3 is enabled, reachable, and expose the configured
+   * buckets as roots.
+   *
+   * When S3 is enabled the buckets may still not exist or the credentials may be
+   * wrong, so every configured bucket is probed; if any probe fails the backend is
+   * reported as disconnected with a clear error for the sidebar (rather than
+   * letting the first browse blow up with a raw SDK 500).
    * @returns The backend status
    */
-  status(): Promise<StorageStatusEntity> {
-    return Promise.resolve({
+  async status(): Promise<StorageStatusEntity> {
+    if (!this.cfg.enabled) {
+      return { backend: this.backend, label: 'S3 Storage', connected: false, email: null, roots: [] };
+    }
+
+    try {
+      const client = this.getClient();
+      for (const bucket of this.cfg.buckets) {
+        await client.send(new ListObjectsV2Command({ Bucket: bucket, MaxKeys: 1 }));
+      }
+    } catch (error) {
+      this.logger.warn(`S3 storage is unavailable: ${(error as Error).message}`);
+
+      return {
+        backend: this.backend,
+        label: 'S3 Storage',
+        connected: false,
+        email: null,
+        error: S3_UNAVAILABLE_MESSAGE,
+        roots: [],
+      };
+    }
+
+    return {
       backend: this.backend,
       label: 'S3 Storage',
-      connected: this.cfg.enabled,
+      connected: true,
       email: null,
       roots: this.cfg.buckets.map((bucket) => ({ id: encodeId({ bucket, key: '' }), name: bucket })),
-    });
+    };
   }
 
   /**
@@ -194,32 +227,42 @@ export class S3StorageProvider implements StorageProvider {
     const files: DriveEntryEntity[] = [];
     let token: string | undefined;
 
-    do {
-      const res = await client.send(
-        new ListObjectsV2Command({
-          Bucket: ref.bucket,
-          Prefix: ref.key,
-          Delimiter: FOLDER_SUFFIX,
-          ContinuationToken: token,
-        }),
-      );
+    try {
+      do {
+        const res = await client.send(
+          new ListObjectsV2Command({
+            Bucket: ref.bucket,
+            Prefix: ref.key,
+            Delimiter: FOLDER_SUFFIX,
+            ContinuationToken: token,
+          }),
+        );
 
-      for (const prefix of res.CommonPrefixes ?? []) {
-        if (prefix.Prefix) {
-          folders.push(this.toFolderEntry(ref.bucket, prefix.Prefix));
+        for (const prefix of res.CommonPrefixes ?? []) {
+          if (prefix.Prefix) {
+            folders.push(this.toFolderEntry(ref.bucket, prefix.Prefix));
+          }
         }
-      }
 
-      for (const object of res.Contents ?? []) {
-        // Skip the folder's own marker object and any nested folder markers.
-        if (!object.Key || object.Key === ref.key || object.Key.endsWith(FOLDER_SUFFIX)) {
-          continue;
+        for (const object of res.Contents ?? []) {
+          // Skip the folder's own marker object and any nested folder markers.
+          if (!object.Key || object.Key === ref.key || object.Key.endsWith(FOLDER_SUFFIX)) {
+            continue;
+          }
+          files.push(this.toFileEntry(ref.bucket, object.Key, object.Size, object.LastModified));
         }
-        files.push(this.toFileEntry(ref.bucket, object.Key, object.Size, object.LastModified));
-      }
 
-      token = res.IsTruncated ? res.NextContinuationToken : undefined;
-    } while (token);
+        token = res.IsTruncated ? res.NextContinuationToken : undefined;
+      } while (token);
+    } catch (error) {
+      // A missing bucket / bad credentials / unreachable endpoint means the whole
+      // backend is unusable — surface it as a clean "reconnect" error (424) rather
+      // than a raw SDK 500 so the client can prompt and refresh the sidebar.
+      if (isS3Unavailable(error)) {
+        throw new StorageDisconnectedException(S3_UNAVAILABLE_MESSAGE);
+      }
+      throw error;
+    }
 
     return [...folders, ...files];
   }
