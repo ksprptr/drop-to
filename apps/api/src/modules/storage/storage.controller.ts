@@ -33,6 +33,7 @@ import { ResponseEntity } from '@/common/entities/response.entity';
 import { AllowedFolderEntity } from '@/modules/google-auth/entities/allowed-folder.entity';
 
 import { CreateSubfolderDto } from './dto/create-subfolder.dto';
+import { MoveItemDto } from './dto/move-item.dto';
 import { RenameItemDto } from './dto/rename-item.dto';
 import { DriveEntryEntity } from './entities/drive-entry.entity';
 import { StorageStatusEntity } from './entities/storage-status.entity';
@@ -264,6 +265,23 @@ export class StorageController {
     @Body() renameItemDto: RenameItemDto,
   ): Promise<DriveEntryEntity> {
     return this.registry.resolve(backend).renameItem(id, renameItemDto.name);
+  }
+
+  /**
+   * Controller to move a file or subfolder into another folder
+   */
+  @ApiOperation({ summary: 'Move a file or subfolder into another folder' })
+  @ApiOkResponse({ type: DriveEntryEntity, description: 'Item moved' })
+  @ApiBadRequestResponse({ type: ResponseEntity, description: 'Invalid move target' })
+  @ApiForbiddenResponse({ type: ResponseEntity, description: 'Item or target outside authorized tree' })
+  @ApiConflictResponse({ type: ResponseEntity, description: 'Root folders cannot be moved' })
+  @Patch(':backend/files/:id/move')
+  async moveFile(
+    @Param('backend') backend: string,
+    @Param('id') id: string,
+    @Body() moveItemDto: MoveItemDto,
+  ): Promise<DriveEntryEntity> {
+    return this.registry.resolve(backend).moveItem(id, moveItemDto.targetFolderId);
   }
 
   /**

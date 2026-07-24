@@ -448,6 +448,65 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
+   * Function to move a file, or a folder (prefix) and everything under it, into
+   * another folder.
+   *
+   * S3 has no native move, so this copies to the destination and deletes the
+   * source. The item keeps its name; only its parent prefix (and possibly bucket)
+   * changes. Bucket roots cannot be moved.
+   * @param itemId - The opaque id of the file or folder to move
+   * @param targetFolderId - The opaque id of the destination bucket root or prefix
+   * @returns The moved item as an entry
+   */
+  async moveItem(itemId: string, targetFolderId: string): Promise<DriveEntryEntity> {
+    const src = this.resolve(itemId);
+    const dest = this.resolve(targetFolderId);
+    const client = this.getClient();
+
+    if (src.key === '') {
+      throw new ConflictException('Buckets cannot be moved.');
+    }
+    if (dest.key !== '' && !dest.key.endsWith(FOLDER_SUFFIX)) {
+      throw new BadRequestException('The move target must be a folder.');
+    }
+
+    const name = baseName(src.key);
+
+    if (src.key.endsWith(FOLDER_SUFFIX)) {
+      const newPrefix = `${dest.key}${name}${FOLDER_SUFFIX}`;
+      if (src.bucket === dest.bucket && newPrefix.startsWith(src.key)) {
+        throw new BadRequestException('Cannot move a folder into itself.');
+      }
+
+      await this.copyPrefix(src.bucket, src.key, dest.bucket, newPrefix);
+      await this.deletePrefix(src.bucket, src.key);
+      this.logger.log(`Moved ${src.bucket}/${src.key} to ${dest.bucket}/${newPrefix}.`);
+
+      return this.toFolderEntry(dest.bucket, newPrefix);
+    }
+
+    const newKey = `${dest.key}${name}`;
+    if (src.bucket === dest.bucket && newKey === src.key) {
+      // Already in this folder — copying onto itself then deleting would lose it.
+      throw new BadRequestException('The item is already in that folder.');
+    }
+
+    await client.send(
+      new CopyObjectCommand({
+        Bucket: dest.bucket,
+        CopySource: this.copySource(src.bucket, src.key),
+        Key: newKey,
+      }),
+    );
+    await client.send(new DeleteObjectCommand({ Bucket: src.bucket, Key: src.key }));
+    this.logger.log(`Moved ${src.bucket}/${src.key} to ${dest.bucket}/${newKey}.`);
+
+    const size = await this.headSize(dest.bucket, newKey);
+
+    return this.toFileEntry(dest.bucket, newKey, size ?? undefined, undefined);
+  }
+
+  /**
    * Function to open a readable stream of an object's contents for download.
    * @param fileId - The opaque id of the file
    * @returns The content stream plus name, MIME type and size
@@ -621,6 +680,47 @@ export class S3StorageProvider implements StorageProvider {
           }),
         );
         await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: object.Key }));
+      }
+
+      token = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (token);
+  }
+
+  /**
+   * Function to copy every object under a prefix to a new bucket/prefix, without
+   * deleting the source — the copy half of a folder move (works cross-bucket).
+   * @param srcBucket - The source bucket
+   * @param srcPrefix - The source folder prefix (ending in a slash)
+   * @param destBucket - The destination bucket
+   * @param destPrefix - The destination folder prefix (ending in a slash)
+   */
+  private async copyPrefix(
+    srcBucket: string,
+    srcPrefix: string,
+    destBucket: string,
+    destPrefix: string,
+  ): Promise<void> {
+    const client = this.getClient();
+    let token: string | undefined;
+
+    do {
+      const res = await client.send(
+        new ListObjectsV2Command({ Bucket: srcBucket, Prefix: srcPrefix, ContinuationToken: token }),
+      );
+
+      for (const object of res.Contents ?? []) {
+        if (!object.Key) {
+          continue;
+        }
+
+        const destKey = `${destPrefix}${object.Key.slice(srcPrefix.length)}`;
+        await client.send(
+          new CopyObjectCommand({
+            Bucket: destBucket,
+            CopySource: this.copySource(srcBucket, object.Key),
+            Key: destKey,
+          }),
+        );
       }
 
       token = res.IsTruncated ? res.NextContinuationToken : undefined;

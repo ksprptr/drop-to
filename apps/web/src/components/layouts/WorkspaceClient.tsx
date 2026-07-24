@@ -1,9 +1,11 @@
 'use client';
 
 import type { StorageBackend, StorageStatus } from '@dropto/types';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useBrowsePane } from '@/common/hooks/useBrowsePane';
 import { disconnectAccount, logout, saveFolders } from '@/common/services/api/auth.api';
 import {
   createSubfolder,
@@ -12,6 +14,7 @@ import {
   folderDownloadUrl,
   getFolderContents,
   getStorageStatuses,
+  moveItem,
   renameItem,
   uploadFile,
 } from '@/common/services/api/storage.api';
@@ -114,6 +117,10 @@ export default function WorkspaceClient({ username }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [split, setSplit] = useState(false);
+  const [activePane, setActivePane] = useState<0 | 1>(0);
+  const [bulkPane, setBulkPane] = useState<0 | 1>(0);
+  const [dragMove, setDragMove] = useState<{ ids: string[]; sourcePane: 0 | 1 } | null>(null);
   const [renameTarget, setRenameTarget] = useState<ViewEntry | null>(null);
   const [renameName, setRenameName] = useState('');
   const [renaming, setRenaming] = useState(false);
@@ -121,6 +128,7 @@ export default function WorkspaceClient({ username }: Props) {
   const [extWarning, setExtWarning] = useState<ExtensionWarning | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderPane, setNewFolderPane] = useState<0 | 1>(0);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -186,6 +194,19 @@ export default function WorkspaceClient({ username }: Props) {
   useEffect(() => {
     void loadStatus();
   }, [loadStatus]);
+
+  const onPaneError = useCallback(
+    (error: unknown) => {
+      toast.error(extractApiErrorMessage(error));
+      if (isStorageDisconnectedError(error)) {
+        void loadStatus();
+      }
+    },
+    [toast, loadStatus],
+  );
+
+  // The second (split) pane: an independent browser over the same backend.
+  const paneB = useBrowsePane(activeBackend, roots, onPaneError);
 
   // Keep the active backend valid: default to the first connected one, and drop
   // it if the current one becomes disconnected.
@@ -263,6 +284,11 @@ export default function WorkspaceClient({ username }: Props) {
     void loadEntries();
   }, [loadEntries]);
 
+  // Reload both panes after a mutation so the source and destination both refresh.
+  const reloadPanes = useCallback(async () => {
+    await Promise.all([loadEntries(), split ? paneB.reload() : Promise.resolve()]);
+  }, [loadEntries, split, paneB]);
+
   const openFolder = useCallback((entry: ViewEntry) => {
     setSelected(null);
     setPath((current) => [...current, { id: entry.id, name: entry.name }]);
@@ -276,6 +302,90 @@ export default function WorkspaceClient({ username }: Props) {
   const selectStorage = useCallback((backend: StorageBackend) => {
     setActiveBackend(backend);
   }, []);
+
+  // --- Split view + drag-to-move ------------------------------------------------
+
+  const toggleSplit = useCallback(() => {
+    setSplit((current) => {
+      const next = !current;
+      if (next) {
+        // Open the second pane at the same location as the primary one.
+        paneB.goTo(path);
+      } else {
+        setDragMove(null);
+        setActivePane(0);
+      }
+      return next;
+    });
+  }, [paneB, path]);
+
+  // Close the split (and any drag) if the storage disconnects entirely.
+  useEffect(() => {
+    if (activeBackend === null) {
+      setSplit(false);
+      setDragMove(null);
+    }
+  }, [activeBackend]);
+
+  // Keyboard shortcut (Cmd/Ctrl + \) to toggle the split view.
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === '\\') {
+        const target = event.target as HTMLElement | null;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+          return;
+        }
+        // Only open the split from inside a folder; closing is always allowed.
+        if (!split && currentFolderId === null) {
+          return;
+        }
+        event.preventDefault();
+        toggleSplit();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [split, currentFolderId, toggleSplit]);
+
+  const handleMoveDrop = useCallback(
+    async (targetPane: 0 | 1) => {
+      if (!dragMove || activeBackend === null || dragMove.sourcePane === targetPane) {
+        return;
+      }
+      const backend = activeBackend;
+      const { ids } = dragMove;
+      const sourceFolderId = dragMove.sourcePane === 0 ? currentFolderId : paneB.currentFolderId;
+      const targetFolderId = targetPane === 0 ? currentFolderId : paneB.currentFolderId;
+      setDragMove(null);
+
+      if (targetFolderId === null) {
+        return;
+      }
+      if (sourceFolderId === targetFolderId) {
+        toast.error('Items are already in that folder.');
+        return;
+      }
+
+      const results = await Promise.allSettled(
+        ids.map((id) => moveItem(backend, id, targetFolderId)),
+      );
+      const failed = results.filter((result) => result.status === 'rejected').length;
+
+      await reloadPanes();
+      setSelectedIds(new Set());
+      paneB.clearSelection();
+      if (selected && ids.includes(selected.id)) {
+        setSelected(null);
+      }
+
+      if (failed > 0) {
+        toast.error(`Failed to move ${failed} item${failed === 1 ? '' : 's'}.`);
+      } else {
+        toast.success(`Moved ${ids.length} item${ids.length === 1 ? '' : 's'}.`);
+      }
+    },
+    [dragMove, activeBackend, currentFolderId, paneB, reloadPanes, selected, toast],
+  );
 
   // --- Upload dock state helpers ------------------------------------------------
 
@@ -335,11 +445,11 @@ export default function WorkspaceClient({ username }: Props) {
         );
         batchRuntime.current.delete(batchId);
       }
-      await loadEntries();
+      await reloadPanes();
       setBatchStatus(batchId, 'canceled');
       scheduleRemoveBatch(batchId);
     },
-    [loadEntries, setBatchStatus, scheduleRemoveBatch],
+    [reloadPanes, setBatchStatus, scheduleRemoveBatch],
   );
 
   const cancelBatch = useCallback((batchId: string) => {
@@ -360,14 +470,16 @@ export default function WorkspaceClient({ username }: Props) {
   }, []);
 
   const handleUpload = useCallback(
-    async (items: UploadItem[]) => {
-      if (currentFolderId === null || activeBackend === null || items.length === 0) {
+    async (items: UploadItem[], pane: 0 | 1 = 0) => {
+      const targetFolderId = pane === 0 ? currentFolderId : paneB.currentFolderId;
+      const existing = pane === 0 ? entries : paneB.entries;
+      if (targetFolderId === null || activeBackend === null || items.length === 0) {
         return;
       }
       const backend = activeBackend;
 
       // Detect name conflicts among the top-level items being added here.
-      const existingNames = new Set(entries.map((entry) => entry.name));
+      const existingNames = new Set(existing.map((entry) => entry.name));
       const topLevel = new Map<string, boolean>();
       for (const item of items) {
         const top = topLevelName(item.relativePath);
@@ -385,7 +497,7 @@ export default function WorkspaceClient({ username }: Props) {
           return;
         }
         if (choice === 'replace') {
-          replaceIds = entries
+          replaceIds = existing
             .filter((entry) => conflicts.includes(entry.name))
             .map((entry) => entry.id);
         } else {
@@ -455,7 +567,7 @@ export default function WorkspaceClient({ username }: Props) {
 
       // Recreate the (possibly nested) folder structure, tracking the top-level
       // folders so a cancel can delete them.
-      const folderIdByPath = new Map<string, string>([['', currentFolderId]]);
+      const folderIdByPath = new Map<string, string>([['', targetFolderId]]);
       const ensureFolder = async (dirPath: string): Promise<string> => {
         const cached = folderIdByPath.get(dirPath);
         if (cached) {
@@ -515,7 +627,7 @@ export default function WorkspaceClient({ username }: Props) {
           await Promise.all(replaceIds.map((id) => deleteItem(backend, id).catch(() => undefined)));
         }
         batchRuntime.current.delete(batchId);
-        await loadEntries();
+        await reloadPanes();
         setBatchStatus(batchId, 'done');
         scheduleRemoveBatch(batchId);
       }
@@ -523,8 +635,9 @@ export default function WorkspaceClient({ username }: Props) {
     [
       activeBackend,
       currentFolderId,
+      paneB,
       entries,
-      loadEntries,
+      reloadPanes,
       toast,
       askDuplicate,
       updateTask,
@@ -567,14 +680,15 @@ export default function WorkspaceClient({ username }: Props) {
     async (event: FormEvent) => {
       event.preventDefault();
       const name = newFolderName.trim();
-      if (currentFolderId === null || activeBackend === null || !name || creating) {
+      const targetFolderId = newFolderPane === 0 ? currentFolderId : paneB.currentFolderId;
+      if (targetFolderId === null || activeBackend === null || !name || creating) {
         return;
       }
 
       setCreating(true);
       try {
-        await createSubfolder(activeBackend, currentFolderId, name);
-        await loadEntries();
+        await createSubfolder(activeBackend, targetFolderId, name);
+        await reloadPanes();
         toast.success(`Folder "${name}" created.`);
         setNewFolderOpen(false);
         setNewFolderName('');
@@ -584,7 +698,7 @@ export default function WorkspaceClient({ username }: Props) {
         setCreating(false);
       }
     },
-    [activeBackend, currentFolderId, newFolderName, creating, loadEntries, toast],
+    [activeBackend, currentFolderId, paneB, newFolderPane, newFolderName, creating, reloadPanes, toast],
   );
 
   const confirmDelete = useCallback(async () => {
@@ -596,7 +710,7 @@ export default function WorkspaceClient({ username }: Props) {
     setDeleting(true);
     try {
       await deleteItem(activeBackend, entry.id);
-      await loadEntries();
+      await reloadPanes();
       if (selected?.id === entry.id) {
         setSelected(null);
       }
@@ -608,6 +722,7 @@ export default function WorkspaceClient({ username }: Props) {
         next.delete(entry.id);
         return next;
       });
+      paneB.pruneSelection(entry.id);
       toast.success(`${entry.isFolder ? 'Folder' : 'File'} "${entry.name}" deleted.`);
       setConfirmTarget(null);
     } catch (error) {
@@ -615,7 +730,7 @@ export default function WorkspaceClient({ username }: Props) {
     } finally {
       setDeleting(false);
     }
-  }, [activeBackend, confirmTarget, selected, loadEntries, toast]);
+  }, [activeBackend, confirmTarget, selected, reloadPanes, paneB, toast]);
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((current) => {
@@ -636,22 +751,26 @@ export default function WorkspaceClient({ username }: Props) {
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   const confirmBulkDelete = useCallback(async () => {
-    if (activeBackend === null || selectedIds.size === 0) {
+    const ids = bulkPane === 0 ? [...selectedIds] : [...paneB.selectedIds];
+    if (activeBackend === null || ids.length === 0) {
       return;
     }
     const backend = activeBackend;
-    const ids = [...selectedIds];
 
     setBulkDeleting(true);
     try {
       const results = await Promise.allSettled(ids.map((id) => deleteItem(backend, id)));
       const failed = results.filter((result) => result.status === 'rejected').length;
 
-      await loadEntries();
+      await reloadPanes();
       if (selected && ids.includes(selected.id)) {
         setSelected(null);
       }
-      setSelectedIds(new Set());
+      if (bulkPane === 0) {
+        setSelectedIds(new Set());
+      } else {
+        paneB.clearSelection();
+      }
       setBulkDeleteOpen(false);
 
       if (failed > 0) {
@@ -664,7 +783,7 @@ export default function WorkspaceClient({ username }: Props) {
     } finally {
       setBulkDeleting(false);
     }
-  }, [activeBackend, selectedIds, selected, loadEntries, toast]);
+  }, [activeBackend, bulkPane, selectedIds, paneB, selected, reloadPanes, toast]);
 
   const openRename = useCallback((entry: ViewEntry) => {
     setRenameTarget(entry);
@@ -688,7 +807,7 @@ export default function WorkspaceClient({ username }: Props) {
       setPendingRename(name);
       try {
         await renameItem(activeBackend, renameTarget.id, name);
-        await loadEntries();
+        await reloadPanes();
         // The id can change on rename (S3 ids encode the key), so drop the old id
         // from the preview and any multi-selection pointing at the renamed item.
         if (selected?.id === renameTarget.id) {
@@ -702,6 +821,7 @@ export default function WorkspaceClient({ username }: Props) {
           next.delete(renameTarget.id);
           return next;
         });
+        paneB.pruneSelection(renameTarget.id);
         toast.success(`Renamed to "${name}".`);
         setRenameTarget(null);
         setExtWarning(null);
@@ -712,7 +832,7 @@ export default function WorkspaceClient({ username }: Props) {
         setPendingRename(null);
       }
     },
-    [activeBackend, renameTarget, selected, loadEntries, toast],
+    [activeBackend, renameTarget, selected, reloadPanes, paneB, toast],
   );
 
   const handleRename = useCallback(
@@ -788,6 +908,7 @@ export default function WorkspaceClient({ username }: Props) {
 
   const rootLabel = activeStatus?.label ?? 'Home';
   const rootIcon = activeBackend ? STORAGE_ICON[activeBackend] : 'Home';
+  const bulkCount = bulkPane === 0 ? selectedIds.size : paneB.selectedIds.size;
 
   return (
     <div className='flex h-screen gap-3 overflow-hidden p-3'>
@@ -812,27 +933,95 @@ export default function WorkspaceClient({ username }: Props) {
           rootIcon={rootIcon}
           entries={entries}
           loading={currentFolderId === null ? loadingStatus : loadingEntries}
-          selectedId={selected?.id ?? null}
+          selectedId={activePane === 0 ? (selected?.id ?? null) : null}
           canUpload={currentFolderId !== null}
           canModify={currentFolderId !== null}
           hasStorage={activeBackend !== null}
           selectedIds={selectedIds}
+          split={split}
+          onToggleSplit={currentFolderId !== null || split ? toggleSplit : undefined}
+          acceptMove={split && dragMove?.sourcePane === 1 && currentFolderId !== null}
+          onMoveDragStart={(ids) => setDragMove({ ids, sourcePane: 0 })}
+          onMoveDragEnd={() => setDragMove(null)}
+          onMoveDrop={() => void handleMoveDrop(0)}
           onNavigate={navigate}
           onOpenFolder={openFolder}
-          onSelect={setSelected}
-          onUpload={handleUpload}
-          onNewFolder={() => setNewFolderOpen(true)}
+          onSelect={(entry) => {
+            setSelected(entry);
+            setActivePane(0);
+          }}
+          onUpload={(items) => handleUpload(items, 0)}
+          onNewFolder={() => {
+            setNewFolderPane(0);
+            setNewFolderOpen(true);
+          }}
           onToggleSelect={toggleSelect}
           onSelectAll={selectAll}
           onClearSelection={clearSelection}
-          onBulkDelete={() => setBulkDeleteOpen(true)}
+          onBulkDelete={() => {
+            setBulkPane(0);
+            setBulkDeleteOpen(true);
+          }}
           onDownload={handleDownload}
           onRename={openRename}
           onDelete={setConfirmTarget}
         />
+
+        <AnimatePresence>
+          {split && (
+            <motion.div
+              key='pane-b'
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 24 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+              className='flex min-w-0 flex-1 flex-col border-l border-zinc-200 pl-3 dark:border-zinc-800'>
+              <FileBrowser
+                path={paneB.path}
+                rootLabel={rootLabel}
+                rootIcon={rootIcon}
+                entries={paneB.entries}
+                loading={paneB.atRoots ? loadingStatus : paneB.loading}
+                selectedId={activePane === 1 ? (selected?.id ?? null) : null}
+                canUpload={paneB.currentFolderId !== null}
+                canModify={paneB.currentFolderId !== null}
+                hasStorage={activeBackend !== null}
+                selectedIds={paneB.selectedIds}
+                split={split}
+                onToggleSplit={toggleSplit}
+                acceptMove={split && dragMove?.sourcePane === 0 && paneB.currentFolderId !== null}
+                onMoveDragStart={(ids) => setDragMove({ ids, sourcePane: 1 })}
+                onMoveDragEnd={() => setDragMove(null)}
+                onMoveDrop={() => void handleMoveDrop(1)}
+                onNavigate={paneB.navigate}
+                onOpenFolder={paneB.openFolder}
+                onSelect={(entry) => {
+                  setSelected(entry);
+                  setActivePane(1);
+                }}
+                onUpload={(items) => handleUpload(items, 1)}
+                onNewFolder={() => {
+                  setNewFolderPane(1);
+                  setNewFolderOpen(true);
+                }}
+                onToggleSelect={paneB.toggleSelect}
+                onSelectAll={paneB.selectAll}
+                onClearSelection={paneB.clearSelection}
+                onBulkDelete={() => {
+                  setBulkPane(1);
+                  setBulkDeleteOpen(true);
+                }}
+                onDownload={handleDownload}
+                onRename={openRename}
+                onDelete={setConfirmTarget}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <PreviewPanel
           entry={selected}
-          isRoot={atRoots}
+          isRoot={activePane === 0 ? atRoots : paneB.atRoots}
           backend={activeBackend}
           onClose={() => setSelected(null)}
           onDelete={setConfirmTarget}
@@ -980,8 +1169,8 @@ export default function WorkspaceClient({ username }: Props) {
               <Icon icon='ExclamationTriangle' className='h-5 w-5' />
             </div>
             <p className='text-zinc-600 dark:text-zinc-400 text-sm'>
-              Delete the {selectedIds.size} selected item{selectedIds.size === 1 ? '' : 's'},
-              including everything inside any selected folders? This cannot be undone.
+              Delete the {bulkCount} selected item{bulkCount === 1 ? '' : 's'}, including everything
+              inside any selected folders? This cannot be undone.
             </p>
           </div>
           <div className='flex justify-end gap-x-2'>

@@ -148,3 +148,22 @@ export const renameItem = async (
 
   return data;
 };
+
+/**
+ * Function to move a file or folder into another folder.
+ * @param backend - The storage backend
+ * @param id - The file or folder id to move
+ * @param targetFolderId - The destination folder id
+ * @returns The moved entry
+ */
+export const moveItem = async (
+  backend: StorageBackend,
+  id: string,
+  targetFolderId: string,
+): Promise<DriveEntry> => {
+  const { data } = await http.patch<DriveEntry>(`/storage/${backend}/files/${id}/move`, {
+    targetFolderId,
+  });
+
+  return data;
+};

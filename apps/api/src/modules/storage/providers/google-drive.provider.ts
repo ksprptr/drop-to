@@ -362,6 +362,46 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
+   * Function to move a file or subfolder into another folder within the tree.
+   *
+   * Both the item and the destination must live inside the authorized tree; the
+   * destination may be a root, but authorized roots cannot themselves be moved.
+   * @param itemId - The Google Drive file or folder id
+   * @param targetFolderId - The destination folder id
+   * @returns The updated item as a Drive entry
+   */
+  async moveItem(itemId: string, targetFolderId: string): Promise<DriveEntryEntity> {
+    if (itemId === targetFolderId) {
+      throw new BadRequestException('Cannot move an item into itself.');
+    }
+
+    const driveAccountId = await this.googleAuthService.getActiveAccountId();
+    const drive = await this.getDrive(driveAccountId);
+    const allowedIds = await this.getAllowedFolderIds(driveAccountId);
+
+    if (allowedIds.has(itemId)) {
+      throw new ConflictException('Authorized root folders cannot be moved.');
+    }
+
+    await this.assertItemAllowed(drive, itemId, allowedIds);
+    await this.assertItemAllowed(drive, targetFolderId, allowedIds);
+
+    const meta = await drive.files.get({ fileId: itemId, fields: 'parents' });
+    const previousParents = (meta.data.parents ?? []).join(',');
+
+    const res = await drive.files.update({
+      fileId: itemId,
+      addParents: targetFolderId,
+      removeParents: previousParents,
+      fields: 'id, name, mimeType, size, modifiedTime, iconLink, webViewLink',
+    });
+
+    this.logger.log(`Moved item ${itemId} into ${targetFolderId}.`);
+
+    return this.toDriveEntry(res.data);
+  }
+
+  /**
    * Function to open a readable stream of a file's contents for download.
    * @param fileId - The Google Drive file id (must be within the allowed tree)
    * @returns The content stream plus the file name and MIME type

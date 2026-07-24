@@ -1,5 +1,6 @@
 'use client';
 
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   type ChangeEvent,
   type DragEvent,
@@ -16,6 +17,9 @@ import Icon from '@/components/common/Icon';
 import LoadingIndicator from '@/components/loadings/LoadingIndicator';
 
 import Breadcrumb from './Breadcrumb';
+
+/** Custom DataTransfer type marking an internal drag-to-move (vs an OS file drop). */
+const MOVE_MIME = 'application/x-dropto-move';
 
 interface Props {
   path: Crumb[];
@@ -45,6 +49,18 @@ interface Props {
   onDownload: (entry: ViewEntry) => void;
   onRename: (entry: ViewEntry) => void;
   onDelete: (entry: ViewEntry) => void;
+  /** Whether the split view is currently open (drives the toggle button state). */
+  split?: boolean;
+  /** When provided, renders a split-view toggle button in the toolbar. */
+  onToggleSplit?: () => void;
+  /** Whether this pane can currently accept an in-progress drag-to-move. */
+  acceptMove?: boolean;
+  /** Starts a drag-to-move of the given ids from this pane. */
+  onMoveDragStart?: (ids: string[]) => void;
+  /** Ends the current drag-to-move (dropped or cancelled). */
+  onMoveDragEnd?: () => void;
+  /** Items were dropped onto this pane — move them into the current folder. */
+  onMoveDrop?: () => void;
 }
 
 /** An open row-actions menu, anchored to the three-dot button's screen position. */
@@ -151,10 +167,16 @@ export default function FileBrowser({
   onDownload,
   onRename,
   onDelete,
+  split = false,
+  onToggleSplit,
+  acceptMove = false,
+  onMoveDragStart,
+  onMoveDragEnd,
+  onMoveDrop,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
-  const [dragging, setDragging] = useState(false);
+  const [dragKind, setDragKind] = useState<'upload' | 'move' | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [menu, setMenu] = useState<RowMenu | null>(null);
@@ -232,9 +254,34 @@ export default function FileBrowser({
     action(entry);
   };
 
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    const types = event.dataTransfer.types;
+    // An internal drag-to-move from the other pane takes precedence.
+    if (acceptMove && types.includes(MOVE_MIME)) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      setDragKind('move');
+      return;
+    }
+    if (canUpload && types.includes('Files')) {
+      event.preventDefault();
+      setDragKind('upload');
+    }
+  };
+
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    const types = event.dataTransfer.types;
+
+    // Internal move: hand off to the parent, which knows the dragged ids.
+    if (acceptMove && types.includes(MOVE_MIME)) {
+      event.preventDefault();
+      setDragKind(null);
+      onMoveDrop?.();
+      return;
+    }
+
     event.preventDefault();
-    setDragging(false);
+    setDragKind(null);
     if (!canUpload) {
       return;
     }
@@ -251,6 +298,17 @@ export default function FileBrowser({
         onUpload(items);
       }
     });
+  };
+
+  const handleRowDragStart = (event: DragEvent<HTMLDivElement>, entry: ViewEntry) => {
+    if (!canModify) {
+      return;
+    }
+    // Dragging a selected row moves the whole selection; otherwise just that row.
+    const ids = selectedIds.has(entry.id) ? [...selectedIds] : [entry.id];
+    event.dataTransfer.setData(MOVE_MIME, ids.join(','));
+    event.dataTransfer.effectAllowed = 'move';
+    onMoveDragStart?.(ids);
   };
 
   const handleInput = (event: ChangeEvent<HTMLInputElement>) => {
@@ -290,6 +348,19 @@ export default function FileBrowser({
             <span className='mr-1 hidden text-xs text-zinc-600 sm:block dark:text-zinc-400'>
               {entries.length} item{entries.length === 1 ? '' : 's'}
             </span>
+          )}
+          {onToggleSplit && (
+            <button
+              type='button'
+              onClick={onToggleSplit}
+              title={split ? 'Close split view' : 'Split view'}
+              className={`inline-flex h-9 w-9 items-center justify-center rounded-lg transition ${
+                split
+                  ? 'bg-green-600/10 text-green-600'
+                  : 'text-zinc-600 hover:bg-zinc-200 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'
+              }`}>
+              <Icon icon={split ? 'XMark' : 'ViewColumns'} className='h-5 w-5' />
+            </button>
           )}
           {canUpload && (
             <>
@@ -346,19 +417,35 @@ export default function FileBrowser({
 
       {/* Content / drop zone */}
       <div
-        onDragOver={(event) => {
-          event.preventDefault();
-          if (canUpload) setDragging(true);
+        onDragOver={handleDragOver}
+        onDragLeave={(event) => {
+          // Ignore leave events bubbling up from children still inside the zone.
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            return;
+          }
+          setDragKind(null);
         }}
-        onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
         className='relative min-h-0 flex-1 overflow-y-auto'>
-        {dragging && canUpload && (
-          <div className='pointer-events-none absolute inset-2 z-10 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-green-600 bg-zinc-100/60 text-green-600 backdrop-blur-md dark:bg-zinc-900/60'>
-            <Icon icon='ArrowDownTray' className='h-8 w-8' />
-            <p className='text-sm font-medium'>Drop files or folders to upload</p>
-          </div>
-        )}
+        <AnimatePresence>
+          {dragKind && (
+            <motion.div
+              key={dragKind}
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.12 }}
+              className='pointer-events-none absolute inset-2 z-10 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-green-600 text-green-600 backdrop-blur-md dark:bg-zinc-900/60'>
+              <Icon
+                icon={dragKind === 'move' ? 'ArrowsPointingIn' : 'ArrowDownTray'}
+                className='h-8 w-8'
+              />
+              <p className='text-sm font-medium'>
+                {dragKind === 'move' ? 'Move here' : 'Drop files or folders to upload'}
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {loading ? (
           <div className='flex h-full items-center justify-center gap-x-2 text-sm text-zinc-600 dark:text-zinc-400'>
@@ -414,12 +501,17 @@ export default function FileBrowser({
                     <div
                       role='button'
                       tabIndex={0}
+                      draggable={canModify}
+                      onDragStart={(event) => handleRowDragStart(event, entry)}
+                      onDragEnd={() => onMoveDragEnd?.()}
                       onClick={() => onSelect(entry)}
                       onDoubleClick={() => {
                         if (entry.isFolder) onOpenFolder(entry);
                         else if (entry.webViewLink) window.open(entry.webViewLink, '_blank');
                       }}
-                      className={`grid ${gridCols} w-full cursor-default items-center gap-x-3 rounded-lg px-3 py-2 text-left transition ${
+                      className={`grid ${gridCols} w-full items-center gap-x-3 rounded-lg px-3 py-2 text-left transition ${
+                        canModify ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
+                      } ${
                         checked || selected
                           ? 'bg-green-600/10'
                           : 'hover:bg-zinc-200 dark:hover:bg-zinc-800'

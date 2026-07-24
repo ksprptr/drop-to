@@ -82,6 +82,12 @@ export interface StorageProvider {
   /** Renames a file or subfolder inside the authorized scope (never a root). */
   renameItem(itemId: string, name: string): Promise<DriveEntryEntity>;
 
+  /**
+   * Moves a file or subfolder into another folder inside the authorized scope
+   * (never a root itself, though a root may be the destination).
+   */
+  moveItem(itemId: string, targetFolderId: string): Promise<DriveEntryEntity>;
+
   /** Opens a readable stream of a single file's contents. */
   downloadFile(fileId: string): Promise<StorageDownload>;
 
