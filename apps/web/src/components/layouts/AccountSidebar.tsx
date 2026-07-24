@@ -207,7 +207,7 @@ export default function AccountSidebar({
             onClick={onLogout}
             disabled={loggingOut}
             title='Sign out'
-            className='inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800'>
+            className='inline-flex h-9 w-9 items-center justify-center rounded-lg text-red-500 transition hover:bg-red-500/10 disabled:opacity-50'>
             {loggingOut ? (
               <LoadingIndicator />
             ) : (

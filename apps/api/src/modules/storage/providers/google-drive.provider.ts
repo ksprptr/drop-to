@@ -332,6 +332,36 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
+   * Function to rename a file or subfolder that lives within the authorized tree.
+   *
+   * Authorized root folders (the ones picked during setup) cannot be renamed.
+   * @param itemId - The Google Drive file or folder id
+   * @param name - The new name
+   * @returns The updated item as a Drive entry
+   */
+  async renameItem(itemId: string, name: string): Promise<DriveEntryEntity> {
+    const driveAccountId = await this.googleAuthService.getActiveAccountId();
+    const drive = await this.getDrive(driveAccountId);
+    const allowedIds = await this.getAllowedFolderIds(driveAccountId);
+
+    if (allowedIds.has(itemId)) {
+      throw new ConflictException('Authorized root folders cannot be renamed.');
+    }
+
+    await this.assertItemAllowed(drive, itemId, allowedIds);
+
+    const res = await drive.files.update({
+      fileId: itemId,
+      requestBody: { name },
+      fields: 'id, name, mimeType, size, modifiedTime, iconLink, webViewLink',
+    });
+
+    this.logger.log(`Renamed item ${itemId} to "${name}".`);
+
+    return this.toDriveEntry(res.data);
+  }
+
+  /**
    * Function to open a readable stream of a file's contents for download.
    * @param fileId - The Google Drive file id (must be within the allowed tree)
    * @returns The content stream plus the file name and MIME type

@@ -16,6 +16,7 @@ interface Props {
   onClose: () => void;
   onDelete: (entry: ViewEntry) => void;
   onDownload: (entry: ViewEntry) => void;
+  onRename: (entry: ViewEntry) => void;
 }
 
 /**
@@ -41,6 +42,7 @@ export default function PreviewPanel({
   onClose,
   onDelete,
   onDownload,
+  onRename,
 }: Props) {
   const [imageFailed, setImageFailed] = useState(false);
 
@@ -112,6 +114,12 @@ export default function PreviewPanel({
                 <Icon icon='ArrowTopRightOnSquare' className='h-4 w-4' />
                 Open in Drive
               </a>
+            )}
+            {!isRoot && (
+              <Button variant='normal' fullWidth onClick={() => onRename(entry)}>
+                <Icon icon='Pencil' className='h-4 w-4' />
+                Rename
+              </Button>
             )}
             {!isRoot && (
               <Button variant='danger' fullWidth onClick={() => onDelete(entry)}>

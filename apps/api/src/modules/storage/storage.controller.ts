@@ -6,6 +6,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Req,
   RequestTimeoutException,
@@ -32,6 +33,7 @@ import { ResponseEntity } from '@/common/entities/response.entity';
 import { AllowedFolderEntity } from '@/modules/google-auth/entities/allowed-folder.entity';
 
 import { CreateSubfolderDto } from './dto/create-subfolder.dto';
+import { RenameItemDto } from './dto/rename-item.dto';
 import { DriveEntryEntity } from './entities/drive-entry.entity';
 import { StorageStatusEntity } from './entities/storage-status.entity';
 import { UploadResultEntity } from './entities/upload-result.entity';
@@ -245,6 +247,23 @@ export class StorageController {
       finished = true;
       req.off('close', onClose);
     }
+  }
+
+  /**
+   * Controller to rename a file or subfolder within the authorized folder tree
+   */
+  @ApiOperation({ summary: 'Rename a file or subfolder' })
+  @ApiOkResponse({ type: DriveEntryEntity, description: 'Item renamed' })
+  @ApiBadRequestResponse({ type: ResponseEntity, description: 'Validation failed' })
+  @ApiForbiddenResponse({ type: ResponseEntity, description: 'Item outside authorized tree' })
+  @ApiConflictResponse({ type: ResponseEntity, description: 'Root folders cannot be renamed' })
+  @Patch(':backend/files/:id/rename')
+  async renameFile(
+    @Param('backend') backend: string,
+    @Param('id') id: string,
+    @Body() renameItemDto: RenameItemDto,
+  ): Promise<DriveEntryEntity> {
+    return this.registry.resolve(backend).renameItem(id, renameItemDto.name);
   }
 
   /**

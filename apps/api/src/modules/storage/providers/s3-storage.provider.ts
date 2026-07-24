@@ -1,5 +1,6 @@
 /* eslint-disable no-await-in-loop */
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
@@ -371,6 +372,54 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
+   * Function to rename a file, or a folder (prefix) and everything under it.
+   *
+   * S3 has no native rename, so this copies to the new key/prefix and deletes the
+   * old one. The new name replaces the last path segment; the parent prefix and
+   * the target bucket stay the same. Bucket roots cannot be renamed.
+   * @param itemId - The opaque id of the file or folder
+   * @param name - The new name (a single path segment, no slashes)
+   * @returns The renamed item as an entry
+   */
+  async renameItem(itemId: string, name: string): Promise<DriveEntryEntity> {
+    const ref = this.resolve(itemId);
+    const client = this.getClient();
+
+    if (ref.key === '') {
+      throw new ConflictException('Buckets cannot be renamed.');
+    }
+
+    if (ref.key.endsWith(FOLDER_SUFFIX)) {
+      // A folder is a prefix: prefix/old/ -> prefix/new/ (copy every object under it).
+      const parent = ref.key.slice(0, -FOLDER_SUFFIX.length);
+      const slash = parent.lastIndexOf('/');
+      const newKey = `${slash === -1 ? '' : parent.slice(0, slash + 1)}${name}${FOLDER_SUFFIX}`;
+
+      await this.renamePrefix(ref.bucket, ref.key, newKey);
+      this.logger.log(`Renamed ${ref.bucket}/${ref.key} to ${newKey}.`);
+
+      return this.toFolderEntry(ref.bucket, newKey);
+    }
+
+    const slash = ref.key.lastIndexOf('/');
+    const newKey = `${slash === -1 ? '' : ref.key.slice(0, slash + 1)}${name}`;
+
+    await client.send(
+      new CopyObjectCommand({
+        Bucket: ref.bucket,
+        CopySource: this.copySource(ref.bucket, ref.key),
+        Key: newKey,
+      }),
+    );
+    await client.send(new DeleteObjectCommand({ Bucket: ref.bucket, Key: ref.key }));
+    this.logger.log(`Renamed ${ref.bucket}/${ref.key} to ${newKey}.`);
+
+    const size = await this.headSize(ref.bucket, newKey);
+
+    return this.toFileEntry(ref.bucket, newKey, size ?? undefined, undefined);
+  }
+
+  /**
    * Function to open a readable stream of an object's contents for download.
    * @param fileId - The opaque id of the file
    * @returns The content stream plus name, MIME type and size
@@ -508,6 +557,62 @@ export class S3StorageProvider implements StorageProvider {
 
       token = res.IsTruncated ? res.NextContinuationToken : undefined;
     } while (token);
+  }
+
+  /**
+   * Function to copy every object under a prefix to a new prefix, then delete the
+   * originals — the S3 way to "rename" a folder.
+   * @param bucket - The bucket
+   * @param oldPrefix - The current folder prefix (ending in a slash)
+   * @param newPrefix - The destination folder prefix (ending in a slash)
+   */
+  private async renamePrefix(
+    bucket: string,
+    oldPrefix: string,
+    newPrefix: string,
+  ): Promise<void> {
+    const client = this.getClient();
+    let token: string | undefined;
+
+    do {
+      const res = await client.send(
+        new ListObjectsV2Command({ Bucket: bucket, Prefix: oldPrefix, ContinuationToken: token }),
+      );
+
+      for (const object of res.Contents ?? []) {
+        if (!object.Key) {
+          continue;
+        }
+
+        const destKey = `${newPrefix}${object.Key.slice(oldPrefix.length)}`;
+        await client.send(
+          new CopyObjectCommand({
+            Bucket: bucket,
+            CopySource: this.copySource(bucket, object.Key),
+            Key: destKey,
+          }),
+        );
+        await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: object.Key }));
+      }
+
+      token = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (token);
+  }
+
+  /**
+   * Function to build a URL-encoded `CopySource` value (`bucket/key`) that keeps
+   * the key's path separators intact while escaping special characters per segment.
+   * @param bucket - The bucket
+   * @param key - The object key
+   * @returns The encoded copy-source string
+   */
+  private copySource(bucket: string, key: string): string {
+    const encodedKey = key
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+
+    return `${bucket}/${encodedKey}`;
   }
 
   /**

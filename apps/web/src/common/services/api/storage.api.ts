@@ -131,3 +131,20 @@ export const uploadFile = async (
 export const deleteItem = async (backend: StorageBackend, id: string): Promise<void> => {
   await http.delete(`/storage/${backend}/files/${id}`);
 };
+
+/**
+ * Function to rename a file or folder.
+ * @param backend - The storage backend
+ * @param id - The file or folder id
+ * @param name - The new name
+ * @returns The renamed entry
+ */
+export const renameItem = async (
+  backend: StorageBackend,
+  id: string,
+  name: string,
+): Promise<DriveEntry> => {
+  const { data } = await http.patch<DriveEntry>(`/storage/${backend}/files/${id}/rename`, { name });
+
+  return data;
+};

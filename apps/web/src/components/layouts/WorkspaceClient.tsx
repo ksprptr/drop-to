@@ -12,6 +12,7 @@ import {
   folderDownloadUrl,
   getFolderContents,
   getStorageStatuses,
+  renameItem,
   uploadFile,
 } from '@/common/services/api/storage.api';
 import { type PickedFolder, usePicker } from '@/common/services/picker/usePicker';
@@ -85,6 +86,12 @@ export default function WorkspaceClient({ username }: Props) {
   const [duplicate, setDuplicate] = useState<string[] | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<ViewEntry | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<ViewEntry | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [renaming, setRenaming] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -168,6 +175,11 @@ export default function WorkspaceClient({ username }: Props) {
     setPath([]);
     setSelected(null);
   }, [activeBackend]);
+
+  // Drop any multi-select whenever the folder or storage changes.
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [currentFolderId, activeBackend]);
 
   useEffect(() => {
     if (handledParams.current) {
@@ -561,6 +573,14 @@ export default function WorkspaceClient({ username }: Props) {
       if (selected?.id === entry.id) {
         setSelected(null);
       }
+      setSelectedIds((current) => {
+        if (!current.has(entry.id)) {
+          return current;
+        }
+        const next = new Set(current);
+        next.delete(entry.id);
+        return next;
+      });
       toast.success(`${entry.isFolder ? 'Folder' : 'File'} "${entry.name}" deleted.`);
       setConfirmTarget(null);
     } catch (error) {
@@ -569,6 +589,100 @@ export default function WorkspaceClient({ username }: Props) {
       setDeleting(false);
     }
   }, [activeBackend, confirmTarget, selected, loadEntries, toast]);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelectedIds(new Set(entries.map((entry) => entry.id)));
+  }, [entries]);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const confirmBulkDelete = useCallback(async () => {
+    if (activeBackend === null || selectedIds.size === 0) {
+      return;
+    }
+    const backend = activeBackend;
+    const ids = [...selectedIds];
+
+    setBulkDeleting(true);
+    try {
+      const results = await Promise.allSettled(ids.map((id) => deleteItem(backend, id)));
+      const failed = results.filter((result) => result.status === 'rejected').length;
+
+      await loadEntries();
+      if (selected && ids.includes(selected.id)) {
+        setSelected(null);
+      }
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+
+      if (failed > 0) {
+        toast.error(`Failed to delete ${failed} item${failed === 1 ? '' : 's'}.`);
+      } else {
+        toast.success(`Deleted ${ids.length} item${ids.length === 1 ? '' : 's'}.`);
+      }
+    } catch (error) {
+      toast.error(extractApiErrorMessage(error));
+    } finally {
+      setBulkDeleting(false);
+    }
+  }, [activeBackend, selectedIds, selected, loadEntries, toast]);
+
+  const openRename = useCallback((entry: ViewEntry) => {
+    setRenameTarget(entry);
+    setRenameName(entry.name);
+  }, []);
+
+  const handleRename = useCallback(
+    async (event: FormEvent) => {
+      event.preventDefault();
+      const name = renameName.trim();
+      if (!renameTarget || activeBackend === null || !name || renaming) {
+        return;
+      }
+      if (name === renameTarget.name) {
+        setRenameTarget(null);
+        return;
+      }
+
+      setRenaming(true);
+      try {
+        await renameItem(activeBackend, renameTarget.id, name);
+        await loadEntries();
+        // The id can change on rename (S3 ids encode the key), so drop the old id
+        // from the preview and any multi-selection pointing at the renamed item.
+        if (selected?.id === renameTarget.id) {
+          setSelected(null);
+        }
+        setSelectedIds((current) => {
+          if (!current.has(renameTarget.id)) {
+            return current;
+          }
+          const next = new Set(current);
+          next.delete(renameTarget.id);
+          return next;
+        });
+        toast.success(`Renamed to "${name}".`);
+        setRenameTarget(null);
+      } catch (error) {
+        toast.error(extractApiErrorMessage(error));
+      } finally {
+        setRenaming(false);
+      }
+    },
+    [activeBackend, renameTarget, renameName, renaming, selected, loadEntries, toast],
+  );
 
   const handleManageFolders = useCallback(async () => {
     try {
@@ -641,12 +755,21 @@ export default function WorkspaceClient({ username }: Props) {
           loading={currentFolderId === null ? loadingStatus : loadingEntries}
           selectedId={selected?.id ?? null}
           canUpload={currentFolderId !== null}
+          canModify={currentFolderId !== null}
           hasStorage={activeBackend !== null}
+          selectedIds={selectedIds}
           onNavigate={navigate}
           onOpenFolder={openFolder}
           onSelect={setSelected}
           onUpload={handleUpload}
           onNewFolder={() => setNewFolderOpen(true)}
+          onToggleSelect={toggleSelect}
+          onSelectAll={selectAll}
+          onClearSelection={clearSelection}
+          onBulkDelete={() => setBulkDeleteOpen(true)}
+          onDownload={handleDownload}
+          onRename={openRename}
+          onDelete={setConfirmTarget}
         />
         <PreviewPanel
           entry={selected}
@@ -655,6 +778,7 @@ export default function WorkspaceClient({ username }: Props) {
           onClose={() => setSelected(null)}
           onDelete={setConfirmTarget}
           onDownload={handleDownload}
+          onRename={openRename}
         />
       </main>
 
@@ -711,6 +835,57 @@ export default function WorkspaceClient({ username }: Props) {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Rename modal */}
+      <Modal
+        open={renameTarget !== null}
+        onClose={() => setRenameTarget(null)}
+        title={renameTarget?.isFolder ? 'Rename folder' : 'Rename file'}>
+        <form onSubmit={handleRename} className='flex flex-col gap-y-4'>
+          <Input
+            name='renameName'
+            label='Name'
+            value={renameName}
+            onChange={(event) => setRenameName(event.target.value)}
+            autoFocus
+          />
+          <div className='flex justify-end gap-x-2'>
+            <Button variant='transparent' onClick={() => setRenameTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              type='submit'
+              variant='primary'
+              loading={renaming}
+              disabled={!renameName.trim() || renameName.trim() === renameTarget?.name}>
+              Rename
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Bulk delete confirmation modal */}
+      <Modal open={bulkDeleteOpen} onClose={() => setBulkDeleteOpen(false)} title='Delete items'>
+        <div className='flex flex-col gap-y-5'>
+          <div className='flex gap-x-3'>
+            <div className='bg-red-500/10 text-red-500 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full'>
+              <Icon icon='ExclamationTriangle' className='h-5 w-5' />
+            </div>
+            <p className='text-zinc-600 dark:text-zinc-400 text-sm'>
+              Delete the {selectedIds.size} selected item{selectedIds.size === 1 ? '' : 's'},
+              including everything inside any selected folders? This cannot be undone.
+            </p>
+          </div>
+          <div className='flex justify-end gap-x-2'>
+            <Button variant='transparent' onClick={() => setBulkDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant='danger' loading={bulkDeleting} onClick={confirmBulkDelete}>
+              Delete
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* Delete confirmation modal */}

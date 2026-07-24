@@ -79,6 +79,9 @@ export interface StorageProvider {
   /** Deletes a file or subfolder inside the authorized tree (never a root). */
   deleteItem(itemId: string): Promise<void>;
 
+  /** Renames a file or subfolder inside the authorized scope (never a root). */
+  renameItem(itemId: string, name: string): Promise<DriveEntryEntity>;
+
   /** Opens a readable stream of a single file's contents. */
   downloadFile(fileId: string): Promise<StorageDownload>;
 
