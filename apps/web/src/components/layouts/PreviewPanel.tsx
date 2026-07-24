@@ -1,8 +1,9 @@
 'use client';
 
+import type { StorageBackend } from '@dropto/types';
 import { useState } from 'react';
 
-import { fileDownloadUrl } from '@/common/services/api/drive.api';
+import { fileDownloadUrl } from '@/common/services/api/storage.api';
 import type { ViewEntry } from '@/common/types/workspace.types';
 import { formatBytes, formatDateTime } from '@/common/utils/format.functions';
 import Button from '@/components/common/Button';
@@ -11,6 +12,7 @@ import Icon from '@/components/common/Icon';
 interface Props {
   entry: ViewEntry | null;
   isRoot: boolean;
+  backend: StorageBackend | null;
   onClose: () => void;
   onDelete: (entry: ViewEntry) => void;
   onDownload: (entry: ViewEntry) => void;
@@ -32,12 +34,19 @@ function DetailRow({ label, value }: { label: string; value: string }) {
  * The right pane: preview and metadata of the selected file or folder, with
  * download (file / folder-as-ZIP) and delete actions.
  */
-export default function PreviewPanel({ entry, isRoot, onClose, onDelete, onDownload }: Props) {
+export default function PreviewPanel({
+  entry,
+  isRoot,
+  backend,
+  onClose,
+  onDelete,
+  onDownload,
+}: Props) {
   const [imageFailed, setImageFailed] = useState(false);
 
   const isImage = !!entry && !entry.isFolder && !!entry.mimeType?.startsWith('image/');
   // Images preview via the download endpoint (cookie-authenticated, same-site).
-  const imageUrl = entry && !entry.isFolder ? fileDownloadUrl(entry.id) : '';
+  const imageUrl = entry && !entry.isFolder && backend ? fileDownloadUrl(backend, entry.id) : '';
 
   return (
     <aside className='hidden w-80 shrink-0 flex-col overflow-hidden rounded-2xl border border-zinc-300 bg-zinc-50 lg:flex dark:border-zinc-700 dark:bg-zinc-800'>

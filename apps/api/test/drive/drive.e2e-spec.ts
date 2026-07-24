@@ -40,9 +40,9 @@ describe('Drive (integration)', () => {
     resetGoogleApisMock();
   });
 
-  describe('GET /api/v1/drive/folders', () => {
+  describe('GET /api/v1/storage/drive/folders', () => {
     it('rejects a request without an auth cookie (401)', async () => {
-      const res = await request(app.getHttpServer()).get('/api/v1/drive/folders');
+      const res = await request(app.getHttpServer()).get('/api/v1/storage/drive/folders');
 
       expect(res.status).toBe(401);
     });
@@ -54,7 +54,7 @@ describe('Drive (integration)', () => {
       ]);
 
       const res = await request(app.getHttpServer())
-        .get('/api/v1/drive/folders')
+        .get('/api/v1/storage/drive/folders')
         .set('Cookie', accessCookie());
 
       expect(res.status).toBe(200);
@@ -66,7 +66,7 @@ describe('Drive (integration)', () => {
       prisma.driveAccount.findFirst.mockResolvedValue(null);
 
       const res = await request(app.getHttpServer())
-        .get('/api/v1/drive/folders')
+        .get('/api/v1/storage/drive/folders')
         .set('Cookie', accessCookie());
 
       expect(res.status).toBe(404);
@@ -74,7 +74,7 @@ describe('Drive (integration)', () => {
     });
   });
 
-  describe('POST /api/v1/drive/folders/:id/subfolder', () => {
+  describe('POST /api/v1/storage/drive/folders/:id/subfolder', () => {
     it('creates a subfolder inside an authorized folder (201)', async () => {
       connectAccountWithRoots('root-1');
       driveFilesMock.create.mockResolvedValue({
@@ -82,7 +82,7 @@ describe('Drive (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post('/api/v1/drive/folders/root-1/subfolder')
+        .post('/api/v1/storage/drive/folders/root-1/subfolder')
         .set('Cookie', accessCookie())
         .send({ name: 'New folder' });
 
@@ -99,7 +99,7 @@ describe('Drive (integration)', () => {
       connectAccountWithRoots('root-1');
 
       const res = await request(app.getHttpServer())
-        .post('/api/v1/drive/folders/root-1/subfolder')
+        .post('/api/v1/storage/drive/folders/root-1/subfolder')
         .set('Cookie', accessCookie())
         .send({ name: 'bad/name' });
 
@@ -107,7 +107,7 @@ describe('Drive (integration)', () => {
     });
   });
 
-  describe('POST /api/v1/drive/folders/:id/upload', () => {
+  describe('POST /api/v1/storage/drive/folders/:id/upload', () => {
     it('uploads a file into an authorized folder (201)', async () => {
       connectAccountWithRoots('root-1');
       driveFilesMock.create.mockResolvedValue({
@@ -115,7 +115,7 @@ describe('Drive (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post('/api/v1/drive/folders/root-1/upload')
+        .post('/api/v1/storage/drive/folders/root-1/upload')
         .set('Cookie', accessCookie())
         .attach('file', Buffer.from('hello'), 'note.txt');
 
@@ -135,19 +135,19 @@ describe('Drive (integration)', () => {
       connectAccountWithRoots('root-1');
 
       const res = await request(app.getHttpServer())
-        .post('/api/v1/drive/folders/root-1/upload')
+        .post('/api/v1/storage/drive/folders/root-1/upload')
         .set('Cookie', accessCookie());
 
       expect(res.status).toBe(400);
     });
   });
 
-  describe('DELETE /api/v1/drive/files/:id', () => {
+  describe('DELETE /api/v1/storage/drive/files/:id', () => {
     it('returns 409 when trying to delete an authorized root folder', async () => {
       connectAccountWithRoots('root-1');
 
       const res = await request(app.getHttpServer())
-        .delete('/api/v1/drive/files/root-1')
+        .delete('/api/v1/storage/drive/files/root-1')
         .set('Cookie', accessCookie());
 
       expect(res.status).toBe(409);
@@ -160,7 +160,7 @@ describe('Drive (integration)', () => {
       driveFilesMock.get.mockResolvedValue({ data: { id: 'orphan', parents: [] } });
 
       const res = await request(app.getHttpServer())
-        .delete('/api/v1/drive/files/orphan')
+        .delete('/api/v1/storage/drive/files/orphan')
         .set('Cookie', accessCookie());
 
       expect(res.status).toBe(403);
@@ -173,7 +173,7 @@ describe('Drive (integration)', () => {
       driveFilesMock.delete.mockResolvedValue({});
 
       const res = await request(app.getHttpServer())
-        .delete('/api/v1/drive/files/child')
+        .delete('/api/v1/storage/drive/files/child')
         .set('Cookie', accessCookie());
 
       expect(res.status).toBe(204);

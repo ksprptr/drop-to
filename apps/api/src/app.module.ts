@@ -14,6 +14,7 @@ import { databaseConfig } from './config/database.config';
 import { googleConfig } from './config/google.config';
 import { jwtConfig } from './config/jwt.config';
 import { rateLimitConfig } from './config/rate-limit.config';
+import { s3Config } from './config/s3.config';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuthGuard } from './modules/auth/guards/auth.guard';
 import { GoogleAuthModule } from './modules/google-auth/google-auth.module';
@@ -29,7 +30,16 @@ import { PrismaModule } from './prisma/prisma.module';
     // Runtime / Platform
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, authConfig, jwtConfig, databaseConfig, googleConfig, cryptoConfig, rateLimitConfig],
+      load: [
+        appConfig,
+        authConfig,
+        jwtConfig,
+        databaseConfig,
+        googleConfig,
+        cryptoConfig,
+        rateLimitConfig,
+        s3Config,
+      ],
       validate: (config) => {
         const envExample = fs.readFileSync(path.join(process.cwd(), '.env.example'), 'utf-8');
 

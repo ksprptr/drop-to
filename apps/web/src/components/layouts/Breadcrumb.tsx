@@ -5,13 +5,18 @@ import Icon from '@/components/common/Icon';
 
 interface Props {
   crumbs: Crumb[];
+  /** Label of the browse root (the active storage name, e.g. "Google Drive"). */
+  rootLabel: string;
+  /** Heroicon name for the browse root. */
+  rootIcon: string;
   onNavigate: (index: number) => void;
 }
 
 /**
- * Breadcrumb trail for the current folder path (Home → folder → subfolder).
+ * Breadcrumb trail for the current folder path. The first crumb is the active
+ * storage (e.g. Google Drive → folder → subfolder).
  */
-export default function Breadcrumb({ crumbs, onNavigate }: Props) {
+export default function Breadcrumb({ crumbs, rootLabel, rootIcon, onNavigate }: Props) {
   return (
     <nav className='flex min-w-0 items-center gap-x-1 text-sm'>
       <button
@@ -22,8 +27,8 @@ export default function Breadcrumb({ crumbs, onNavigate }: Props) {
             ? 'text-zinc-950 dark:text-zinc-50 font-medium'
             : 'text-zinc-600 dark:text-zinc-400'
         }`}>
-        <Icon icon='Home' className='h-4 w-4' />
-        Home
+        <Icon icon={rootIcon} className='h-4 w-4' />
+        {rootLabel}
       </button>
 
       {crumbs.map((crumb, index) => (

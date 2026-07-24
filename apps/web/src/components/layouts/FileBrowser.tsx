@@ -11,10 +11,16 @@ import Breadcrumb from './Breadcrumb';
 
 interface Props {
   path: Crumb[];
+  /** Label of the browse root (the active storage name). */
+  rootLabel: string;
+  /** Heroicon name for the browse root. */
+  rootIcon: string;
   entries: ViewEntry[];
   loading: boolean;
   selectedId: string | null;
   canUpload: boolean;
+  /** Whether a storage backend is currently selected. */
+  hasStorage: boolean;
   onNavigate: (index: number) => void;
   onOpenFolder: (entry: ViewEntry) => void;
   onSelect: (entry: ViewEntry) => void;
@@ -99,10 +105,13 @@ const resolveDropItems = async (
  */
 export default function FileBrowser({
   path,
+  rootLabel,
+  rootIcon,
   entries,
   loading,
   selectedId,
   canUpload,
+  hasStorage,
   onNavigate,
   onOpenFolder,
   onSelect,
@@ -199,7 +208,7 @@ export default function FileBrowser({
     <section className='flex min-h-0 flex-1 flex-col'>
       {/* Toolbar */}
       <header className='flex h-12 shrink-0 items-center justify-between gap-x-4 px-2'>
-        <Breadcrumb crumbs={path} onNavigate={onNavigate} />
+        <Breadcrumb crumbs={path} rootLabel={rootLabel} rootIcon={rootIcon} onNavigate={onNavigate} />
 
         <div className='flex shrink-0 items-center gap-x-1'>
           {!loading && (
@@ -259,16 +268,18 @@ export default function FileBrowser({
         ) : entries.length === 0 ? (
           <div className='flex h-full flex-col items-center justify-center text-center text-zinc-600 dark:text-zinc-400'>
             <Icon
-              icon={canUpload ? 'ArrowUpTray' : 'FolderOpen'}
+              icon={canUpload ? 'ArrowUpTray' : hasStorage ? 'FolderOpen' : 'CircleStack'}
               className='mb-3 h-9 w-9 opacity-40'
             />
             <p className='text-sm font-medium text-zinc-950 dark:text-zinc-50'>
-              {canUpload ? 'This folder is empty' : 'No folders yet'}
+              {canUpload ? 'This folder is empty' : hasStorage ? 'No folders yet' : 'No storage selected'}
             </p>
             <p className='mt-1 text-xs'>
               {canUpload
                 ? 'Drag files or folders here, or use the upload buttons.'
-                : 'Connect a Google account and pick folders in the sidebar.'}
+                : hasStorage
+                  ? 'Add folders or buckets to this storage in the sidebar.'
+                  : 'Choose a storage in the sidebar to start browsing.'}
             </p>
           </div>
         ) : (

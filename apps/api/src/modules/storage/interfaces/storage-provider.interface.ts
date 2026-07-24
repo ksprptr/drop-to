@@ -4,14 +4,14 @@ import { Readable } from 'node:stream';
 import { AllowedFolderEntity } from '@/modules/google-auth/entities/allowed-folder.entity';
 
 import { DriveEntryEntity } from '../entities/drive-entry.entity';
+import { StorageStatusEntity } from '../entities/storage-status.entity';
 import { UploadResultEntity } from '../entities/upload-result.entity';
 
-/**
- * DI token the storage provider is bound to. Controllers depend on the
- * `StorageProvider` interface via this token, never on a concrete backend, so a
- * different backend (e.g. S3) is a one-line binding change in `StorageModule`.
- */
-export const STORAGE_PROVIDER = Symbol('STORAGE_PROVIDER');
+/** The storage backends the workspace can browse. */
+export type StorageBackend = 'drive' | 's3';
+
+/** All known backend keys, in the order they appear in the sidebar. */
+export const STORAGE_BACKENDS: StorageBackend[] = ['drive', 's3'];
 
 /**
  * A file to upload: its contents as a stream plus the metadata needed to store
@@ -44,16 +44,26 @@ export interface StorageArchive {
 }
 
 /**
- * Backend-agnostic contract for the file storage a `DriveAccount` is backed by.
+ * Backend-agnostic contract for a file storage backend.
  *
- * The current implementation ({@link GoogleDriveProvider}) is Google Drive, but
- * every method is expressed in terms the app cares about (authorized roots,
- * folder contents, uploads, downloads) rather than Drive specifics, so an
- * alternative backend (e.g. S3) only needs to implement this interface and be
- * bound to {@link STORAGE_PROVIDER}. Implementations must keep enforcing the
- * authorized-folder tree — no id from a request is ever trusted unvalidated.
+ * Implemented by `GoogleDriveProvider` (Google Drive) and `S3StorageProvider`
+ * (AWS S3 / S3-compatible). Every method is expressed in terms the app cares
+ * about (browse roots, folder contents, uploads, downloads) rather than backend
+ * specifics, so a new backend only needs to implement this interface and be
+ * registered in the `StorageRegistry`. Implementations must keep enforcing their
+ * allowed scope — no id from a request is ever trusted unvalidated.
  */
 export interface StorageProvider {
+  /** The backend key this provider serves ('drive' | 's3'). */
+  readonly backend: StorageBackend;
+
+  /**
+   * Reports whether the backend is usable and its browse roots, for the sidebar
+   * and storage switcher. Never throws for a not-connected backend — it returns
+   * `connected: false` with empty roots.
+   */
+  status(): Promise<StorageStatusEntity>;
+
   /** Lists the authorized root folders (the ones picked during setup). */
   listRoots(): Promise<AllowedFolderEntity[]>;
 

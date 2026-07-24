@@ -1,20 +1,23 @@
 'use client';
 
-import type { DriveAccountStatus } from '@dropto/types';
+import type { StorageBackend, StorageStatus } from '@dropto/types';
+import type { ReactNode } from 'react';
 
 import { getGoogleAuthUrl } from '@/common/services/api/auth.api';
 import Button from '@/components/common/Button';
 import Icon from '@/components/common/Icon';
 import ThemeToggle from '@/components/common/ThemeToggle';
 import LoadingIndicator from '@/components/loadings/LoadingIndicator';
+import { STORAGE_ICON } from '@/configs/storage.config';
 
 interface Props {
-  status: DriveAccountStatus | null;
+  statuses: StorageStatus[];
+  driveStatus: StorageStatus | null;
+  activeBackend: StorageBackend | null;
   loading: boolean;
   username: string;
-  activeRootId: string | null;
   saving: boolean;
-  onOpenRoot: (folderId: string, name: string) => void;
+  onSelectStorage: (backend: StorageBackend) => void;
   onManageFolders: () => void;
   onDisconnect: () => void;
   onLogout: () => void;
@@ -22,21 +25,37 @@ interface Props {
 }
 
 /**
- * The left pane: brand, Google account management (connect / pick folders /
- * disconnect), quick navigation to the authorized roots, and the session footer.
+ * A small uppercase section label.
+ */
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className='mb-2 px-1 text-[10px] font-semibold tracking-wider text-zinc-600 uppercase dark:text-zinc-400'>
+      {children}
+    </p>
+  );
+}
+
+/**
+ * The left pane: the Google account category (connect / pick folders / disconnect),
+ * the S3 storage category (status from the API), a switcher to choose which storage
+ * to browse, and the session footer.
  */
 export default function AccountSidebar({
-  status,
+  statuses,
+  driveStatus,
+  activeBackend,
   loading,
   username,
-  activeRootId,
   saving,
-  onOpenRoot,
+  onSelectStorage,
   onManageFolders,
   onDisconnect,
   onLogout,
   loggingOut,
 }: Props) {
+  const s3Status = statuses.find((status) => status.backend === 's3') ?? null;
+  const connectedStorages = statuses.filter((status) => status.connected);
+
   return (
     <aside className='hidden w-72 shrink-0 flex-col overflow-hidden rounded-2xl border border-zinc-300 bg-zinc-50 md:flex dark:border-zinc-700 dark:bg-zinc-800'>
       {/* Brand */}
@@ -47,24 +66,23 @@ export default function AccountSidebar({
         <div className='leading-tight'>
           <p className='text-sm font-semibold'>DropTo</p>
           <p className='text-[10px] tracking-wider text-zinc-600 uppercase dark:text-zinc-400'>
-            Drive workspace
+            Storage workspace
           </p>
         </div>
       </div>
 
-      {/* Account + folders */}
+      {/* Categories + storage switcher */}
       <div className='flex min-h-0 flex-1 flex-col gap-y-5 overflow-y-auto p-4'>
+        {/* Google account */}
         <div>
-          <p className='mb-2 px-1 text-[10px] font-semibold tracking-wider text-zinc-600 uppercase dark:text-zinc-400'>
-            Google account
-          </p>
+          <SectionLabel>Google account</SectionLabel>
 
           {loading ? (
             <div className='flex items-center gap-x-2 px-1 py-2 text-sm text-zinc-600 dark:text-zinc-400'>
               <LoadingIndicator />
               Loading…
             </div>
-          ) : !status?.connected ? (
+          ) : !driveStatus?.connected ? (
             <div className='flex flex-col gap-y-3 rounded-xl bg-zinc-100 p-3 dark:bg-zinc-900'>
               <p className='text-xs text-zinc-600 dark:text-zinc-400'>
                 No account connected. Connect a Google account to pick folders and upload.
@@ -83,7 +101,7 @@ export default function AccountSidebar({
                   <Icon icon='CheckBadge' type='solid' className='h-5 w-5' />
                 </div>
                 <div className='min-w-0 leading-tight'>
-                  <p className='truncate text-xs font-medium'>{status.email}</p>
+                  <p className='truncate text-xs font-medium'>{driveStatus.email}</p>
                   <p className='text-[10px] text-zinc-600 dark:text-zinc-400'>Connected</p>
                 </div>
               </div>
@@ -102,27 +120,58 @@ export default function AccountSidebar({
           )}
         </div>
 
-        {/* Authorized roots */}
-        {status?.connected && status.allowedFolders.length > 0 && (
+        {/* S3 storage */}
+        <div>
+          <SectionLabel>S3 storage</SectionLabel>
+
+          {loading ? (
+            <div className='flex items-center gap-x-2 px-1 py-2 text-sm text-zinc-600 dark:text-zinc-400'>
+              <LoadingIndicator />
+              Loading…
+            </div>
+          ) : !s3Status?.connected ? (
+            <div className='flex flex-col gap-y-1.5 rounded-xl bg-zinc-100 p-3 dark:bg-zinc-900'>
+              <p className='text-xs font-medium text-zinc-950 dark:text-zinc-50'>
+                No S3 storage connected
+              </p>
+              <p className='text-[11px] text-zinc-600 dark:text-zinc-400'>
+                Enable and configure S3 in the API environment to browse buckets.
+              </p>
+            </div>
+          ) : (
+            <div className='flex items-center gap-x-2 rounded-xl bg-zinc-100 p-2.5 dark:bg-zinc-900'>
+              <div className='inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-600/15 text-green-600'>
+                <Icon icon='CircleStack' type='solid' className='h-5 w-5' />
+              </div>
+              <div className='min-w-0 leading-tight'>
+                <p className='truncate text-xs font-medium'>
+                  {s3Status.roots.length} bucket{s3Status.roots.length === 1 ? '' : 's'}
+                </p>
+                <p className='text-[10px] text-zinc-600 dark:text-zinc-400'>Connected</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Storage switcher */}
+        {!loading && connectedStorages.length > 0 && (
           <div className='min-h-0'>
-            <p className='mb-2 px-1 text-[10px] font-semibold tracking-wider text-zinc-600 uppercase dark:text-zinc-400'>
-              Folders
-            </p>
+            <SectionLabel>Browse</SectionLabel>
             <nav className='flex flex-col gap-y-0.5'>
-              {status.allowedFolders.map((folder) => {
-                const active = folder.folderId === activeRootId;
+              {connectedStorages.map((storage) => {
+                const active = storage.backend === activeBackend;
                 return (
                   <button
-                    key={folder.id}
+                    key={storage.backend}
                     type='button'
-                    onClick={() => onOpenRoot(folder.folderId, folder.name)}
+                    onClick={() => onSelectStorage(storage.backend)}
                     className={`flex items-center gap-x-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
                       active
                         ? 'bg-green-600/10 text-green-600 dark:bg-green-600/15'
                         : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'
                     }`}>
-                    <Icon icon='Folder' type='solid' className='h-4 w-4 shrink-0' />
-                    <span className='truncate'>{folder.name}</span>
+                    <Icon icon={STORAGE_ICON[storage.backend]} className='h-4 w-4 shrink-0' />
+                    <span className='truncate'>{storage.label}</span>
                   </button>
                 );
               })}

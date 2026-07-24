@@ -2,21 +2,23 @@ import { Module } from '@nestjs/common';
 
 import { GoogleAuthModule } from '@/modules/google-auth/google-auth.module';
 
-import { STORAGE_PROVIDER } from './interfaces/storage-provider.interface';
 import { GoogleDriveProvider } from './providers/google-drive.provider';
+import { S3StorageProvider } from './providers/s3-storage.provider';
 import { StorageController } from './storage.controller';
+import { StorageRegistry } from './storage.registry';
 
 /**
  * Class representing the storage module.
  *
- * Binds the `STORAGE_PROVIDER` token to the concrete backend. Today that is
- * {@link GoogleDriveProvider}; switching to another backend (e.g. S3) is a
- * single-line change here — no controller touches a concrete provider.
+ * Registers every storage backend provider and the {@link StorageRegistry} that
+ * resolves them by key. The controller is backend-agnostic and drives them all
+ * through the {@link StorageProvider} interface; adding a backend (e.g. another
+ * object store) is a new provider class registered in the {@link StorageRegistry}.
  */
 @Module({
   imports: [GoogleAuthModule],
   controllers: [StorageController],
-  providers: [{ provide: STORAGE_PROVIDER, useClass: GoogleDriveProvider }],
-  exports: [STORAGE_PROVIDER],
+  providers: [GoogleDriveProvider, S3StorageProvider, StorageRegistry],
+  exports: [StorageRegistry],
 })
 export class StorageModule {}

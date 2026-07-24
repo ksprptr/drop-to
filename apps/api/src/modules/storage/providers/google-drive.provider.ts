@@ -15,9 +15,11 @@ import { GoogleAuthService } from '@/modules/google-auth/google-auth.service';
 import { PrismaService } from '@/prisma/prisma.service';
 
 import { DriveEntryEntity } from '../entities/drive-entry.entity';
+import { StorageStatusEntity } from '../entities/storage-status.entity';
 import { UploadResultEntity } from '../entities/upload-result.entity';
 import {
   StorageArchive,
+  StorageBackend,
   StorageDownload,
   StorageProvider,
   StorageUpload,
@@ -31,18 +33,36 @@ const MAX_ANCESTOR_DEPTH = 50;
  *
  * Wraps the Google Drive API and enforces that every operation stays within the
  * tree of `AllowedFolder`s the account owner authorized via the Picker. No raw
- * folder id from a request is ever trusted without validation. Swapping in a
- * different backend (e.g. S3) means implementing the same interface and binding
- * it to `STORAGE_PROVIDER`, with no controller changes.
+ * folder id from a request is ever trusted without validation. It is one of the
+ * backends registered in the `StorageRegistry`; the controller never touches a
+ * concrete provider.
  */
 @Injectable()
 export class GoogleDriveProvider implements StorageProvider {
+  readonly backend: StorageBackend = 'drive';
+
   private readonly logger = new Logger(GoogleDriveProvider.name);
 
   constructor(
     private readonly googleAuthService: GoogleAuthService,
     private readonly prismaService: PrismaService,
   ) {}
+
+  /**
+   * Function to report the Drive connection status and authorized roots.
+   * @returns The backend status with the authorized folders as roots
+   */
+  async status(): Promise<StorageStatusEntity> {
+    const status = await this.googleAuthService.getStatus();
+
+    return {
+      backend: this.backend,
+      label: 'Google Drive',
+      connected: status.connected,
+      email: status.email,
+      roots: status.allowedFolders.map((folder) => ({ id: folder.folderId, name: folder.name })),
+    };
+  }
 
   /**
    * Function to build an authorized Drive v3 client for the active account.

@@ -1,4 +1,4 @@
-import type { AllowedFolder, AuthUser, DriveAccountStatus, LoginPayload, SaveFoldersPayload } from '@dropto/types';
+import type { AllowedFolder, AuthUser, LoginPayload, SaveFoldersPayload } from '@dropto/types';
 
 import { http } from '@/common/services/axios/axios.instance';
 import { getEnvString } from '@/common/utils/environments.functions';
@@ -36,16 +36,6 @@ export const getGoogleAuthUrl = (): string => {
   const base = getEnvString({ key: 'NEXT_PUBLIC_API_URL', fallback: 'http://localhost:4000/api/v1' });
 
   return `${base.replace(/\/$/, '')}/google-auth/google`;
-};
-
-/**
- * Function to fetch the current Drive account connection status.
- * @returns The connection status
- */
-export const getAuthStatus = async (): Promise<DriveAccountStatus> => {
-  const { data } = await http.get<DriveAccountStatus>('/google-auth/status');
-
-  return data;
 };
 
 /**

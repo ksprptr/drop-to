@@ -1,18 +1,19 @@
 'use client';
 
-import type { DriveAccountStatus } from '@dropto/types';
+import type { StorageBackend, StorageStatus } from '@dropto/types';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { disconnectAccount, getAuthStatus, logout, saveFolders } from '@/common/services/api/auth.api';
+import { disconnectAccount, logout, saveFolders } from '@/common/services/api/auth.api';
 import {
   createSubfolder,
-  deleteFile,
+  deleteItem,
   fileDownloadUrl,
   folderDownloadUrl,
   getFolderContents,
+  getStorageStatuses,
   uploadFile,
-} from '@/common/services/api/drive.api';
+} from '@/common/services/api/storage.api';
 import { type PickedFolder, usePicker } from '@/common/services/picker/usePicker';
 import type {
   Crumb,
@@ -29,6 +30,7 @@ import Icon from '@/components/common/Icon';
 import Input from '@/components/common/Input';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/components/providers/ToastProvider';
+import { STORAGE_ICON } from '@/configs/storage.config';
 
 import AccountSidebar from './AccountSidebar';
 import FileBrowser from './FileBrowser';
@@ -50,8 +52,16 @@ interface Props {
 }
 
 /**
- * The main workspace: a Finder-like three-pane view (account sidebar, file
- * browser, preview panel) with drag-and-drop uploads and account management.
+ * Returns the first connected backend (or null), used to auto-select a storage.
+ */
+const pickDefaultBackend = (statuses: StorageStatus[]): StorageBackend | null =>
+  statuses.find((status) => status.connected)?.backend ?? null;
+
+/**
+ * The main workspace: a Finder-like three-pane view (storage sidebar, file
+ * browser, preview panel) with drag-and-drop uploads and account management. The
+ * sidebar switches between storage backends (Google Drive, S3); the active
+ * backend's roots (authorized folders / buckets) are the top level.
  */
 export default function WorkspaceClient({ username }: Props) {
   const router = useRouter();
@@ -59,8 +69,9 @@ export default function WorkspaceClient({ username }: Props) {
   const toast = useToast();
   const { openPicker } = usePicker();
 
-  const [status, setStatus] = useState<DriveAccountStatus | null>(null);
+  const [statuses, setStatuses] = useState<StorageStatus[]>([]);
   const [loadingStatus, setLoadingStatus] = useState(true);
+  const [activeBackend, setActiveBackend] = useState<StorageBackend | null>(null);
   const [path, setPath] = useState<Crumb[]>([]);
   const [entries, setEntries] = useState<ViewEntry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
@@ -79,6 +90,11 @@ export default function WorkspaceClient({ username }: Props) {
   const handledParams = useRef(false);
   const batchRuntime = useRef<Map<string, BatchRuntime>>(new Map());
   const duplicateResolve = useRef<((choice: 'replace' | 'keep' | 'cancel') => void) | null>(null);
+
+  const driveStatus = statuses.find((status) => status.backend === 'drive') ?? null;
+  const activeStatus = activeBackend
+    ? (statuses.find((status) => status.backend === activeBackend) ?? null)
+    : null;
 
   const currentFolderId = path.length > 0 ? path[path.length - 1].id : null;
   const atRoots = path.length === 0;
@@ -107,21 +123,21 @@ export default function WorkspaceClient({ username }: Props) {
 
   const roots = useMemo<ViewEntry[]>(
     () =>
-      (status?.allowedFolders ?? []).map((folder) => ({
-        id: folder.folderId,
-        name: folder.name,
+      (activeStatus?.roots ?? []).map((root) => ({
+        id: root.id,
+        name: root.name,
         isFolder: true,
         size: null,
         mimeType: FOLDER_MIME,
         modifiedTime: null,
         webViewLink: null,
       })),
-    [status],
+    [activeStatus],
   );
 
   const loadStatus = useCallback(async () => {
     try {
-      setStatus(await getAuthStatus());
+      setStatuses(await getStorageStatuses());
     } catch (error) {
       toast.error(extractApiErrorMessage(error));
     } finally {
@@ -132,6 +148,22 @@ export default function WorkspaceClient({ username }: Props) {
   useEffect(() => {
     void loadStatus();
   }, [loadStatus]);
+
+  // Keep the active backend valid: default to the first connected one, and drop
+  // it if the current one becomes disconnected.
+  useEffect(() => {
+    setActiveBackend((current) => {
+      const stillConnected =
+        current !== null && statuses.some((s) => s.backend === current && s.connected);
+      return stillConnected ? current : pickDefaultBackend(statuses);
+    });
+  }, [statuses]);
+
+  // Reset the browse path whenever the active storage changes.
+  useEffect(() => {
+    setPath([]);
+    setSelected(null);
+  }, [activeBackend]);
 
   useEffect(() => {
     if (handledParams.current) {
@@ -153,14 +185,14 @@ export default function WorkspaceClient({ username }: Props) {
   }, [searchParams, toast, loadStatus, router]);
 
   const loadEntries = useCallback(async () => {
-    if (currentFolderId === null) {
+    if (currentFolderId === null || activeBackend === null) {
       setEntries(roots);
       return;
     }
 
     setLoadingEntries(true);
     try {
-      const contents = await getFolderContents(currentFolderId);
+      const contents = await getFolderContents(activeBackend, currentFolderId);
       setEntries(
         contents.map((entry) => ({
           id: entry.id,
@@ -177,7 +209,7 @@ export default function WorkspaceClient({ username }: Props) {
     } finally {
       setLoadingEntries(false);
     }
-  }, [currentFolderId, roots, toast]);
+  }, [activeBackend, currentFolderId, roots, toast]);
 
   useEffect(() => {
     void loadEntries();
@@ -193,9 +225,8 @@ export default function WorkspaceClient({ username }: Props) {
     setPath((current) => (index < 0 ? [] : current.slice(0, index + 1)));
   }, []);
 
-  const openRoot = useCallback((folderId: string, name: string) => {
-    setSelected(null);
-    setPath([{ id: folderId, name }]);
+  const selectStorage = useCallback((backend: StorageBackend) => {
+    setActiveBackend(backend);
   }, []);
 
   // --- Upload dock state helpers ------------------------------------------------
@@ -233,7 +264,7 @@ export default function WorkspaceClient({ username }: Props) {
   // Undo an entire batch: delete every file/folder it created, so cancelling a
   // multi-file or folder upload leaves nothing behind.
   const rollbackBatch = useCallback(
-    async (batchId: string) => {
+    async (batchId: string, backend: StorageBackend) => {
       // Flip the batch (and all its rows) to a cancelled state — the dock turns
       // the bars and labels red.
       setBatches((current) =>
@@ -251,7 +282,7 @@ export default function WorkspaceClient({ username }: Props) {
       if (runtime) {
         await Promise.all(
           [...runtime.rootFolderIds, ...runtime.looseFileIds].map((id) =>
-            deleteFile(id).catch(() => undefined),
+            deleteItem(backend, id).catch(() => undefined),
           ),
         );
         batchRuntime.current.delete(batchId);
@@ -282,9 +313,10 @@ export default function WorkspaceClient({ username }: Props) {
 
   const handleUpload = useCallback(
     async (items: UploadItem[]) => {
-      if (currentFolderId === null || items.length === 0) {
+      if (currentFolderId === null || activeBackend === null || items.length === 0) {
         return;
       }
+      const backend = activeBackend;
 
       // Detect name conflicts among the top-level items being added here.
       const existingNames = new Set(entries.map((entry) => entry.name));
@@ -385,7 +417,7 @@ export default function WorkspaceClient({ username }: Props) {
         const parentPath = slash === -1 ? '' : dirPath.slice(0, slash);
         const name = slash === -1 ? dirPath : dirPath.slice(slash + 1);
         const parentId = await ensureFolder(parentPath);
-        const created = await createSubfolder(parentId, name);
+        const created = await createSubfolder(backend, parentId, name);
         folderIdByPath.set(dirPath, created.id);
         if (parentPath === '') {
           runtime.rootFolderIds.push(created.id);
@@ -401,6 +433,7 @@ export default function WorkspaceClient({ username }: Props) {
         try {
           const targetFolderId = await ensureFolder(dirPath);
           const result = await uploadFile(
+            backend,
             targetFolderId,
             item.file,
             ({ percent, rate }) => {
@@ -427,11 +460,11 @@ export default function WorkspaceClient({ username }: Props) {
       }
 
       if (signal.aborted) {
-        await rollbackBatch(batchId);
+        await rollbackBatch(batchId, backend);
       } else {
         // Replacements are in — now remove the originals they superseded.
         if (replaceIds.length > 0) {
-          await Promise.all(replaceIds.map((id) => deleteFile(id).catch(() => undefined)));
+          await Promise.all(replaceIds.map((id) => deleteItem(backend, id).catch(() => undefined)));
         }
         batchRuntime.current.delete(batchId);
         await loadEntries();
@@ -440,6 +473,7 @@ export default function WorkspaceClient({ username }: Props) {
       }
     },
     [
+      activeBackend,
       currentFolderId,
       entries,
       loadEntries,
@@ -452,38 +486,46 @@ export default function WorkspaceClient({ username }: Props) {
     ],
   );
 
-  const handleDownload = useCallback((entry: ViewEntry) => {
-    const url = entry.isFolder ? folderDownloadUrl(entry.id) : fileDownloadUrl(entry.id);
-    const id = crypto.randomUUID();
-    setDownloads((current) => [...current, { id, name: entry.name }]);
+  const handleDownload = useCallback(
+    (entry: ViewEntry) => {
+      if (activeBackend === null) {
+        return;
+      }
+      const url = entry.isFolder
+        ? folderDownloadUrl(activeBackend, entry.id)
+        : fileDownloadUrl(activeBackend, entry.id);
+      const id = crypto.randomUUID();
+      setDownloads((current) => [...current, { id, name: entry.name }]);
 
-    // Trigger the download without navigating the SPA; the server's
-    // Content-Disposition drives the filename (the `download` attr is ignored
-    // cross-origin). We can't observe when it starts, so clear "Preparing" after
-    // a short delay.
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.rel = 'noopener';
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
+      // Trigger the download without navigating the SPA; the server's
+      // Content-Disposition drives the filename (the `download` attr is ignored
+      // cross-origin). We can't observe when it starts, so clear "Preparing" after
+      // a short delay.
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.rel = 'noopener';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
 
-    setTimeout(() => {
-      setDownloads((current) => current.filter((task) => task.id !== id));
-    }, DOWNLOAD_PREPARING_MS);
-  }, []);
+      setTimeout(() => {
+        setDownloads((current) => current.filter((task) => task.id !== id));
+      }, DOWNLOAD_PREPARING_MS);
+    },
+    [activeBackend],
+  );
 
   const handleCreateFolder = useCallback(
     async (event: FormEvent) => {
       event.preventDefault();
       const name = newFolderName.trim();
-      if (currentFolderId === null || !name || creating) {
+      if (currentFolderId === null || activeBackend === null || !name || creating) {
         return;
       }
 
       setCreating(true);
       try {
-        await createSubfolder(currentFolderId, name);
+        await createSubfolder(activeBackend, currentFolderId, name);
         await loadEntries();
         toast.success(`Folder "${name}" created.`);
         setNewFolderOpen(false);
@@ -494,18 +536,18 @@ export default function WorkspaceClient({ username }: Props) {
         setCreating(false);
       }
     },
-    [currentFolderId, newFolderName, creating, loadEntries, toast],
+    [activeBackend, currentFolderId, newFolderName, creating, loadEntries, toast],
   );
 
   const confirmDelete = useCallback(async () => {
-    if (!confirmTarget) {
+    if (!confirmTarget || activeBackend === null) {
       return;
     }
     const entry = confirmTarget;
 
     setDeleting(true);
     try {
-      await deleteFile(entry.id);
+      await deleteItem(activeBackend, entry.id);
       await loadEntries();
       if (selected?.id === entry.id) {
         setSelected(null);
@@ -517,7 +559,7 @@ export default function WorkspaceClient({ username }: Props) {
     } finally {
       setDeleting(false);
     }
-  }, [confirmTarget, selected, loadEntries, toast]);
+  }, [activeBackend, confirmTarget, selected, loadEntries, toast]);
 
   const handleManageFolders = useCallback(async () => {
     try {
@@ -544,8 +586,6 @@ export default function WorkspaceClient({ username }: Props) {
   const handleDisconnect = useCallback(async () => {
     try {
       await disconnectAccount();
-      setPath([]);
-      setSelected(null);
       await loadStatus();
       toast.success('Google account disconnected.');
     } catch (error) {
@@ -564,15 +604,19 @@ export default function WorkspaceClient({ username }: Props) {
     }
   }, [router, toast]);
 
+  const rootLabel = activeStatus?.label ?? 'Home';
+  const rootIcon = activeBackend ? STORAGE_ICON[activeBackend] : 'Home';
+
   return (
     <div className='flex h-screen gap-3 overflow-hidden p-3'>
       <AccountSidebar
-        status={status}
+        statuses={statuses}
+        driveStatus={driveStatus}
+        activeBackend={activeBackend}
         loading={loadingStatus}
         username={username}
-        activeRootId={path[0]?.id ?? null}
         saving={saving}
-        onOpenRoot={openRoot}
+        onSelectStorage={selectStorage}
         onManageFolders={handleManageFolders}
         onDisconnect={handleDisconnect}
         onLogout={handleLogout}
@@ -582,10 +626,13 @@ export default function WorkspaceClient({ username }: Props) {
       <main className='flex min-w-0 flex-1 gap-3'>
         <FileBrowser
           path={path}
+          rootLabel={rootLabel}
+          rootIcon={rootIcon}
           entries={entries}
           loading={currentFolderId === null ? loadingStatus : loadingEntries}
           selectedId={selected?.id ?? null}
           canUpload={currentFolderId !== null}
+          hasStorage={activeBackend !== null}
           onNavigate={navigate}
           onOpenFolder={openFolder}
           onSelect={setSelected}
@@ -595,6 +642,7 @@ export default function WorkspaceClient({ username }: Props) {
         <PreviewPanel
           entry={selected}
           isRoot={atRoots}
+          backend={activeBackend}
           onClose={() => setSelected(null)}
           onDelete={setConfirmTarget}
           onDownload={handleDownload}

@@ -61,3 +61,28 @@ export interface ApiErrorResponse {
   status: number;
   message: string | string[];
 }
+
+/** A storage backend the workspace can browse. */
+export type StorageBackend = 'drive' | 's3';
+
+/**
+ * A browse root within a storage backend: an authorized folder for Google Drive,
+ * or a configured bucket for S3. `id` is the opaque id used to browse into it.
+ */
+export interface StorageRoot {
+  id: string;
+  name: string;
+}
+
+/**
+ * Connection status of a storage backend, used to render the sidebar and the
+ * storage switcher. `connected` means the backend is usable (Drive: an account is
+ * linked; S3: enabled in the API env). `email` is Drive-only.
+ */
+export interface StorageStatus {
+  backend: StorageBackend;
+  label: string;
+  connected: boolean;
+  roots: StorageRoot[];
+  email?: string | null;
+}
