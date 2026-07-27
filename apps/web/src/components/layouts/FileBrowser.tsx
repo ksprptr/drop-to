@@ -16,7 +16,7 @@ import { formatBytes, formatDate } from '@/common/utils/format.functions';
 import Icon from '@/components/common/Icon';
 import LoadingIndicator from '@/components/loadings/LoadingIndicator';
 
-import Breadcrumb from './Breadcrumb';
+import Breadcrumb, { type BreadcrumbStoragePicker } from './Breadcrumb';
 
 /** Custom DataTransfer type marking an internal drag-to-move (vs an OS file drop). */
 const MOVE_MIME = 'application/x-dropto-move';
@@ -71,6 +71,8 @@ interface Props {
   onMoveDragEnd?: () => void;
   /** Items were dropped onto this pane — move them into the current folder. */
   onMoveDrop?: () => void;
+  /** When provided, the root crumb switches the active storage (mobile switcher). */
+  storagePicker?: BreadcrumbStoragePicker;
 }
 
 /** An open row-actions menu, anchored to the three-dot button's screen position. */
@@ -184,6 +186,7 @@ export default function FileBrowser({
   onMoveDragStart,
   onMoveDragEnd,
   onMoveDrop,
+  storagePicker,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -253,10 +256,12 @@ export default function FileBrowser({
   const allSelected = entries.length > 0 && entries.every((entry) => selectedIds.has(entry.id));
 
   // Row layout: a leading checkbox + trailing actions column only when the level
-  // is modifiable (i.e. not the roots level, where items can't be changed).
+  // is modifiable (i.e. not the roots level, where items can't be changed). The
+  // "Modified" column is dropped on mobile (hidden cell + a narrower template) so
+  // the name gets the room.
   const gridCols = canModify
-    ? 'grid-cols-[1.5rem_minmax(0,1fr)_8rem_5rem_2rem]'
-    : 'grid-cols-[minmax(0,1fr)_8rem_6rem]';
+    ? 'grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_2rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_8rem_5rem_2rem]'
+    : 'grid-cols-[minmax(0,1fr)_4.5rem] sm:grid-cols-[minmax(0,1fr)_8rem_6rem]';
 
   const openMenu = (event: MouseEvent<HTMLButtonElement>, entry: ViewEntry) => {
     event.stopPropagation();
@@ -376,6 +381,7 @@ export default function FileBrowser({
           rootLabel={rootLabel}
           rootIcon={rootIcon}
           onNavigate={onNavigate}
+          storagePicker={storagePicker}
         />
 
         <div className='flex shrink-0 items-center gap-x-1'>
@@ -506,7 +512,9 @@ export default function FileBrowser({
                 />
               )}
               <SortHeader label='Name' column='name' />
-              <SortHeader label='Modified' column='modified' />
+              <div className='hidden sm:block'>
+                <SortHeader label='Modified' column='modified' />
+              </div>
               <div className='flex justify-end'>
                 <SortHeader label='Size' column='size' />
               </div>
@@ -576,9 +584,9 @@ export default function FileBrowser({
                             className='h-5 w-5 shrink-0 text-zinc-600 dark:text-zinc-400'
                           />
                         )}
-                        <span className='truncate text-sm font-medium'>{entry.name}</span>
+                        <span className='min-w-0 truncate text-sm font-medium'>{entry.name}</span>
                       </span>
-                      <span className='text-xs text-zinc-600 dark:text-zinc-400'>
+                      <span className='hidden text-xs text-zinc-600 sm:block dark:text-zinc-400'>
                         {formatDate(entry.modifiedTime)}
                       </span>
                       <span className='text-right text-xs text-zinc-600 dark:text-zinc-400'>

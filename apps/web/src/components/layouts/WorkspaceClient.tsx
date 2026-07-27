@@ -14,7 +14,11 @@ import {
   statusesAction,
 } from '@/actions/storage/storage.actions';
 import { useBrowsePane } from '@/common/hooks/useBrowsePane';
-import { fileDownloadUrl, folderDownloadUrl, uploadFile } from '@/common/services/api/storage.client';
+import {
+  fileDownloadUrl,
+  folderDownloadUrl,
+  uploadFile,
+} from '@/common/services/api/storage.client';
 import { type PickedFolder, usePicker } from '@/common/services/picker/usePicker';
 import type {
   Crumb,
@@ -365,7 +369,9 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
       // A move can take a while (S3 copies whole folders), so show a live toast.
       const toastId = toast.loading(`Moving ${count}…`);
 
-      const results = await Promise.all(ids.map((id) => moveItemAction(backend, id, targetFolderId)));
+      const results = await Promise.all(
+        ids.map((id) => moveItemAction(backend, id, targetFolderId)),
+      );
       const failed = results.filter((result) => !result.ok).length;
 
       await reloadPanes();
@@ -389,23 +395,18 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
 
   // --- Upload dock state helpers ------------------------------------------------
 
-  const updateTask = useCallback(
-    (batchId: string, taskId: string, patch: Partial<UploadTask>) => {
-      setBatches((current) =>
-        current.map((batch) =>
-          batch.id === batchId
-            ? {
-                ...batch,
-                tasks: batch.tasks.map((task) =>
-                  task.id === taskId ? { ...task, ...patch } : task,
-                ),
-              }
-            : batch,
-        ),
-      );
-    },
-    [],
-  );
+  const updateTask = useCallback((batchId: string, taskId: string, patch: Partial<UploadTask>) => {
+    setBatches((current) =>
+      current.map((batch) =>
+        batch.id === batchId
+          ? {
+              ...batch,
+              tasks: batch.tasks.map((task) => (task.id === taskId ? { ...task, ...patch } : task)),
+            }
+          : batch,
+      ),
+    );
+  }, []);
 
   const setBatchStatus = useCallback((batchId: string, batchStatus: UploadBatch['status']) => {
     setBatches((current) =>
@@ -523,7 +524,9 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
       });
 
       const folderTops = new Set(
-        finalItems.filter((item) => isTopLevelFolder(item.relativePath)).map((item) => topLevelName(item.relativePath)),
+        finalItems
+          .filter((item) => isTopLevelFolder(item.relativePath))
+          .map((item) => topLevelName(item.relativePath)),
       );
       const looseCount = finalItems.filter((item) => !isTopLevelFolder(item.relativePath)).length;
       const kind: UploadBatch['kind'] =
@@ -706,7 +709,16 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
         setCreating(false);
       }
     },
-    [activeBackend, currentFolderId, paneB, newFolderPane, newFolderName, creating, reloadPanes, toast],
+    [
+      activeBackend,
+      currentFolderId,
+      paneB,
+      newFolderPane,
+      newFolderName,
+      creating,
+      reloadPanes,
+      toast,
+    ],
   );
 
   const confirmDelete = useCallback(async () => {
@@ -958,46 +970,51 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
           <FileBrowser
             path={path}
             rootLabel={rootLabel}
-          rootIcon={rootIcon}
-          entries={entries}
-          loading={currentFolderId === null ? loadingStatus : loadingEntries}
-          selectedId={activePane === 0 ? (selected?.id ?? null) : null}
-          canUpload={currentFolderId !== null}
-          canModify={currentFolderId !== null}
-          hasStorage={activeBackend !== null}
-          selectedIds={selectedIds}
-          split={split}
-          onToggleSplit={currentFolderId !== null || split ? toggleSplit : undefined}
-          acceptMove={split && dragMove?.sourcePane === 1 && currentFolderId !== null}
-          onMoveDragStart={(ids) => setDragMove({ ids, sourcePane: 0 })}
-          onMoveDragEnd={() => setDragMove(null)}
-          onMoveDrop={() => void handleMoveDrop(0)}
-          onNavigate={navigate}
-          onOpenFolder={openFolder}
-          onSelect={(entry) => {
-            setSelected(entry);
-            setActivePane(0);
-          }}
-          onDeselect={() => {
-            setSelected(null);
-            clearSelection();
-          }}
-          onUpload={(items) => handleUpload(items, 0)}
-          onNewFolder={() => {
-            setNewFolderPane(0);
-            setNewFolderOpen(true);
-          }}
-          onToggleSelect={toggleSelect}
-          onSelectAll={selectAll}
-          onClearSelection={clearSelection}
-          onBulkDelete={() => {
-            setBulkPane(0);
-            setBulkDeleteOpen(true);
-          }}
-          onDownload={handleDownload}
-          onRename={openRename}
-          onDelete={setConfirmTarget}
-        />
+            rootIcon={rootIcon}
+            entries={entries}
+            loading={currentFolderId === null ? loadingStatus : loadingEntries}
+            selectedId={activePane === 0 ? (selected?.id ?? null) : null}
+            canUpload={currentFolderId !== null}
+            canModify={currentFolderId !== null}
+            hasStorage={activeBackend !== null}
+            selectedIds={selectedIds}
+            split={split}
+            onToggleSplit={currentFolderId !== null || split ? toggleSplit : undefined}
+            acceptMove={split && dragMove?.sourcePane === 1 && currentFolderId !== null}
+            onMoveDragStart={(ids) => setDragMove({ ids, sourcePane: 0 })}
+            onMoveDragEnd={() => setDragMove(null)}
+            onMoveDrop={() => void handleMoveDrop(0)}
+            onNavigate={navigate}
+            onOpenFolder={openFolder}
+            onSelect={(entry) => {
+              setSelected(entry);
+              setActivePane(0);
+            }}
+            onDeselect={() => {
+              setSelected(null);
+              clearSelection();
+            }}
+            onUpload={(items) => handleUpload(items, 0)}
+            onNewFolder={() => {
+              setNewFolderPane(0);
+              setNewFolderOpen(true);
+            }}
+            onToggleSelect={toggleSelect}
+            onSelectAll={selectAll}
+            onClearSelection={clearSelection}
+            onBulkDelete={() => {
+              setBulkPane(0);
+              setBulkDeleteOpen(true);
+            }}
+            onDownload={handleDownload}
+            onRename={openRename}
+            onDelete={setConfirmTarget}
+            storagePicker={{
+              storages: statuses.filter((status) => status.connected),
+              activeBackend,
+              onSelect: selectStorage,
+            }}
+          />
 
           <div className='min-w-0 overflow-hidden'>
             <div
@@ -1110,7 +1127,11 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
             <Button variant='transparent' onClick={() => setNewFolderOpen(false)}>
               Cancel
             </Button>
-            <Button type='submit' variant='primary' loading={creating} disabled={!newFolderName.trim()}>
+            <Button
+              type='submit'
+              variant='primary'
+              loading={creating}
+              disabled={!newFolderName.trim()}>
               Create
             </Button>
           </div>
@@ -1197,10 +1218,10 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
       <Modal open={bulkDeleteOpen} onClose={() => setBulkDeleteOpen(false)} title='Delete items'>
         <div className='flex flex-col gap-y-5'>
           <div className='flex gap-x-3'>
-            <div className='bg-red-500/10 text-red-500 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full'>
+            <div className='inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-500'>
               <Icon icon='ExclamationTriangle' className='h-5 w-5' />
             </div>
-            <p className='text-zinc-600 dark:text-zinc-400 text-sm'>
+            <p className='text-sm text-zinc-600 dark:text-zinc-400'>
               Delete the {bulkCount} selected item{bulkCount === 1 ? '' : 's'}, including everything
               inside any selected folders? This cannot be undone.
             </p>
@@ -1223,10 +1244,10 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
         title={confirmTarget?.isFolder ? 'Delete folder' : 'Delete file'}>
         <div className='flex flex-col gap-y-5'>
           <div className='flex gap-x-3'>
-            <div className='bg-red-500/10 text-red-500 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full'>
+            <div className='inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-500'>
               <Icon icon='ExclamationTriangle' className='h-5 w-5' />
             </div>
-            <p className='text-zinc-600 dark:text-zinc-400 text-sm'>
+            <p className='text-sm text-zinc-600 dark:text-zinc-400'>
               {confirmTarget?.isFolder
                 ? `Delete the folder "${confirmTarget?.name}" and everything inside it? This cannot be undone.`
                 : `Delete the file "${confirmTarget?.name}"? This cannot be undone.`}
