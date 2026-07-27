@@ -21,6 +21,14 @@ import Breadcrumb from './Breadcrumb';
 /** Custom DataTransfer type marking an internal drag-to-move (vs an OS file drop). */
 const MOVE_MIME = 'application/x-dropto-move';
 
+/** Dropdown-menu open/close animation (fade + zoom + slight slide), shadcn-style. */
+const MENU_MOTION = {
+  initial: { opacity: 0, scale: 0.96, y: -4 },
+  animate: { opacity: 1, scale: 1, y: 0 },
+  exit: { opacity: 0, scale: 0.96, y: -4 },
+  transition: { duration: 0.08, ease: 'easeOut' },
+} as const;
+
 interface Props {
   path: Crumb[];
   /** Label of the browse root (the active storage name). */
@@ -363,7 +371,12 @@ export default function FileBrowser({
     <section className='flex min-h-0 flex-1 flex-col'>
       {/* Toolbar */}
       <header className='flex h-12 shrink-0 items-center justify-between gap-x-4 px-2'>
-        <Breadcrumb crumbs={path} rootLabel={rootLabel} rootIcon={rootIcon} onNavigate={onNavigate} />
+        <Breadcrumb
+          crumbs={path}
+          rootLabel={rootLabel}
+          rootIcon={rootIcon}
+          onNavigate={onNavigate}
+        />
 
         <div className='flex shrink-0 items-center gap-x-1'>
           {!loading && (
@@ -388,29 +401,36 @@ export default function FileBrowser({
       </header>
 
       {/* Bulk selection bar */}
-      {canModify && selectedIds.size > 0 && (
-        <div className='mb-1 flex items-center justify-between gap-x-3 rounded-lg bg-green-600/10 px-3 py-2'>
-          <span className='text-xs font-medium text-green-700 dark:text-green-400'>
-            {selectedIds.size} selected
-          </span>
-          <div className='flex items-center gap-x-1'>
-            <button
-              type='button'
-              onClick={onClearSelection}
-              className='inline-flex h-8 items-center gap-x-1.5 rounded-lg px-2.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'>
-              <Icon icon='XMark' className='h-4 w-4' />
-              Clear
-            </button>
-            <button
-              type='button'
-              onClick={onBulkDelete}
-              className='inline-flex h-8 items-center gap-x-1.5 rounded-lg px-2.5 text-xs font-medium text-red-500 transition hover:bg-red-500/10'>
-              <Icon icon='Trash' className='h-4 w-4' />
-              Delete
-            </button>
-          </div>
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {canModify && selectedIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, height: 'auto', marginBottom: 4 }}
+            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+            transition={{ duration: 0.12, ease: 'easeInOut' }}
+            className='flex items-center justify-between gap-x-3 overflow-hidden rounded-lg bg-green-600/10 px-3 py-2'>
+            <span className='text-xs font-medium text-green-700 dark:text-green-400'>
+              {selectedIds.size} selected
+            </span>
+            <div className='flex items-center gap-x-1'>
+              <button
+                type='button'
+                onClick={onClearSelection}
+                className='inline-flex h-8 items-center gap-x-1.5 rounded-lg px-2.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'>
+                <Icon icon='XMark' className='h-4 w-4' />
+                Clear
+              </button>
+              <button
+                type='button'
+                onClick={onBulkDelete}
+                className='inline-flex h-8 items-center gap-x-1.5 rounded-lg px-2.5 text-xs font-medium text-red-500 transition hover:bg-red-500/10'>
+                <Icon icon='Trash' className='h-4 w-4' />
+                Delete
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Content / drop zone */}
       <div
@@ -457,7 +477,11 @@ export default function FileBrowser({
               className='mb-3 h-9 w-9 opacity-40'
             />
             <p className='text-sm font-medium text-zinc-950 dark:text-zinc-50'>
-              {canUpload ? 'This folder is empty' : hasStorage ? 'No folders yet' : 'No storage selected'}
+              {canUpload
+                ? 'This folder is empty'
+                : hasStorage
+                  ? 'No folders yet'
+                  : 'No storage selected'}
             </p>
             <p className='mt-1 text-xs'>
               {canUpload
@@ -574,89 +598,109 @@ export default function FileBrowser({
       <input ref={folderInputRef} type='file' className='hidden' onChange={handleInput} />
 
       {/* Toolbar actions menu (upload / new folder / split), same style as row menu */}
-      {toolbarMenu && (
-        <div
-          role='menu'
-          onClick={(event) => event.stopPropagation()}
-          style={{ left: Math.max(8, toolbarMenu.right - 176), top: toolbarMenu.bottom + 4, width: 176 }}
-          className='fixed z-50 flex flex-col gap-y-0.5 rounded-xl border border-zinc-300 bg-zinc-50 p-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-800'>
-          {canUpload && (
-            <MenuItem
-              icon='ArrowUpTray'
-              label='Upload files'
-              tone='primary'
-              onClick={() => runToolbarAction(() => fileInputRef.current?.click())}
-            />
-          )}
-          {canUpload && (
-            <MenuItem
-              icon='FolderArrowDown'
-              label='Upload folder'
-              tone='primary'
-              onClick={() => runToolbarAction(() => folderInputRef.current?.click())}
-            />
-          )}
-          {canUpload && (
-            <MenuItem
-              icon='FolderPlus'
-              label='New folder'
-              onClick={() => runToolbarAction(onNewFolder)}
-            />
-          )}
-          {onToggleSplit && (
-            <MenuItem
-              icon={split ? 'XMark' : 'ViewColumns'}
-              label={split ? 'Close split view' : 'Split view'}
-              onClick={() => runToolbarAction(onToggleSplit)}
-            />
-          )}
-        </div>
-      )}
+      <AnimatePresence>
+        {toolbarMenu && (
+          <motion.div
+            key='toolbar-menu'
+            role='menu'
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              left: Math.max(8, toolbarMenu.right - 176),
+              top: toolbarMenu.bottom + 4,
+              width: 176,
+              transformOrigin: 'top right',
+            }}
+            initial={MENU_MOTION.initial}
+            animate={MENU_MOTION.animate}
+            exit={MENU_MOTION.exit}
+            transition={MENU_MOTION.transition}
+            className='fixed z-50 flex flex-col gap-y-0.5 rounded-xl border border-zinc-300 bg-zinc-50 p-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-800'>
+            {canUpload && (
+              <MenuItem
+                icon='ArrowUpTray'
+                label='Upload files'
+                tone='primary'
+                onClick={() => runToolbarAction(() => fileInputRef.current?.click())}
+              />
+            )}
+            {canUpload && (
+              <MenuItem
+                icon='FolderArrowDown'
+                label='Upload folder'
+                tone='primary'
+                onClick={() => runToolbarAction(() => folderInputRef.current?.click())}
+              />
+            )}
+            {canUpload && (
+              <MenuItem
+                icon='FolderPlus'
+                label='New folder'
+                onClick={() => runToolbarAction(onNewFolder)}
+              />
+            )}
+            {onToggleSplit && (
+              <MenuItem
+                icon={split ? 'XMark' : 'ViewColumns'}
+                label={split ? 'Close split view' : 'Split view'}
+                onClick={() => runToolbarAction(onToggleSplit)}
+              />
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Row actions menu (fixed so it is never clipped by the scroll container) */}
-      {menu && (
-        <div
-          role='menu'
-          onClick={(event) => event.stopPropagation()}
-          style={(() => {
-            const width = 176;
-            const left = Math.max(8, menu.rect.right - width);
-            const flipUp =
-              typeof window !== 'undefined' && menu.rect.bottom + 200 > window.innerHeight;
-            return flipUp
-              ? { left, bottom: window.innerHeight - menu.rect.top + 4, width }
-              : { left, top: menu.rect.bottom + 4, width };
-          })()}
-          className='fixed z-50 flex flex-col gap-y-0.5 rounded-xl border border-zinc-300 bg-zinc-50 p-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-800'>
-          <MenuItem
-            icon='ArrowDownTray'
-            label={menu.entry.isFolder ? 'Download as ZIP' : 'Download'}
-            onClick={() => runMenuAction(onDownload, menu.entry)}
-          />
-          {menu.entry.webViewLink && !menu.entry.isFolder && (
+      <AnimatePresence>
+        {menu && (
+          <motion.div
+            key='row-menu'
+            role='menu'
+            onClick={(event) => event.stopPropagation()}
+            style={(() => {
+              const width = 176;
+              const left = Math.max(8, menu.rect.right - width);
+              const flipUp =
+                typeof window !== 'undefined' && menu.rect.bottom + 200 > window.innerHeight;
+              const transformOrigin = flipUp ? 'bottom right' : 'top right';
+              return flipUp
+                ? { left, bottom: window.innerHeight - menu.rect.top + 4, width, transformOrigin }
+                : { left, top: menu.rect.bottom + 4, width, transformOrigin };
+            })()}
+            initial={MENU_MOTION.initial}
+            animate={MENU_MOTION.animate}
+            exit={MENU_MOTION.exit}
+            transition={MENU_MOTION.transition}
+            className='fixed z-50 flex flex-col gap-y-0.5 rounded-xl border border-zinc-300 bg-zinc-50 p-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-800'>
             <MenuItem
-              icon='ArrowTopRightOnSquare'
-              label='Open in Drive'
-              onClick={() => {
-                const link = menu.entry.webViewLink;
-                setMenu(null);
-                if (link) window.open(link, '_blank');
-              }}
+              icon='ArrowDownTray'
+              label={menu.entry.isFolder ? 'Download as ZIP' : 'Download'}
+              onClick={() => runMenuAction(onDownload, menu.entry)}
             />
-          )}
-          <MenuItem
-            icon='Pencil'
-            label='Rename'
-            onClick={() => runMenuAction(onRename, menu.entry)}
-          />
-          <MenuItem
-            icon='Trash'
-            label='Delete'
-            tone='danger'
-            onClick={() => runMenuAction(onDelete, menu.entry)}
-          />
-        </div>
-      )}
+            {menu.entry.webViewLink && !menu.entry.isFolder && (
+              <MenuItem
+                icon='ArrowTopRightOnSquare'
+                label='Open in Drive'
+                onClick={() => {
+                  const link = menu.entry.webViewLink;
+                  setMenu(null);
+                  if (link) window.open(link, '_blank');
+                }}
+              />
+            )}
+            <MenuItem
+              icon='Pencil'
+              label='Rename'
+              onClick={() => runMenuAction(onRename, menu.entry)}
+            />
+            <MenuItem
+              icon='Trash'
+              label='Delete'
+              tone='danger'
+              onClick={() => runMenuAction(onDelete, menu.entry)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }

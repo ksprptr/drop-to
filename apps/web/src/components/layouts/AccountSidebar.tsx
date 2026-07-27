@@ -1,6 +1,7 @@
 'use client';
 
 import type { StorageBackend, StorageStatus } from '@dropto/types';
+import { motion } from 'framer-motion';
 import type { ReactNode } from 'react';
 
 import { getGoogleAuthUrl } from '@/common/services/api/auth.client';
@@ -177,13 +178,23 @@ export default function AccountSidebar({
                     key={storage.backend}
                     type='button'
                     onClick={() => onSelectStorage(storage.backend)}
-                    className={`flex items-center gap-x-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
+                    className={`relative flex items-center gap-x-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
                       active
-                        ? 'bg-green-600/10 text-green-600 dark:bg-green-600/15'
+                        ? 'text-green-600'
                         : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'
                     }`}>
-                    <Icon icon={STORAGE_ICON[storage.backend]} className='h-4 w-4 shrink-0' />
-                    <span className='truncate'>{storage.label}</span>
+                    {active && (
+                      <motion.span
+                        layoutId='storage-switcher-pill'
+                        transition={{ type: 'spring', stiffness: 800, damping: 44 }}
+                        className='absolute inset-0 rounded-lg bg-green-600/10 dark:bg-green-600/15'
+                      />
+                    )}
+                    <Icon
+                      icon={STORAGE_ICON[storage.backend]}
+                      className='relative h-4 w-4 shrink-0'
+                    />
+                    <span className='relative truncate'>{storage.label}</span>
                   </button>
                 );
               })}

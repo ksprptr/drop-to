@@ -1,6 +1,7 @@
 'use client';
 
 import type { StorageBackend } from '@dropto/types';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 
 import { fileDownloadUrl } from '@/common/services/api/storage.client';
@@ -44,9 +45,11 @@ export default function PreviewPanel({
   onDownload,
   onRename,
 }: Props) {
-  const [imageFailed, setImageFailed] = useState(false);
+  // Track which entry's image failed to load, so switching items re-tries fresh.
+  const [failedId, setFailedId] = useState<string | null>(null);
 
   const isImage = !!entry && !entry.isFolder && !!entry.mimeType?.startsWith('image/');
+  const imageFailed = !!entry && failedId === entry.id;
   // Images preview via the download endpoint (cookie-authenticated, same-site).
   const imageUrl = entry && !entry.isFolder && backend ? fileDownloadUrl(backend, entry.id) : '';
 
@@ -64,72 +67,86 @@ export default function PreviewPanel({
         )}
       </header>
 
-      {!entry ? (
-        <div className='flex flex-1 flex-col items-center justify-center px-6 text-center text-zinc-600 dark:text-zinc-400'>
-          <Icon icon='CursorArrowRays' className='mb-3 h-8 w-8 opacity-40' />
-          <p className='text-sm'>Select an item to see its preview and details.</p>
-        </div>
-      ) : (
-        <div className='flex min-h-0 flex-1 flex-col overflow-y-auto p-5'>
-          {/* Preview */}
-          <div className='flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-900'>
-            {isImage && !imageFailed ? (
-              <img
-                src={imageUrl}
-                alt={entry.name}
-                onError={() => setImageFailed(true)}
-                className='h-full w-full object-contain'
+      <AnimatePresence mode='wait' initial={false}>
+        {!entry ? (
+          <motion.div
+            key='empty'
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.08 }}
+            className='flex flex-1 flex-col items-center justify-center px-6 text-center text-zinc-600 dark:text-zinc-400'>
+            <Icon icon='CursorArrowRays' className='mb-3 h-8 w-8 opacity-40' />
+            <p className='text-sm'>Select an item to see its preview and details.</p>
+          </motion.div>
+        ) : (
+          <motion.div
+            key={entry.id}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.1, ease: 'easeOut' }}
+            className='flex min-h-0 flex-1 flex-col overflow-y-auto p-5'>
+            {/* Preview */}
+            <div className='flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-900'>
+              {isImage && !imageFailed ? (
+                <img
+                  src={imageUrl}
+                  alt={entry.name}
+                  onError={() => setFailedId(entry.id)}
+                  className='h-full w-full object-contain'
+                />
+              ) : (
+                <Icon
+                  icon={entry.isFolder ? 'Folder' : 'Document'}
+                  type={entry.isFolder ? 'solid' : 'outlined'}
+                  className={`h-16 w-16 ${entry.isFolder ? 'text-green-600' : 'text-zinc-600 dark:text-zinc-400'}`}
+                />
+              )}
+            </div>
+
+            <h3 className='mt-4 text-sm font-semibold wrap-break-word'>{entry.name}</h3>
+
+            <div className='mt-4 flex flex-col gap-y-2.5 border-t border-zinc-300 pt-4 dark:border-zinc-700'>
+              <DetailRow
+                label='Type'
+                value={entry.isFolder ? 'Folder' : (entry.mimeType ?? 'File')}
               />
-            ) : (
-              <Icon
-                icon={entry.isFolder ? 'Folder' : 'Document'}
-                type={entry.isFolder ? 'solid' : 'outlined'}
-                className={`h-16 w-16 ${entry.isFolder ? 'text-green-600' : 'text-zinc-600 dark:text-zinc-400'}`}
-              />
-            )}
-          </div>
+              {!entry.isFolder && <DetailRow label='Size' value={formatBytes(entry.size)} />}
+              <DetailRow label='Modified' value={formatDateTime(entry.modifiedTime)} />
+            </div>
 
-          <h3 className='mt-4 text-sm font-semibold wrap-break-word'>{entry.name}</h3>
-
-          <div className='mt-4 flex flex-col gap-y-2.5 border-t border-zinc-300 pt-4 dark:border-zinc-700'>
-            <DetailRow
-              label='Type'
-              value={entry.isFolder ? 'Folder' : (entry.mimeType ?? 'File')}
-            />
-            {!entry.isFolder && <DetailRow label='Size' value={formatBytes(entry.size)} />}
-            <DetailRow label='Modified' value={formatDateTime(entry.modifiedTime)} />
-          </div>
-
-          <div className='mt-6 flex flex-col gap-y-2'>
-            <Button variant='primary' fullWidth onClick={() => onDownload(entry)}>
-              <Icon icon='ArrowDownTray' className='h-4 w-4' />
-              {entry.isFolder ? 'Download as ZIP' : 'Download'}
-            </Button>
-            {entry.webViewLink && !entry.isFolder && (
-              <a
-                href={entry.webViewLink}
-                target='_blank'
-                rel='noreferrer'
-                className='inline-flex items-center justify-center gap-x-2 rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-sm font-medium transition hover:bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-900'>
-                <Icon icon='ArrowTopRightOnSquare' className='h-4 w-4' />
-                Open in Drive
-              </a>
-            )}
-            {!isRoot && (
-              <Button variant='normal' fullWidth onClick={() => onRename(entry)}>
-                <Icon icon='Pencil' className='h-4 w-4' />
-                Rename
+            <div className='mt-6 flex flex-col gap-y-2'>
+              <Button variant='primary' fullWidth onClick={() => onDownload(entry)}>
+                <Icon icon='ArrowDownTray' className='h-4 w-4' />
+                {entry.isFolder ? 'Download as ZIP' : 'Download'}
               </Button>
-            )}
-            {!isRoot && (
-              <Button variant='danger' fullWidth onClick={() => onDelete(entry)}>
-                <Icon icon='Trash' className='h-4 w-4' />
-                Delete
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
+              {entry.webViewLink && !entry.isFolder && (
+                <a
+                  href={entry.webViewLink}
+                  target='_blank'
+                  rel='noreferrer'
+                  className='inline-flex items-center justify-center gap-x-2 rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-sm font-medium transition hover:bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-900'>
+                  <Icon icon='ArrowTopRightOnSquare' className='h-4 w-4' />
+                  Open in Drive
+                </a>
+              )}
+              {!isRoot && (
+                <Button variant='normal' fullWidth onClick={() => onRename(entry)}>
+                  <Icon icon='Pencil' className='h-4 w-4' />
+                  Rename
+                </Button>
+              )}
+              {!isRoot && (
+                <Button variant='danger' fullWidth onClick={() => onDelete(entry)}>
+                  <Icon icon='Trash' className='h-4 w-4' />
+                  Delete
+                </Button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </aside>
   );
 }

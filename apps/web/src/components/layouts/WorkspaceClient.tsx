@@ -943,7 +943,7 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
         {/* Both panes live in a grid whose second column animates 1fr↔0fr, so the
             left pane resizes smoothly in sync with the right one appearing/leaving. */}
         <div
-          className='grid min-w-0 flex-1 grid-rows-1 transition-all duration-300 ease-out'
+          className='grid min-w-0 flex-1 grid-rows-1 transition-all duration-200 ease-out'
           style={{
             gridTemplateColumns: `minmax(0,1fr) minmax(0,${split ? 1 : 0}fr)`,
             columnGap: split ? '0.75rem' : '0px',
