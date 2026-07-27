@@ -3,15 +3,10 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 
-import type { DownloadTask, UploadBatch, UploadTask } from '@/common/types/workspace.types';
+import type { UploadBatch, UploadTask } from '@/common/types/workspace.types';
 import { formatEta } from '@/common/utils/format.functions';
 import Icon from '@/components/common/Icon';
-
-interface Props {
-  batches: UploadBatch[];
-  downloads: DownloadTask[];
-  onCancelBatch: (batchId: string) => void;
-}
+import { useUploadActions, useUploadState } from '@/components/providers/UploadProvider';
 
 const statusLabel = (task: UploadTask): string => {
   switch (task.status) {
@@ -200,7 +195,9 @@ function BatchCard({ batch, onCancel }: { batch: UploadBatch; onCancel: (id: str
 /**
  * Floating dock showing upload batches (ETA, per-file bars, cancel) and downloads.
  **/
-export default function UploadDock({ batches, downloads, onCancelBatch }: Props) {
+export default function UploadDock() {
+  const { batches, downloads } = useUploadState();
+  const { cancelBatch: onCancelBatch } = useUploadActions();
   const hasActive = batches.some((batch) => batch.status === 'uploading');
 
   return (

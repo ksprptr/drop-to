@@ -25,13 +25,6 @@ export interface DriveEntry {
   webViewLink: string | null;
 }
 
-/** Connection status of the authorized Google Drive account. */
-export interface DriveAccountStatus {
-  connected: boolean;
-  email: string | null;
-  allowedFolders: AllowedFolder[];
-}
-
 /** Result of a successful file upload. */
 export interface UploadResult {
   fileId: string;
@@ -45,21 +38,9 @@ export interface SaveFoldersPayload {
   folders: Array<{ folderId: string; name: string }>;
 }
 
-/** Payload sent to log the operator in. */
-export interface LoginPayload {
-  username: string;
-  password: string;
-}
-
 /** The authenticated operator returned by `GET /auth/me`. */
 export interface AuthUser {
   username: string;
-}
-
-/** Standard API error envelope produced by the API's global exception filter. */
-export interface ApiErrorResponse {
-  status: number;
-  message: string | string[];
 }
 
 /** A storage backend the workspace can browse. */

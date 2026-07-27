@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class DriveEntryEntity {
-  @ApiProperty({ type: 'string', description: 'Google Drive file/folder id' })
+  @ApiProperty({ type: 'string', description: 'Opaque file/folder id (Drive id or S3 ref)' })
   id: string;
 
   @ApiProperty({ type: 'string', description: 'Name' })

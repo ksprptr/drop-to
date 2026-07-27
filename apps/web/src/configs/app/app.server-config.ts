@@ -3,7 +3,6 @@ import 'server-only';
 interface AppServerConfig {
   nodeEnv: {
     isProduction: boolean;
-    isDevelopment: boolean;
   };
   urls: {
     /** API base for server-to-server calls. */
@@ -19,7 +18,6 @@ interface AppServerConfig {
 export const appServerConfig: AppServerConfig = {
   nodeEnv: {
     isProduction: process.env.NODE_ENV === 'production',
-    isDevelopment: process.env.NODE_ENV === 'development',
   },
   urls: {
     apiUrl: (

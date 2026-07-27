@@ -12,6 +12,6 @@ import { AuthHelpers } from './helpers/auth.helpers';
   imports: [JwtModule.register({ global: true })],
   controllers: [AuthController],
   providers: [AuthService, AuthStateService, AuthHelpers, AuthTokensHelper],
-  exports: [AuthTokensHelper],
+  exports: [AuthTokensHelper, AuthStateService],
 })
 export class AuthModule {}

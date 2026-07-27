@@ -175,14 +175,23 @@ export class GoogleDriveProvider implements StorageProvider {
 
     await this.assertItemAllowed(drive, folderId, allowedIds);
 
-    const res = await drive.files.list({
-      q: `'${folderId}' in parents and trashed = false`,
-      fields: 'files(id, name, mimeType, size, modifiedTime, iconLink, webViewLink)',
-      orderBy: 'folder,name',
-      pageSize: 1000,
-    });
+    const files: drive_v3.Schema$File[] = [];
+    let pageToken: string | undefined;
 
-    return (res.data.files ?? []).map((file) => this.toDriveEntry(file));
+    do {
+      const res = await drive.files.list({
+        q: `'${folderId}' in parents and trashed = false`,
+        fields: 'nextPageToken, files(id, name, mimeType, size, modifiedTime, iconLink, webViewLink)',
+        orderBy: 'folder,name',
+        pageSize: 1000,
+        pageToken,
+      });
+
+      files.push(...(res.data.files ?? []));
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
+
+    return files.map((file) => this.toDriveEntry(file));
   }
 
   async createFolder(parentId: string, name: string): Promise<DriveEntryEntity> {
@@ -397,30 +406,39 @@ export class GoogleDriveProvider implements StorageProvider {
     prefix: string,
     archive: Archiver,
   ): Promise<void> {
-    const res = await drive.files.list({
-      q: `'${folderId}' in parents and trashed = false`,
-      fields: 'files(id, name, mimeType)',
-      orderBy: 'folder,name',
-      pageSize: 1000,
-    });
+    let pageToken: string | undefined;
 
-    for (const file of res.data.files ?? []) {
-      if (!file.id || !file.name) {
-        continue;
+    do {
+      const res = await drive.files.list({
+        q: `'${folderId}' in parents and trashed = false`,
+        fields: 'nextPageToken, files(id, name, mimeType)',
+        orderBy: 'folder,name',
+        pageSize: 1000,
+        pageToken,
+      });
+
+      for (const file of res.data.files ?? []) {
+        if (!file.id || !file.name) {
+          continue;
+        }
+
+        const entryPath = prefix ? `${prefix}/${file.name}` : file.name;
+
+        if (file.mimeType === FOLDER_MIME) {
+          await this.appendFolderToArchive(drive, file.id, entryPath, archive);
+        } else {
+          const media = await drive.files.get(
+            { fileId: file.id, alt: 'media' },
+            { responseType: 'stream' },
+          );
+          archive.append(media.data as unknown as Readable, {
+            name: sanitizeZipEntryPath(entryPath),
+          });
+        }
       }
 
-      const entryPath = prefix ? `${prefix}/${file.name}` : file.name;
-
-      if (file.mimeType === FOLDER_MIME) {
-        await this.appendFolderToArchive(drive, file.id, entryPath, archive);
-      } else {
-        const media = await drive.files.get(
-          { fileId: file.id, alt: 'media' },
-          { responseType: 'stream' },
-        );
-        archive.append(media.data as unknown as Readable, { name: sanitizeZipEntryPath(entryPath) });
-      }
-    }
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
   }
 
   private toDriveEntry(file: drive_v3.Schema$File): DriveEntryEntity {

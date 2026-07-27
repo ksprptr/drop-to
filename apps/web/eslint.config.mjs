@@ -2,7 +2,6 @@ import tsPlugin from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 import { defineConfig } from 'eslint/config';
 import importPlugin from 'eslint-plugin-import';
-import prettier from 'eslint-plugin-prettier';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import unusedImports from 'eslint-plugin-unused-imports';
 
@@ -17,7 +16,6 @@ export default defineConfig([
       },
     },
     plugins: {
-      prettier,
       import: importPlugin,
       'unused-imports': unusedImports,
       'simple-import-sort': simpleImportSort,

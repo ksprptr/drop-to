@@ -13,9 +13,8 @@ import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
 import { JwtRequestUser, RequestUser } from '@/common/types/auth-user.types';
 import { extractTokenFromCookies } from '@/common/utils/auth-tokens.functions';
 import { type JwtConfig, jwtConfig } from '@/config/jwt.config';
-import { PrismaService } from '@/prisma/prisma.service';
 
-import { AUTH_STATE_ID } from '../auth.constants';
+import { AuthStateService } from '../auth-state.service';
 
 /**
  * Verifies the access-token cookie on every non-`@Public()` route; missing/expired/revoked → 401.
@@ -26,7 +25,7 @@ export class AuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly jwtService: JwtService,
     @Inject(jwtConfig.KEY) private readonly jwtCfg: JwtConfig,
-    private readonly prismaService: PrismaService,
+    private readonly authStateService: AuthStateService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -49,25 +48,13 @@ export class AuthGuard implements CanActivate {
 
     // Revocation check: reject a signature-valid token whose version is stale (a logout since
     // it was issued bumped the version).
-    const currentVersion = await this.getTokenVersion();
+    const currentVersion = await this.authStateService.getTokenVersion();
     if (payload.ver !== currentVersion) {
       throw new UnauthorizedException();
     }
 
     request.user = { sub: payload.sub };
     return true;
-  }
-
-  /**
-   * Reads the operator's current token version (0 until the first logout).
-   **/
-  private async getTokenVersion(): Promise<number> {
-    const state = await this.prismaService.authState.findUnique({
-      where: { id: AUTH_STATE_ID },
-      select: { tokenVersion: true },
-    });
-
-    return state?.tokenVersion ?? 0;
   }
 
   /**

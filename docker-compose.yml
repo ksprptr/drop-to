@@ -82,11 +82,15 @@ services:
         NEXT_PUBLIC_GOOGLE_API_KEY: '${NEXT_PUBLIC_GOOGLE_API_KEY:-}'
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: '${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}'
         NEXT_PUBLIC_GOOGLE_APP_ID: '${NEXT_PUBLIC_GOOGLE_APP_ID:-}'
+        APP_URL: '${APP_URL:-http://localhost:3000}'
     container_name: dropto-web
     restart: unless-stopped
     environment:
       NODE_ENV: 'production'
       PORT: '3000'
+      # Server-only runtime vars: reach the API over the compose network; share the cookie domain.
+      API_URL: 'http://dropto-api:4000/api/v1'
+      COOKIE_DOMAIN: '${COOKIE_DOMAIN:-localhost}'
     ports:
       - '3000:3000'
     networks:

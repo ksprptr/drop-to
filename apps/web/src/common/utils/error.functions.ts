@@ -27,9 +27,3 @@ export const extractApiErrorMessage = (error: unknown): string => {
  * True when the request was cancelled (e.g. an aborted upload).
  **/
 export const isCanceledError = (error: unknown): boolean => axios.isCancel(error);
-
-/**
- * True for a "storage disconnected/unavailable" error (API signals it with HTTP 424).
- **/
-export const isStorageDisconnectedError = (error: unknown): boolean =>
-  axios.isAxiosError(error) && error.response?.status === 424;

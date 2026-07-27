@@ -3,8 +3,8 @@ import { Reflector } from '@nestjs/core';
 import { JsonWebTokenError, JwtService } from '@nestjs/jwt';
 
 import { type JwtConfig } from '@/config/jwt.config';
-import type { PrismaService } from '@/prisma/prisma.service';
 
+import type { AuthStateService } from '../auth-state.service';
 import { AuthGuard } from './auth.guard';
 
 /**
@@ -27,7 +27,7 @@ const buildContext = (cookieHeader?: string): { context: ExecutionContext; reque
 describe('AuthGuard', () => {
   let reflector: Reflector;
   let jwtService: { verifyAsync: jest.Mock };
-  let prisma: { authState: { findUnique: jest.Mock } };
+  let authState: { getTokenVersion: jest.Mock };
   let guard: AuthGuard;
 
   const jwtCfg = { accessSecret: 'access', refreshSecret: 'refresh' } as JwtConfig;
@@ -35,12 +35,12 @@ describe('AuthGuard', () => {
   beforeEach(() => {
     reflector = new Reflector();
     jwtService = { verifyAsync: jest.fn() };
-    prisma = { authState: { findUnique: jest.fn().mockResolvedValue(null) } };
+    authState = { getTokenVersion: jest.fn().mockResolvedValue(0) };
     guard = new AuthGuard(
       reflector,
       jwtService as unknown as JwtService,
       jwtCfg,
-      prisma as unknown as PrismaService,
+      authState as unknown as AuthStateService,
     );
   });
 
@@ -64,7 +64,7 @@ describe('AuthGuard', () => {
   it('rejects a signature-valid token whose version was revoked', async () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
     jwtService.verifyAsync.mockResolvedValue({ sub: 'operator', ver: 0, iat: 1, exp: 2 });
-    prisma.authState.findUnique.mockResolvedValue({ tokenVersion: 1 });
+    authState.getTokenVersion.mockResolvedValue(1);
 
     await expect(
       guard.canActivate(buildContext('accessToken=stale').context),

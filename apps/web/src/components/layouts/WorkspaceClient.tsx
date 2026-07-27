@@ -21,20 +21,21 @@ import {
 } from '@/common/services/api/storage.client';
 import { type PickedFolder, usePicker } from '@/common/services/picker/usePicker';
 import type {
+  BatchRuntime,
   Crumb,
-  DownloadTask,
   UploadBatch,
   UploadItem,
-  UploadTask,
   ViewEntry,
 } from '@/common/types/workspace.types';
 import { extractApiErrorMessage, isCanceledError } from '@/common/utils/error.functions';
 import { isTopLevelFolder, topLevelName, uniqueName } from '@/common/utils/upload.functions';
 import Button from '@/components/common/Button';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Icon from '@/components/common/Icon';
 import Input from '@/components/common/Input';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/components/providers/ToastProvider';
+import { UploadProvider, useUploadActions } from '@/components/providers/UploadProvider';
 import { STORAGE_ICON } from '@/configs/storage.config';
 
 import AccountSidebar from './AccountSidebar';
@@ -43,14 +44,7 @@ import PreviewPanel from './PreviewPanel';
 import UploadDock from './UploadDock';
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
-const UPLOAD_LINGER_MS = 4000;
 const DOWNLOAD_PREPARING_MS = 6000;
-
-interface BatchRuntime {
-  controller: AbortController;
-  looseFileIds: string[];
-  rootFolderIds: string[];
-}
 
 interface Props {
   username: string;
@@ -90,11 +84,13 @@ interface ExtensionWarning {
 /**
  * Main workspace: sidebar + file browser + preview, with uploads and account management.
  **/
-export default function WorkspaceClient({ username, initialStatuses }: Props) {
+function WorkspaceInner({ username, initialStatuses }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const toast = useToast();
   const { openPicker } = usePicker();
+  const { setBatches, setDownloads, updateTask, setBatchStatus, scheduleRemoveBatch, batchRuntime } =
+    useUploadActions();
 
   const [statuses, setStatuses] = useState<StorageStatus[]>(initialStatuses);
   const [loadingStatus, setLoadingStatus] = useState(false);
@@ -103,8 +99,6 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
   const [entries, setEntries] = useState<ViewEntry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
   const [selected, setSelected] = useState<ViewEntry | null>(null);
-  const [batches, setBatches] = useState<UploadBatch[]>([]);
-  const [downloads, setDownloads] = useState<DownloadTask[]>([]);
   const [duplicate, setDuplicate] = useState<string[] | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<ViewEntry | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -128,7 +122,6 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
   const [loggingOut, setLoggingOut] = useState(false);
 
   const handledParams = useRef(false);
-  const batchRuntime = useRef<Map<string, BatchRuntime>>(new Map());
   const duplicateResolve = useRef<((choice: 'replace' | 'keep' | 'cancel') => void) | null>(null);
 
   const driveStatus = statuses.find((status) => status.backend === 'drive') ?? null;
@@ -138,28 +131,6 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
 
   const currentFolderId = path.length > 0 ? path[path.length - 1].id : null;
   const atRoots = path.length === 0;
-  const hasActiveUploads = batches.some((batch) => batch.status === 'uploading');
-
-  // Abort any in-flight uploads when the workspace unmounts (e.g. on refresh).
-  useEffect(() => {
-    const runtimes = batchRuntime.current;
-    return () => {
-      runtimes.forEach((runtime) => runtime.controller.abort());
-    };
-  }, []);
-
-  // Warn (native browser prompt) before leaving while uploads are still running.
-  useEffect(() => {
-    if (!hasActiveUploads) {
-      return;
-    }
-    const handler = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [hasActiveUploads]);
 
   const roots = useMemo<ViewEntry[]>(
     () =>
@@ -384,32 +355,7 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
     [dragMove, activeBackend, currentFolderId, paneB, reloadPanes, selected, toast],
   );
 
-  // --- Upload dock state helpers ------------------------------------------------
-
-  const updateTask = useCallback((batchId: string, taskId: string, patch: Partial<UploadTask>) => {
-    setBatches((current) =>
-      current.map((batch) =>
-        batch.id === batchId
-          ? {
-              ...batch,
-              tasks: batch.tasks.map((task) => (task.id === taskId ? { ...task, ...patch } : task)),
-            }
-          : batch,
-      ),
-    );
-  }, []);
-
-  const setBatchStatus = useCallback((batchId: string, batchStatus: UploadBatch['status']) => {
-    setBatches((current) =>
-      current.map((batch) => (batch.id === batchId ? { ...batch, status: batchStatus } : batch)),
-    );
-  }, []);
-
-  const scheduleRemoveBatch = useCallback((batchId: string) => {
-    setTimeout(() => {
-      setBatches((current) => current.filter((batch) => batch.id !== batchId));
-    }, UPLOAD_LINGER_MS);
-  }, []);
+  // --- Upload orchestration -----------------------------------------------------
 
   // Undo a batch: delete everything it created so a cancel leaves nothing behind.
   const rollbackBatch = useCallback(
@@ -439,12 +385,8 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
       setBatchStatus(batchId, 'canceled');
       scheduleRemoveBatch(batchId);
     },
-    [reloadPanes, setBatchStatus, scheduleRemoveBatch],
+    [reloadPanes, setBatchStatus, scheduleRemoveBatch, setBatches, batchRuntime],
   );
-
-  const cancelBatch = useCallback((batchId: string) => {
-    batchRuntime.current.get(batchId)?.controller.abort();
-  }, []);
 
   const askDuplicate = useCallback((names: string[]): Promise<'replace' | 'keep' | 'cancel'> => {
     setDuplicate(names);
@@ -1059,7 +1001,7 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
         />
       </main>
 
-      <UploadDock batches={batches} downloads={downloads} onCancelBatch={cancelBatch} />
+      <UploadDock />
 
       {/* Duplicate name modal */}
       <Modal
@@ -1194,55 +1136,40 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
         </div>
       </Modal>
 
-      {/* Bulk delete confirmation modal */}
-      <Modal open={bulkDeleteOpen} onClose={() => setBulkDeleteOpen(false)} title='Delete items'>
-        <div className='flex flex-col gap-y-5'>
-          <div className='flex gap-x-3'>
-            <div className='inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-500'>
-              <Icon icon='ExclamationTriangle' className='h-5 w-5' />
-            </div>
-            <p className='text-sm text-zinc-600 dark:text-zinc-400'>
-              Delete the {bulkCount} selected item{bulkCount === 1 ? '' : 's'}, including everything
-              inside any selected folders? This cannot be undone.
-            </p>
-          </div>
-          <div className='flex justify-end gap-x-2'>
-            <Button variant='transparent' onClick={() => setBulkDeleteOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant='danger' loading={bulkDeleting} onClick={confirmBulkDelete}>
-              Delete
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onClose={() => setBulkDeleteOpen(false)}
+        title='Delete items'
+        message={`Delete the ${bulkCount} selected item${bulkCount === 1 ? '' : 's'}, including everything inside any selected folders? This cannot be undone.`}
+        confirmLabel='Delete'
+        loading={bulkDeleting}
+        onConfirm={confirmBulkDelete}
+      />
 
-      {/* Delete confirmation modal */}
-      <Modal
+      <ConfirmDialog
         open={confirmTarget !== null}
         onClose={() => setConfirmTarget(null)}
-        title={confirmTarget?.isFolder ? 'Delete folder' : 'Delete file'}>
-        <div className='flex flex-col gap-y-5'>
-          <div className='flex gap-x-3'>
-            <div className='inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-500'>
-              <Icon icon='ExclamationTriangle' className='h-5 w-5' />
-            </div>
-            <p className='text-sm text-zinc-600 dark:text-zinc-400'>
-              {confirmTarget?.isFolder
-                ? `Delete the folder "${confirmTarget?.name}" and everything inside it? This cannot be undone.`
-                : `Delete the file "${confirmTarget?.name}"? This cannot be undone.`}
-            </p>
-          </div>
-          <div className='flex justify-end gap-x-2'>
-            <Button variant='transparent' onClick={() => setConfirmTarget(null)}>
-              Cancel
-            </Button>
-            <Button variant='danger' loading={deleting} onClick={confirmDelete}>
-              Delete
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        title={confirmTarget?.isFolder ? 'Delete folder' : 'Delete file'}
+        message={
+          confirmTarget?.isFolder
+            ? `Delete the folder "${confirmTarget?.name}" and everything inside it? This cannot be undone.`
+            : `Delete the file "${confirmTarget?.name}"? This cannot be undone.`
+        }
+        confirmLabel='Delete'
+        loading={deleting}
+        onConfirm={confirmDelete}
+      />
     </div>
+  );
+}
+
+/**
+ * Wraps the workspace in the upload provider so progress ticks re-render only the dock.
+ **/
+export default function WorkspaceClient(props: Props) {
+  return (
+    <UploadProvider>
+      <WorkspaceInner {...props} />
+    </UploadProvider>
   );
 }

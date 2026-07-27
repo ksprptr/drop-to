@@ -50,3 +50,10 @@ export interface DownloadTask {
   id: string;
   name: string;
 }
+
+/** Per-batch runtime handles: the abort controller and the ids created so far (for rollback). */
+export interface BatchRuntime {
+  controller: AbortController;
+  looseFileIds: string[];
+  rootFolderIds: string[];
+}

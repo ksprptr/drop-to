@@ -53,10 +53,12 @@ RUN npm install -g pnpm
 # Production dependencies only (Prisma CLI is a runtime dep — migrations run here).
 RUN pnpm install --frozen-lockfile --prod
 
-# Built app + the Prisma schema/migrations/config that `migrate deploy` reads.
+# Built app + the Prisma schema/migrations/config that `migrate deploy` reads + `.env.example`
+# (AppModule validates required env keys against it at boot).
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/api/src/prisma ./apps/api/src/prisma
 COPY --from=builder /app/apps/api/prisma.config.ts ./apps/api/prisma.config.ts
+COPY --from=builder /app/apps/api/.env.example ./apps/api/.env.example
 
 WORKDIR /app/apps/api
 
