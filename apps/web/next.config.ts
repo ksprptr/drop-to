@@ -11,7 +11,10 @@ const GOOGLE_FRAME =
 const GOOGLE_CONNECT = 'https://apis.google.com https://*.googleapis.com';
 const GOOGLE_IMG = 'https://*.googleusercontent.com https://*.gstatic.com https://*.google.com';
 
-// Permissive CSP (Next needs inline scripts/styles; Google is allowed for Picker/OAuth/images).
+// CSP: Next injects inline bootstrap scripts and React inline styles, so `script-src`/`style-src`
+// keep 'unsafe-inline' (a nonce-based policy would need per-request middleware wiring and risks
+// breaking framer-motion/Next inline styles). `object-src 'none'`, `frame-ancestors 'none'` and
+// `base-uri 'self'` still block the main injection sinks; Google is allowed for Picker/OAuth/images.
 const contentSecurityPolicy = [
   `default-src 'self'`,
   `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ''} ${GOOGLE_SCRIPT}`,
@@ -34,6 +37,8 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+  // Drop ambient access to sensor/geolocation APIs the app never uses.
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()' },
 ];
 
 const nextConfig: NextConfig = {

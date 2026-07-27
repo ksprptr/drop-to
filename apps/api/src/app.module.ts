@@ -14,6 +14,7 @@ import { databaseConfig } from './config/database.config';
 import { googleConfig } from './config/google.config';
 import { jwtConfig } from './config/jwt.config';
 import { rateLimitConfig } from './config/rate-limit.config';
+import { redisConfig } from './config/redis.config';
 import { s3Config } from './config/s3.config';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuthGuard } from './modules/auth/guards/auth.guard';
@@ -36,6 +37,7 @@ import { PrismaModule } from './prisma/prisma.module';
         googleConfig,
         cryptoConfig,
         rateLimitConfig,
+        redisConfig,
         s3Config,
       ],
       validate: (config) => {
@@ -49,6 +51,18 @@ import { PrismaModule } from './prisma/prisma.module';
         if (missing.length > 0) {
           throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
         }
+
+        // Reject weak/placeholder JWT secrets — a guessable secret means forgeable tokens.
+        const weakSecrets = ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET'].filter((key) => {
+          const value = String(config[key] ?? '');
+          return value.length < 16 || /generate_me|change_me|your[_-]|example|secret_here/i.test(value);
+        });
+        if (weakSecrets.length > 0) {
+          throw new Error(
+            `Weak or placeholder secrets (set strong random values, >= 16 chars): ${weakSecrets.join(', ')}`,
+          );
+        }
+
         return config;
       },
     }),

@@ -2,6 +2,7 @@ import 'server-only';
 import type { DriveEntry, StorageBackend, StorageStatus } from '@dropto/types';
 
 import { getHttp } from '@/common/services/axios/axios.instance';
+import { seg } from '@/common/utils/storage-path';
 
 // Server-side storage API via getHttp(); uploads/downloads use dedicated route handlers.
 
@@ -23,7 +24,9 @@ export const listContents = async (
   folderId: string,
 ): Promise<DriveEntry[]> => {
   const http = await getHttp();
-  const { data } = await http.get<DriveEntry[]>(`/storage/${backend}/folders/${folderId}/contents`);
+  const { data } = await http.get<DriveEntry[]>(
+    `/storage/${backend}/folders/${seg(folderId)}/contents`,
+  );
 
   return data;
 };
@@ -38,7 +41,7 @@ export const createSubfolder = async (
 ): Promise<DriveEntry> => {
   const http = await getHttp();
   const { data } = await http.post<DriveEntry>(
-    `/storage/${backend}/folders/${parentId}/subfolder`,
+    `/storage/${backend}/folders/${seg(parentId)}/subfolder`,
     { name },
   );
 
@@ -50,7 +53,7 @@ export const createSubfolder = async (
  **/
 export const deleteItem = async (backend: StorageBackend, id: string): Promise<void> => {
   const http = await getHttp();
-  await http.delete(`/storage/${backend}/files/${id}`);
+  await http.delete(`/storage/${backend}/files/${seg(id)}`);
 };
 
 /**
@@ -62,7 +65,9 @@ export const renameItem = async (
   name: string,
 ): Promise<DriveEntry> => {
   const http = await getHttp();
-  const { data } = await http.patch<DriveEntry>(`/storage/${backend}/files/${id}/rename`, { name });
+  const { data } = await http.patch<DriveEntry>(`/storage/${backend}/files/${seg(id)}/rename`, {
+    name,
+  });
 
   return data;
 };
@@ -76,7 +81,7 @@ export const moveItem = async (
   targetFolderId: string,
 ): Promise<DriveEntry> => {
   const http = await getHttp();
-  const { data } = await http.patch<DriveEntry>(`/storage/${backend}/files/${id}/move`, {
+  const { data } = await http.patch<DriveEntry>(`/storage/${backend}/files/${seg(id)}/move`, {
     targetFolderId,
   });
 

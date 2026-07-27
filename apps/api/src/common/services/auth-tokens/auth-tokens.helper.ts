@@ -19,13 +19,13 @@ interface AddTokenToResponseParams {
 @Injectable()
 export class AuthTokensHelper {
   private readonly cookieDomain?: string;
-  private readonly isProduction: boolean;
+  private readonly isDevelopment: boolean;
 
   constructor(
     @Inject(appConfig.KEY) appCfg: AppConfig,
     @Inject(authConfig.KEY) authCfg: AuthConfig,
   ) {
-    this.isProduction = appCfg.isProduction;
+    this.isDevelopment = appCfg.isDevelopment;
     this.cookieDomain = authCfg.cookieDomain;
   }
 
@@ -41,7 +41,8 @@ export class AuthTokensHelper {
       value,
       ...(this.cookieDomain ? { domain: this.cookieDomain } : {}),
       httpOnly: true,
-      secure: this.isProduction,
+      // Secure everywhere except local dev (covers staging/other non-dev envs served over HTTPS).
+      secure: !this.isDevelopment,
       sameSite: 'lax',
       maxAge: value === '' ? 0 : maxAge,
       path: '/',

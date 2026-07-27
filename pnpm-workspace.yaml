@@ -6,6 +6,18 @@ overrides:
   # googleapis-common pins 10.5.0 exactly — two copies make the OAuth2Client
   # types incompatible. Dedupe to a single (latest) version.
   google-auth-library: 10.9.0
+  # Security: force patched transitive versions (advisories on the ranges Next
+  # pulled). sharp < 0.35.0 = libvips CVEs (image optimization, production);
+  # postcss <= 8.5.17 = arbitrary file read / path traversal (build-time CSS).
+  sharp: ^0.35.3
+  postcss: ^8.5.23
+  # Build/dev-tooling transitives (Prisma dev, ajv, glob). Patched within-major
+  # (no breaking bump): fast-uri host confusion, brace-expansion 5.x DoS,
+  # @hono/node-server middleware bypass / path traversal, valibot flatten() throw.
+  fast-uri@3: 3.1.4
+  brace-expansion: 5.0.8
+  '@hono/node-server': ^1.19.17
+  valibot: ^1.4.2
 allowBuilds:
   '@prisma/engines': true
   '@scarf/scarf': false
@@ -16,3 +28,4 @@ allowBuilds:
   unrs-resolver: true
 minimumReleaseAgeExclude:
   - '@nestjs/cli@11.0.24'
+  - '@hono/node-server@1.19.17'

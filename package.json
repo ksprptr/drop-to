@@ -18,7 +18,7 @@
     "lint": "turbo lint",
     "test": "turbo test",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "devDependencies": {
     "husky": "^9.1.7",

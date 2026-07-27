@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 
 import { AppModule } from './app.module';
 import { type AppConfig, appConfig } from './config/app.config';
@@ -18,6 +19,10 @@ async function bootstrap() {
   app.setGlobalPrefix(appCfg.apiPrefix, {
     exclude: [{ path: 'health', method: RequestMethod.GET }],
   });
+
+  // Security headers. CSP is disabled: this is a JSON API (no first-party HTML to protect) and a
+  // default CSP would break the dev-only Swagger UI. HSTS, nosniff, frameguard, etc. still apply.
+  app.use(helmet({ contentSecurityPolicy: false }));
 
   app.use(cookieParser());
 

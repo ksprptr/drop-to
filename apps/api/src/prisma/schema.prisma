@@ -23,6 +23,17 @@ enum UploadStatus {
 // Models
 //
 
+/// Single-row store for the operator's token version. Stateless JWTs are otherwise
+/// irrevocable; bumping this version on logout invalidates every access/refresh token
+/// issued before it (the AuthGuard rejects a token whose `ver` no longer matches).
+model AuthState {
+  id           String   @id @default("singleton")
+  tokenVersion Int      @default(0) @map("token_version")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("auth_state")
+}
+
 /// The single authorized Google account whose Drive quota is used for uploads.
 /// The refresh token is stored encrypted (AES-256-GCM), never in plaintext.
 model DriveAccount {

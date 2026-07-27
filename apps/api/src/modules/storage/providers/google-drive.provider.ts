@@ -29,6 +29,7 @@ import {
   isInvalidGrant,
   StorageDisconnectedException,
 } from '../storage.errors';
+import { sanitizeZipEntryPath } from '../storage.functions';
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const MAX_ANCESTOR_DEPTH = 50;
@@ -415,7 +416,7 @@ export class GoogleDriveProvider implements StorageProvider {
           { fileId: file.id, alt: 'media' },
           { responseType: 'stream' },
         );
-        archive.append(media.data as unknown as Readable, { name: entryPath });
+        archive.append(media.data as unknown as Readable, { name: sanitizeZipEntryPath(entryPath) });
       }
     }
   }

@@ -15,14 +15,14 @@ const makeResponse = () => {
   return { response, headers };
 };
 
-const helper = (isProduction: boolean, cookieDomain?: string) =>
-  new AuthTokensHelper({ isProduction } as AppConfig, { cookieDomain } as AuthConfig);
+const helper = (isDevelopment: boolean, cookieDomain?: string) =>
+  new AuthTokensHelper({ isDevelopment } as AppConfig, { cookieDomain } as AuthConfig);
 
 describe('AuthTokensHelper', () => {
-  it('writes an httpOnly, lax, secure (prod) cookie with the access TTL and domain', () => {
+  it('writes an httpOnly, lax, secure (non-dev) cookie with the access TTL and domain', () => {
     const { response, headers } = makeResponse();
 
-    helper(true, '.example.com').addToResponse({ response, type: 'accessToken', value: 'tok' });
+    helper(false, '.example.com').addToResponse({ response, type: 'accessToken', value: 'tok' });
 
     const cookie = (headers.get('Set-Cookie') as string).toLowerCase();
     expect(cookie).toContain('accesstoken=tok');
@@ -37,7 +37,7 @@ describe('AuthTokensHelper', () => {
   it('clears the cookie (Max-Age=0) when the value is empty', () => {
     const { response, headers } = makeResponse();
 
-    helper(true, '.example.com').addToResponse({ response, type: 'refreshToken', value: '' });
+    helper(false, '.example.com').addToResponse({ response, type: 'refreshToken', value: '' });
 
     expect((headers.get('Set-Cookie') as string).toLowerCase()).toContain('max-age=0');
   });
@@ -45,7 +45,7 @@ describe('AuthTokensHelper', () => {
   it('omits Secure/Domain in development and uses the refresh TTL', () => {
     const { response, headers } = makeResponse();
 
-    helper(false).addToResponse({ response, type: 'refreshToken', value: 'r' });
+    helper(true).addToResponse({ response, type: 'refreshToken', value: 'r' });
 
     const cookie = (headers.get('Set-Cookie') as string).toLowerCase();
     expect(cookie).toContain(`max-age=${REFRESH_TOKEN_TTL_SECONDS}`);
@@ -55,7 +55,7 @@ describe('AuthTokensHelper', () => {
 
   it('appends to an existing Set-Cookie header (both tokens survive)', () => {
     const { response, headers } = makeResponse();
-    const h = helper(false);
+    const h = helper(true);
 
     h.addToResponse({ response, type: 'accessToken', value: 'a' });
     h.addToResponse({ response, type: 'refreshToken', value: 'b' });

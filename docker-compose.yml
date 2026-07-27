@@ -18,14 +18,29 @@ services:
       POSTGRES_USER: '${DB_USER}'
       POSTGRES_PASSWORD: '${DB_PASS}'
       POSTGRES_DB: '${DB_NAME}'
+    # Bind to loopback only — the API reaches Postgres over the compose network (DB_HOST=dropto-pg),
+    # so the DB must not be exposed on all host interfaces.
     ports:
-      - '${DB_PORT}:5432'
+      - '127.0.0.1:${DB_PORT}:5432'
     volumes:
       - dropto_pg_data:/var/lib/postgresql/data
     networks:
       - dropto_net
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${DB_USER} -d ${DB_NAME}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dropto-redis:
+    image: redis:7-alpine
+    container_name: dropto-redis
+    restart: unless-stopped
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    networks:
+      - dropto_net
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -40,14 +55,17 @@ services:
       - apps/api/.env
     environment:
       NODE_ENV: 'production'
-      # Database — reach Postgres over the compose network
+      # Database + Redis — reach them over the compose network
       DB_HOST: 'dropto-pg'
+      REDIS_HOST: 'dropto-redis'
     ports:
       - '4000:4000'
     networks:
       - dropto_net
     depends_on:
       dropto-pg:
+        condition: service_healthy
+      dropto-redis:
         condition: service_healthy
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://localhost:4000/health || exit 1']

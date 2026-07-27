@@ -16,19 +16,19 @@ describe('AuthHelpers', () => {
 
   beforeEach(() => signAsync.mockClear());
 
-  it('signs the access token with the access secret and TTL', async () => {
-    await expect(helpers.signAccessToken({ sub: 'admin' })).resolves.toBe('signed');
+  it('signs the access token with the access secret, HS256 and TTL', async () => {
+    await expect(helpers.signAccessToken({ sub: 'admin', ver: 0 })).resolves.toBe('signed');
     expect(signAsync).toHaveBeenCalledWith(
-      { sub: 'admin' },
-      { secret: 'access-secret', expiresIn: ACCESS_TOKEN_TTL_SECONDS },
+      { sub: 'admin', ver: 0 },
+      { secret: 'access-secret', algorithm: 'HS256', expiresIn: ACCESS_TOKEN_TTL_SECONDS },
     );
   });
 
-  it('signs the refresh token with the refresh secret and TTL', async () => {
-    await helpers.signRefreshToken({ sub: 'admin' });
+  it('signs the refresh token with the refresh secret, HS256 and TTL', async () => {
+    await helpers.signRefreshToken({ sub: 'admin', ver: 2 });
     expect(signAsync).toHaveBeenCalledWith(
-      { sub: 'admin' },
-      { secret: 'refresh-secret', expiresIn: REFRESH_TOKEN_TTL_SECONDS },
+      { sub: 'admin', ver: 2 },
+      { secret: 'refresh-secret', algorithm: 'HS256', expiresIn: REFRESH_TOKEN_TTL_SECONDS },
     );
   });
 });

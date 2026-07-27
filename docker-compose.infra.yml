@@ -14,14 +14,31 @@ services:
       POSTGRES_USER: '${DB_USER}'
       POSTGRES_PASSWORD: '${DB_PASS}'
       POSTGRES_DB: '${DB_NAME}'
+    # Loopback only — native dev apps connect via localhost; don't expose the DB to the LAN.
     ports:
-      - '${DB_PORT}:5432'
+      - '127.0.0.1:${DB_PORT}:5432'
     volumes:
       - dropto_pg_data:/var/lib/postgresql/data
     networks:
       - dropto_net
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${DB_USER} -d ${DB_NAME}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dropto-redis:
+    image: redis:7-alpine
+    container_name: dropto-redis
+    restart: unless-stopped
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    # Loopback only — native dev apps connect via localhost.
+    ports:
+      - '127.0.0.1:6379:6379'
+    networks:
+      - dropto_net
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5

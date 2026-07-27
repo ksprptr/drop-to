@@ -7,6 +7,10 @@ export interface PrismaMock {
   $runCommandRaw: jest.Mock;
   $queryRawUnsafe: jest.Mock;
   $transaction: jest.Mock;
+  authState: {
+    findUnique: jest.Mock;
+    upsert: jest.Mock;
+  };
   driveAccount: {
     findFirst: jest.Mock;
     findUnique: jest.Mock;
@@ -29,6 +33,11 @@ export const createPrismaMock = (): PrismaMock => ({
   $runCommandRaw: jest.fn().mockRejectedValue(new Error('Use the mongodb provider')),
   $queryRawUnsafe: jest.fn().mockResolvedValue([{ ok: 1 }]),
   $transaction: jest.fn().mockResolvedValue([]),
+  // Default: no row → token version 0 (matches the ver:0 baked into test tokens).
+  authState: {
+    findUnique: jest.fn().mockResolvedValue(null),
+    upsert: jest.fn().mockResolvedValue(undefined),
+  },
   driveAccount: {
     findFirst: jest.fn(),
     findUnique: jest.fn(),
@@ -49,6 +58,8 @@ export const resetPrismaMock = (mock: PrismaMock): void => {
   mock.$runCommandRaw.mockReset().mockRejectedValue(new Error('Use the mongodb provider'));
   mock.$queryRawUnsafe.mockReset().mockResolvedValue([{ ok: 1 }]);
   mock.$transaction.mockReset().mockResolvedValue([]);
+  mock.authState.findUnique.mockReset().mockResolvedValue(null);
+  mock.authState.upsert.mockReset().mockResolvedValue(undefined);
   mock.driveAccount.findFirst.mockReset();
   mock.driveAccount.findUnique.mockReset();
   mock.driveAccount.upsert.mockReset();

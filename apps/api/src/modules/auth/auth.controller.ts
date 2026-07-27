@@ -36,7 +36,7 @@ export class AuthController {
   @ApiBadRequestResponse({ type: ResponseEntity, description: 'Validation failed' })
   @ApiUnauthorizedResponse({ type: ResponseEntity, description: 'Invalid credentials' })
   @ApiTooManyRequestsResponse({ type: ResponseEntity, description: 'Too many requests' })
-  @RateLimit({ points: 10, duration: 60 })
+  @RateLimit({ points: 5, duration: 60, blockDuration: 900 })
   @HttpCode(200)
   @Post('login')
   async logIn(@Body() loginDto: LoginDto, @Res() response: Response): Promise<void> {
@@ -71,7 +71,11 @@ export class AuthController {
   @ApiOkResponse({ type: ResponseEntity, description: 'Logged out' })
   @HttpCode(200)
   @Post('logout')
-  logOut(@Res() response: Response): void {
+  async logOut(@Req() request: Request, @Res() response: Response): Promise<void> {
+    // Revoke server-side (bumps the token version) before clearing the cookies.
+    const refreshToken = extractTokenFromCookies({ type: 'refreshToken', request }) ?? null;
+    await this.authService.logout(refreshToken);
+
     this.authTokens.addToResponse({ response, type: 'accessToken', value: '' });
     this.authTokens.addToResponse({ response, type: 'refreshToken', value: '' });
 

@@ -1,12 +1,18 @@
 import type { Request } from 'express';
+import type Redis from 'ioredis';
 
 import { RateLimitHelpers } from './rate-limit.helpers';
+
+// RateLimiterRedis calls defineCommand on its store client during construction.
+const buildRedis = (): Redis => ({ defineCommand: jest.fn() }) as unknown as Redis;
+
+const buildHelpers = (): RateLimitHelpers => new RateLimitHelpers(buildRedis());
 
 describe('RateLimitHelpers', () => {
   let helpers: RateLimitHelpers;
 
   beforeEach(() => {
-    helpers = new RateLimitHelpers();
+    helpers = buildHelpers();
   });
 
   describe('normalizeIp', () => {

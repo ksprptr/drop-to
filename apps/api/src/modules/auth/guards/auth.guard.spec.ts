@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { JsonWebTokenError, JwtService } from '@nestjs/jwt';
 
 import { type JwtConfig } from '@/config/jwt.config';
+import type { PrismaService } from '@/prisma/prisma.service';
 
 import { AuthGuard } from './auth.guard';
 
@@ -26,6 +27,7 @@ const buildContext = (cookieHeader?: string): { context: ExecutionContext; reque
 describe('AuthGuard', () => {
   let reflector: Reflector;
   let jwtService: { verifyAsync: jest.Mock };
+  let prisma: { authState: { findUnique: jest.Mock } };
   let guard: AuthGuard;
 
   const jwtCfg = { accessSecret: 'access', refreshSecret: 'refresh' } as JwtConfig;
@@ -33,7 +35,13 @@ describe('AuthGuard', () => {
   beforeEach(() => {
     reflector = new Reflector();
     jwtService = { verifyAsync: jest.fn() };
-    guard = new AuthGuard(reflector, jwtService as unknown as JwtService, jwtCfg);
+    prisma = { authState: { findUnique: jest.fn().mockResolvedValue(null) } };
+    guard = new AuthGuard(
+      reflector,
+      jwtService as unknown as JwtService,
+      jwtCfg,
+      prisma as unknown as PrismaService,
+    );
   });
 
   it('allows a public route without checking the token', async () => {
@@ -43,14 +51,24 @@ describe('AuthGuard', () => {
     expect(jwtService.verifyAsync).not.toHaveBeenCalled();
   });
 
-  it('allows a request with a valid access token and attaches the user', async () => {
+  it('allows a request with a valid, current-version access token and attaches the user', async () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
-    jwtService.verifyAsync.mockResolvedValue({ sub: 'operator', iat: 1, exp: 2 });
+    jwtService.verifyAsync.mockResolvedValue({ sub: 'operator', ver: 0, iat: 1, exp: 2 });
 
     const { context, request } = buildContext('accessToken=valid.jwt.token');
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
     expect(request.user).toEqual({ sub: 'operator' });
+  });
+
+  it('rejects a signature-valid token whose version was revoked', async () => {
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+    jwtService.verifyAsync.mockResolvedValue({ sub: 'operator', ver: 0, iat: 1, exp: 2 });
+    prisma.authState.findUnique.mockResolvedValue({ tokenVersion: 1 });
+
+    await expect(
+      guard.canActivate(buildContext('accessToken=stale').context),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('rejects a request without an access cookie', async () => {

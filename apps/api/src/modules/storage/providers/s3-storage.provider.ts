@@ -41,6 +41,7 @@ import {
   S3_UNAVAILABLE_MESSAGE,
   StorageDisconnectedException,
 } from '../storage.errors';
+import { sanitizeZipEntryPath } from '../storage.functions';
 
 /** Marker used for zero-byte "folder" objects (a prefix ending in a slash). */
 const FOLDER_SUFFIX = '/';
@@ -664,7 +665,7 @@ export class S3StorageProvider implements StorageProvider {
 
         const entryPath = object.Key.slice(prefix.length) || baseName(object.Key);
         const body = await client.send(new GetObjectCommand({ Bucket: bucket, Key: object.Key }));
-        archive.append(body.Body as Readable, { name: entryPath });
+        archive.append(body.Body as Readable, { name: sanitizeZipEntryPath(entryPath) });
       }
 
       token = res.IsTruncated ? res.NextContinuationToken : undefined;
