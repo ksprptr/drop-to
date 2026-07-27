@@ -13,10 +13,7 @@ export type StorageBackend = 'drive' | 's3';
 /** All known backend keys, in the order they appear in the sidebar. */
 export const STORAGE_BACKENDS: StorageBackend[] = ['drive', 's3'];
 
-/**
- * A file to upload: its contents as a stream plus the metadata needed to store
- * it. `signal` lets the caller abort an in-flight upload (client disconnect).
- */
+/** A file to upload: stream + metadata; `signal` aborts an in-flight upload. */
 export interface StorageUpload {
   body: Readable;
   fileName: string;
@@ -24,10 +21,7 @@ export interface StorageUpload {
   signal?: AbortSignal;
 }
 
-/**
- * A file opened for download: the content stream plus the headers a caller needs
- * (`size` may be null when the backend does not report it).
- */
+/** A file opened for download: stream + headers (`size` null when unreported). */
 export interface StorageDownload {
   stream: Readable;
   name: string;
@@ -35,33 +29,18 @@ export interface StorageDownload {
   size: number | null;
 }
 
-/**
- * A folder streamed as a ZIP archive plus the folder name for the file name.
- */
+/** A folder streamed as a ZIP archive plus the folder name for the file name. */
 export interface StorageArchive {
   archive: Archiver;
   name: string;
 }
 
-/**
- * Backend-agnostic contract for a file storage backend.
- *
- * Implemented by `GoogleDriveProvider` (Google Drive) and `S3StorageProvider`
- * (AWS S3 / S3-compatible). Every method is expressed in terms the app cares
- * about (browse roots, folder contents, uploads, downloads) rather than backend
- * specifics, so a new backend only needs to implement this interface and be
- * registered in the `StorageRegistry`. Implementations must keep enforcing their
- * allowed scope — no id from a request is ever trusted unvalidated.
- */
+// Backend-agnostic storage contract. Implementations must enforce their allowed scope (no id trusted unvalidated).
 export interface StorageProvider {
   /** The backend key this provider serves ('drive' | 's3'). */
   readonly backend: StorageBackend;
 
-  /**
-   * Reports whether the backend is usable and its browse roots, for the sidebar
-   * and storage switcher. Never throws for a not-connected backend — it returns
-   * `connected: false` with empty roots.
-   */
+  /** Backend usability + browse roots for the sidebar; never throws (returns `connected: false`). */
   status(): Promise<StorageStatusEntity>;
 
   /** Lists the authorized root folders (the ones picked during setup). */
@@ -82,10 +61,7 @@ export interface StorageProvider {
   /** Renames a file or subfolder inside the authorized scope (never a root). */
   renameItem(itemId: string, name: string): Promise<DriveEntryEntity>;
 
-  /**
-   * Moves a file or subfolder into another folder inside the authorized scope
-   * (never a root itself, though a root may be the destination).
-   */
+  /** Moves an item into another folder inside the authorized scope (never a root itself). */
   moveItem(itemId: string, targetFolderId: string): Promise<DriveEntryEntity>;
 
   /** Opens a readable stream of a single file's contents. */

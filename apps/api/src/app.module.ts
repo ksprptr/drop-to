@@ -22,12 +22,8 @@ import { HealthModule } from './modules/health/health.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { PrismaModule } from './prisma/prisma.module';
 
-/**
- * Class representing an app module
- */
 @Module({
   imports: [
-    // Runtime / Platform
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: [path.join(__dirname, '..', '.env'), path.join(__dirname, '..', '.env.local')],
@@ -57,12 +53,10 @@ import { PrismaModule } from './prisma/prisma.module';
       },
     }),
 
-    // Infrastructure / Shared
     PrismaModule,
     CryptoModule,
     RateLimitModule,
 
-    // Feature modules
     AuthModule,
     HealthModule,
     GoogleAuthModule,

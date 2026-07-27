@@ -13,19 +13,15 @@ import {
 import { type ActionResult, runAction } from '@/common/utils/action.functions';
 
 /**
- * Server Action: fetches the status of every storage backend.
- * @returns The per-backend status list
- */
+ * Fetches the status of every storage backend.
+ **/
 export async function statusesAction(): Promise<ActionResult<StorageStatus[]>> {
   return runAction(() => getStatuses());
 }
 
 /**
- * Server Action: lists the contents of a folder.
- * @param backend - The storage backend
- * @param folderId - The folder id
- * @returns The folder entries
- */
+ * Lists the contents of a folder.
+ **/
 export async function listContentsAction(
   backend: StorageBackend,
   folderId: string,
@@ -34,12 +30,8 @@ export async function listContentsAction(
 }
 
 /**
- * Server Action: creates a subfolder inside a folder.
- * @param backend - The storage backend
- * @param parentId - The parent folder id
- * @param name - The new folder name
- * @returns The created folder entry
- */
+ * Creates a subfolder inside a folder.
+ **/
 export async function createFolderAction(
   backend: StorageBackend,
   parentId: string,
@@ -49,11 +41,8 @@ export async function createFolderAction(
 }
 
 /**
- * Server Action: deletes a file or folder.
- * @param backend - The storage backend
- * @param id - The file or folder id
- * @returns The result of the delete
- */
+ * Deletes a file or folder.
+ **/
 export async function deleteItemAction(
   backend: StorageBackend,
   id: string,
@@ -62,12 +51,8 @@ export async function deleteItemAction(
 }
 
 /**
- * Server Action: renames a file or folder.
- * @param backend - The storage backend
- * @param id - The file or folder id
- * @param name - The new name
- * @returns The renamed entry
- */
+ * Renames a file or folder.
+ **/
 export async function renameItemAction(
   backend: StorageBackend,
   id: string,
@@ -77,12 +62,8 @@ export async function renameItemAction(
 }
 
 /**
- * Server Action: moves a file or folder into another folder.
- * @param backend - The storage backend
- * @param id - The file or folder id to move
- * @param targetFolderId - The destination folder id
- * @returns The moved entry
- */
+ * Moves a file or folder into another folder.
+ **/
 export async function moveItemAction(
   backend: StorageBackend,
   id: string,

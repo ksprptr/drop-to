@@ -15,12 +15,7 @@ import { RATE_LIMIT_META_KEY, RateLimitRule } from '../decorators/rate-limit.dec
 import { SKIP_RATE_LIMIT_META_KEY } from '../decorators/skip-rate-limit.decorator';
 import { RateLimitHelpers } from '../helpers/rate-limit.helpers';
 
-/**
- * Class representing a rate limit guard.
- *
- * Applies a per-route `@RateLimit` rule (or a default) keyed by client IP.
- * Routes marked `@SkipRateLimit()` are never limited. Exceeding the limit → 429.
- */
+/** Per-route `@RateLimit` rule (or default) keyed by client IP; `@SkipRateLimit` opts out; over → 429. */
 @Injectable()
 export class RateLimitGuard implements CanActivate {
   constructor(
@@ -29,13 +24,6 @@ export class RateLimitGuard implements CanActivate {
     @Inject(rateLimitConfig.KEY) private readonly rateLimitCfg: RateLimitConfig,
   ) {}
 
-  /**
-   * Determines whether the request may proceed under the rate limit.
-   * @param context - The execution context
-   * @returns True when the request is within its limit
-   * @throws BadRequestException when the client IP cannot be resolved
-   * @throws HttpException (429) when the limit is exceeded
-   */
   async canActivate(context: ExecutionContext): Promise<boolean> {
     if (!this.rateLimitCfg.enabled) {
       return true;

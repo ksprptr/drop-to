@@ -8,7 +8,7 @@ import { AuthGuard } from './auth.guard';
 
 /**
  * Builds a minimal ExecutionContext exposing the given cookie header.
- */
+ **/
 const buildContext = (cookieHeader?: string): { context: ExecutionContext; request: { user?: unknown } } => {
   const request: { headers: Record<string, unknown>; user?: unknown } = {
     headers: cookieHeader ? { cookie: cookieHeader } : {},

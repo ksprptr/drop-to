@@ -1,9 +1,6 @@
 import type { StorageBackend } from '@dropto/types';
 
-/**
- * Icon name (see the `Icon` component) used to represent each storage backend in
- * the sidebar, storage switcher and breadcrumb.
- */
+/** Icon name per storage backend. */
 export const STORAGE_ICON: Record<StorageBackend, string> = {
   drive: 'Cloud',
   s3: 'CircleStack',

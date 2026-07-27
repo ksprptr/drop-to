@@ -18,7 +18,7 @@ export interface BrowsePane {
   entries: ViewEntry[];
   loading: boolean;
   selectedIds: Set<string>;
-  /** Id of the folder currently open (null at the roots level). */
+  /** Null at the roots level. */
   currentFolderId: string | null;
   atRoots: boolean;
   openFolder: (entry: ViewEntry) => void;
@@ -32,14 +32,8 @@ export interface BrowsePane {
 }
 
 /**
- * Hook that owns one browsing pane's state (its path, listed entries, loading and
- * multi-selection) for a single storage backend. Used to power a second, split
- * pane alongside the primary workspace pane, so items can be dragged between them.
- * @param backend - The active storage backend (or null when none is selected)
- * @param roots - The backend's browse roots, shown at the top (path) level
- * @param onError - Called with a display message when listing a folder fails
- * @returns The pane state and its navigation/selection helpers
- */
+ * Owns one browsing pane's state (path, entries, loading, multi-selection).
+ **/
 export function useBrowsePane(
   backend: StorageBackend | null,
   roots: ViewEntry[],
@@ -53,12 +47,10 @@ export function useBrowsePane(
   const currentFolderId = path.length > 0 ? path[path.length - 1].id : null;
   const atRoots = path.length === 0;
 
-  // Reset the path when the backend changes (its folders are entirely different).
   useEffect(() => {
     setPath([]);
   }, [backend]);
 
-  // Drop any multi-selection whenever the folder or backend changes.
   useEffect(() => {
     setSelectedIds(new Set());
   }, [currentFolderId, backend]);

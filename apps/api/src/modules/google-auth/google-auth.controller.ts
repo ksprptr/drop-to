@@ -21,9 +21,6 @@ import { AllowedFolderEntity } from './entities/allowed-folder.entity';
 import { DriveAccountStatusEntity } from './entities/drive-account-status.entity';
 import { GoogleAuthService } from './google-auth.service';
 
-/**
- * Class representing a google auth controller
- */
 @ApiTags('Google Auth')
 @ApiCookieAuth('accessToken')
 @ApiUnauthorizedResponse({ type: ResponseEntity, description: 'Unauthorized' })
@@ -34,9 +31,6 @@ export class GoogleAuthController {
     private readonly googleAuthService: GoogleAuthService,
   ) {}
 
-  /**
-   * Controller to redirect the user to the Google OAuth consent screen
-   */
   @Public()
   @ApiExcludeEndpoint()
   @Get('google')
@@ -44,9 +38,6 @@ export class GoogleAuthController {
     res.redirect(this.googleAuthService.getAuthUrl());
   }
 
-  /**
-   * Controller to handle the Google OAuth callback and redirect back to the web app
-   */
   @Public()
   @ApiExcludeEndpoint()
   @Get('google/callback')
@@ -74,9 +65,6 @@ export class GoogleAuthController {
     res.redirect(redirectUrl.toString());
   }
 
-  /**
-   * Controller to persist the folders selected through the Google Picker
-   */
   @ApiOperation({ summary: 'Save the Picker-selected allowed folders' })
   @ApiCreatedResponse({ type: [AllowedFolderEntity], description: 'Allowed folders saved' })
   @ApiBadRequestResponse({ type: ResponseEntity, description: 'Validation failed' })
@@ -85,9 +73,6 @@ export class GoogleAuthController {
     return this.googleAuthService.saveAllowedFolders(saveFoldersDto);
   }
 
-  /**
-   * Controller to mint a short-lived access token for the Google Picker
-   */
   @ApiOperation({ summary: 'Get a short-lived access token for the Google Picker' })
   @ApiOkResponse({ description: 'Access token issued' })
   @Get('picker-token')
@@ -95,9 +80,6 @@ export class GoogleAuthController {
     return { accessToken: await this.googleAuthService.getPickerAccessToken() };
   }
 
-  /**
-   * Controller to return the current connection status of the Drive account
-   */
   @ApiOperation({ summary: 'Get the Drive account connection status' })
   @ApiOkResponse({ type: DriveAccountStatusEntity, description: 'Successful' })
   @Get('status')
@@ -105,9 +87,6 @@ export class GoogleAuthController {
     return this.googleAuthService.getStatus();
   }
 
-  /**
-   * Controller to disconnect the Google account from the app
-   */
   @ApiOperation({ summary: 'Disconnect the Google account' })
   @ApiNoContentResponse({ description: 'Account disconnected' })
   @HttpCode(204)

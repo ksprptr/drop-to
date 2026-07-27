@@ -12,13 +12,7 @@ const ALGORITHM: CipherGCMTypes = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 
-/**
- * Class representing a crypto service.
- *
- * Provides authenticated AES-256-GCM encryption used to protect the Google
- * Drive refresh token at rest. The ciphertext is serialized as
- * `iv:authTag:data` (all hex) so a single column can round-trip it.
- */
+/** AES-256-GCM encryption for the Drive refresh token; envelope `iv:authTag:data` (hex). */
 @Injectable()
 export class CryptoService {
   private readonly key: Buffer;
@@ -27,11 +21,6 @@ export class CryptoService {
     this.key = config.tokenEncryptionKey;
   }
 
-  /**
-   * Function to encrypt a plaintext string.
-   * @param plaintext - The value to encrypt
-   * @returns The `iv:authTag:ciphertext` hex-encoded envelope
-   */
   encrypt(plaintext: string): string {
     const iv = randomBytes(IV_LENGTH);
     const cipher = createCipheriv(ALGORITHM, this.key, iv);
@@ -42,11 +31,6 @@ export class CryptoService {
     return [iv.toString('hex'), authTag.toString('hex'), encrypted.toString('hex')].join(':');
   }
 
-  /**
-   * Function to decrypt an `iv:authTag:ciphertext` envelope produced by `encrypt`.
-   * @param payload - The hex-encoded envelope
-   * @returns The recovered plaintext
-   */
   decrypt(payload: string): string {
     const [ivHex, authTagHex, dataHex] = payload.split(':');
 

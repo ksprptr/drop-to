@@ -1,8 +1,6 @@
 /**
- * Function to format a byte count into a human-readable string.
- * @param bytes - The size in bytes (or null)
- * @returns A formatted size like `1.4 MB`, or an em dash when unknown
- */
+ * Formats a byte count like `1.4 MB` (em dash when unknown).
+ **/
 export const formatBytes = (bytes: number | null): string => {
   if (bytes === null || Number.isNaN(bytes)) {
     return '—';
@@ -20,10 +18,8 @@ export const formatBytes = (bytes: number | null): string => {
 };
 
 /**
- * Function to format an ISO date string for display.
- * @param iso - The ISO date string (or null)
- * @returns A localized date, or an em dash when unknown
- */
+ * Formats an ISO date (em dash when unknown).
+ **/
 export const formatDate = (iso: string | null): string => {
   if (!iso) {
     return '—';
@@ -37,10 +33,8 @@ export const formatDate = (iso: string | null): string => {
 };
 
 /**
- * Function to format an ISO date string with the time for display.
- * @param iso - The ISO date string (or null)
- * @returns A localized date and time, or an em dash when unknown
- */
+ * Formats an ISO date + time (em dash when unknown).
+ **/
 export const formatDateTime = (iso: string | null): string => {
   if (!iso) {
     return '—';
@@ -56,10 +50,8 @@ export const formatDateTime = (iso: string | null): string => {
 };
 
 /**
- * Function to format an estimated time remaining into a short string.
- * @param seconds - The seconds remaining (or null when unknown)
- * @returns A string like `12s left` or `2m 5s left`, or empty when unknown
- */
+ * Formats a time-remaining like `12s left` / `2m 5s left` (empty when unknown).
+ **/
 export const formatEta = (seconds: number | null): string => {
   if (seconds === null || !Number.isFinite(seconds) || seconds <= 0) {
     return '';

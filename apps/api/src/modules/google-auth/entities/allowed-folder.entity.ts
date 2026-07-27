@@ -1,8 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/**
- * Class representing an allowed folder entity
- */
 export class AllowedFolderEntity {
   @ApiProperty({ type: 'string', description: 'Internal record id' })
   id: string;

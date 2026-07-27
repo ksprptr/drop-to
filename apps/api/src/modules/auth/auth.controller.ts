@@ -22,9 +22,6 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { AuthUserEntity } from './entities/auth-user.entity';
 
-/**
- * Class representing an auth controller.
- */
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
@@ -33,9 +30,6 @@ export class AuthController {
     private readonly authTokens: AuthTokensHelper,
   ) {}
 
-  /**
-   * Controller to log the operator in and set the auth cookies
-   */
   @Public()
   @ApiOperation({ summary: 'Log in with username and password' })
   @ApiOkResponse({ type: ResponseEntity, description: 'Logged in' })
@@ -54,9 +48,6 @@ export class AuthController {
     response.status(200).send({ status: 200, message: 'Logged in successfully.' });
   }
 
-  /**
-   * Controller to rotate the token pair from the refresh cookie
-   */
   @Public()
   @ApiOperation({ summary: 'Refresh the access token' })
   @ApiOkResponse({ type: ResponseEntity, description: 'Token refreshed' })
@@ -75,9 +66,6 @@ export class AuthController {
     response.status(200).send({ status: 200, message: 'Token refreshed successfully.' });
   }
 
-  /**
-   * Controller to log out by clearing the auth cookies
-   */
   @Public()
   @ApiOperation({ summary: 'Log out' })
   @ApiOkResponse({ type: ResponseEntity, description: 'Logged out' })
@@ -90,9 +78,6 @@ export class AuthController {
     response.status(200).send({ status: 200, message: 'Logged out successfully.' });
   }
 
-  /**
-   * Controller to return the currently authenticated operator
-   */
   @ApiCookieAuth('accessToken')
   @ApiOperation({ summary: 'Get the current authenticated operator' })
   @ApiOkResponse({ type: AuthUserEntity, description: 'Successful' })

@@ -10,11 +10,8 @@ export interface ActionResult<T = void> {
 }
 
 /**
- * Runs a server-side API call and wraps it into a serializable {@link ActionResult}
- * — never throws, so client code can branch on `ok` / `status` / `error`.
- * @param fn - The API call to execute
- * @returns The wrapped result
- */
+ * Wraps a server-side API call into a serializable {@link ActionResult} (never throws).
+ **/
 export async function runAction<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
   try {
     return { ok: true, data: await fn() };
@@ -25,12 +22,8 @@ export async function runAction<T>(fn: () => Promise<T>): Promise<ActionResult<T
 }
 
 /**
- * Extracts a human-readable message from a caught API error (NestJS returns
- * `{ message }`, sometimes an array). Returns `undefined` when nothing can be
- * extracted, so callers can fall back to a generic message.
- * @param error - The caught error
- * @returns The message, or undefined
- */
+ * Extracts the NestJS `{ message }` from a caught API error, or undefined.
+ **/
 export const extractApiError = (error: unknown): string | undefined => {
   if (isAxiosError(error)) {
     const payload = error.response?.data as { message?: string | string[] } | undefined;

@@ -11,8 +11,7 @@ export interface PickedFolder {
   name: string;
 }
 
-// The Picker/gapi globals are injected by external scripts and have no bundled
-// types, so they are accessed loosely through `window`.
+// gapi/Picker globals have no bundled types.
 declare global {
   interface Window {
     gapi?: {
@@ -27,10 +26,8 @@ declare global {
 const GAPI_SRC = 'https://apis.google.com/js/api.js';
 
 /**
- * Function to load an external script once, resolving when it is ready.
- * @param src - The script URL
- * @returns A promise that resolves when the script has loaded
- */
+ * Loads an external script once, resolving when ready.
+ **/
 const loadScript = (src: string): Promise<void> => {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
@@ -58,12 +55,8 @@ const loadScript = (src: string): Promise<void> => {
 };
 
 /**
- * Hook that lazily loads the Google Picker and opens it scoped to folders.
- *
- * The Picker is authorized with a short-lived access token minted by the API
- * from the stored refresh token, so the browser never handles OAuth directly.
- * @returns An `openPicker` function that resolves selected folders via callback
- */
+ * Lazily loads the Google Picker (scoped to folders) and returns `openPicker`.
+ **/
 export function usePicker() {
   const pickerLoaded = useRef(false);
 

@@ -15,12 +15,7 @@ interface AddTokenToResponseParams {
   value: string;
 }
 
-/**
- * Class representing an auth tokens helper.
- *
- * Serializes access/refresh tokens into httpOnly cookies. An empty value clears
- * the cookie (used on logout).
- */
+/** Serializes access/refresh tokens into httpOnly cookies (empty value clears them). */
 @Injectable()
 export class AuthTokensHelper {
   private readonly cookieDomain?: string;
@@ -35,11 +30,8 @@ export class AuthTokensHelper {
   }
 
   /**
-   * Helper function to write an auth token into the response cookies.
-   * @param response - The HTTP response
-   * @param type - The token type (accessToken or refreshToken)
-   * @param value - The token value (empty string clears the cookie)
-   */
+   * Writes an auth token into the response cookies (empty value clears it).
+   **/
   addToResponse({ response, type, value }: AddTokenToResponseParams): void {
     const maxAge =
       type === 'accessToken' ? ACCESS_TOKEN_TTL_SECONDS : REFRESH_TOKEN_TTL_SECONDS;

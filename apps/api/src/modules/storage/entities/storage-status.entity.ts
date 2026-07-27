@@ -2,10 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 
 import { StorageBackend } from '../interfaces/storage-provider.interface';
 
-/**
- * Class representing a storage root entity (a browse root within a backend:
- * an authorized folder for Drive, a configured bucket for S3).
- */
+/** A browse root within a backend: a Drive folder or an S3 bucket. */
 export class StorageRootEntity {
   @ApiProperty({ type: 'string', description: 'Opaque id used to browse into this root' })
   id: string;
@@ -14,10 +11,6 @@ export class StorageRootEntity {
   name: string;
 }
 
-/**
- * Class representing a storage backend status entity, used to render the sidebar
- * and the storage switcher.
- */
 export class StorageStatusEntity {
   @ApiProperty({ enum: ['drive', 's3'], description: 'Storage backend key' })
   backend: StorageBackend;

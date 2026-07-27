@@ -1,8 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/**
- * Class representing a drive entry entity (a file or folder inside a folder)
- */
 export class DriveEntryEntity {
   @ApiProperty({ type: 'string', description: 'Google Drive file/folder id' })
   id: string;

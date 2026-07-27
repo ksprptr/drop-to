@@ -1,9 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString } from 'class-validator';
 
-/**
- * Class representing the payload to move a file or subfolder into another folder.
- */
 export class MoveItemDto {
   @ApiProperty({
     type: 'string',

@@ -42,7 +42,9 @@ const statusColor = (task: UploadTask): string => {
   }
 };
 
-/** An indeterminate progress bar (used while streaming to Drive / preparing). */
+/**
+ * Indeterminate progress bar (streaming / preparing).
+ **/
 function IndeterminateBar() {
   return (
     <div className='h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-900'>
@@ -55,7 +57,9 @@ function IndeterminateBar() {
   );
 }
 
-/** Per-task progress bar (fully green on done, red on cancel, indeterminate while processing). */
+/**
+ * Per-task progress bar.
+ **/
 function ProgressBar({ task }: { task: UploadTask }) {
   if (task.status === 'processing') {
     return <IndeterminateBar />;
@@ -79,7 +83,6 @@ function ProgressBar({ task }: { task: UploadTask }) {
   );
 }
 
-/** A single file row: name, status and its own progress bar. */
 function TaskRow({ task }: { task: UploadTask }) {
   return (
     <div className='flex flex-col gap-y-1'>
@@ -94,7 +97,9 @@ function TaskRow({ task }: { task: UploadTask }) {
   );
 }
 
-/** A card for one upload batch (single file, multiple files, or a folder). */
+/**
+ * Card for one upload batch.
+ **/
 function BatchCard({ batch, onCancel }: { batch: UploadBatch; onCancel: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -111,8 +116,6 @@ function BatchCard({ batch, onCancel }: { batch: UploadBatch; onCancel: (id: str
   const many = total > 4;
   const showList = !many || expanded;
 
-  // The title stays constant ("Uploading N files" / folder) — cancellation shows
-  // on the per-file rows, not the header.
   const title = `${batch.status === 'done' ? 'Uploaded' : 'Uploading'} ${
     batch.kind === 'folder' ? `folder “${batch.folderName}”` : `${total} file${total === 1 ? '' : 's'}`
   }`;
@@ -195,11 +198,8 @@ function BatchCard({ batch, onCancel }: { batch: UploadBatch; onCancel: (id: str
 }
 
 /**
- * Floating bottom-right dock for uploads and downloads. Uploads are grouped per
- * batch (single file, N files, or a folder) with a shared ETA, per-file bars,
- * a cancel button and a collapsible list; a warning notes that refreshing cancels
- * in-flight uploads.
- */
+ * Floating dock showing upload batches (ETA, per-file bars, cancel) and downloads.
+ **/
 export default function UploadDock({ batches, downloads, onCancelBatch }: Props) {
   const hasActive = batches.some((batch) => batch.status === 'uploading');
 

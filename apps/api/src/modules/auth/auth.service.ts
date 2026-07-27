@@ -10,13 +10,7 @@ import { LoginDto } from './dto/login.dto';
 import { AuthResponseEntity } from './entities/auth-response.entity';
 import { AuthHelpers } from './helpers/auth.helpers';
 
-/**
- * Class representing an auth service.
- *
- * Authenticates the single operator account defined in the environment and
- * issues stateless access/refresh JWTs. There is no user database — the refresh
- * token is a signed JWT, so logout is handled by clearing the cookies client-side.
- */
+/** Authenticates the single env-defined operator and issues stateless access/refresh JWTs. */
 @Injectable()
 export class AuthService {
   constructor(
@@ -26,17 +20,11 @@ export class AuthService {
     private readonly authHelpers: AuthHelpers,
   ) {}
 
-  /**
-   * Function to authenticate the operator and issue a fresh token pair.
-   * @param loginDto - The submitted username and password
-   * @returns The access and refresh tokens
-   * @throws UnauthorizedException on invalid credentials
-   */
   async login(loginDto: LoginDto): Promise<AuthResponseEntity> {
     const usernameOk = this.safeEqual(loginDto.username, this.authCfg.username);
     const passwordOk = this.safeEqual(loginDto.password, this.authCfg.password);
 
-    // Evaluate both before deciding so timing does not reveal which field was wrong.
+    // Evaluate both so timing doesn't reveal which field was wrong.
     if (!usernameOk || !passwordOk) {
       throw new UnauthorizedException('Invalid credentials.');
     }
@@ -45,11 +33,8 @@ export class AuthService {
   }
 
   /**
-   * Function to rotate the token pair from a valid refresh token.
-   * @param rawRefreshToken - The refresh token from the cookie
-   * @returns A new access and refresh token pair
-   * @throws UnauthorizedException when the refresh token is missing, invalid or expired
-   */
+   * Rotates the token pair from a valid refresh token.
+   **/
   async refreshTokens(rawRefreshToken: string | null): Promise<AuthResponseEntity> {
     if (!rawRefreshToken) {
       throw new UnauthorizedException('Missing refresh token.');
@@ -60,7 +45,6 @@ export class AuthService {
         secret: this.jwtCfg.refreshSecret,
       });
 
-      // The single operator is the only valid subject; reject anything else.
       if (payload.sub !== this.authCfg.username) {
         throw new UnauthorizedException('Invalid refresh token.');
       }
@@ -75,10 +59,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * Function to sign a fresh access/refresh token pair for the operator.
-   * @returns The token pair
-   */
   private async issueTokens(): Promise<AuthResponseEntity> {
     const payload = { sub: this.authCfg.username };
 
@@ -91,11 +71,8 @@ export class AuthService {
   }
 
   /**
-   * Constant-time string comparison that never short-circuits on length.
-   * @param provided - The value from the request
-   * @param expected - The configured value
-   * @returns True when the two are equal
-   */
+   * Constant-time string comparison (also length-safe).
+   **/
   private safeEqual(provided: string, expected: string): boolean {
     const providedBuffer = Buffer.from(provided);
     const expectedBuffer = Buffer.from(expected);

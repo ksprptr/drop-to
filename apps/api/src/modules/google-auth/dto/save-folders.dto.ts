@@ -2,9 +2,6 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMinSize, IsArray, IsNotEmpty, IsString, MaxLength, ValidateNested } from 'class-validator';
 
-/**
- * Class representing a single folder selected through the Google Picker.
- */
 export class SaveFolderItemDto {
   @ApiProperty({
     type: 'string',
@@ -29,9 +26,6 @@ export class SaveFolderItemDto {
   name: string;
 }
 
-/**
- * Class representing the payload persisting the Picker-selected folders.
- */
 export class SaveFoldersDto {
   @ApiProperty({
     type: [SaveFolderItemDto],

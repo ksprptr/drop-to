@@ -1,8 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/**
- * Class representing an upload result entity
- */
 export class UploadResultEntity {
   @ApiProperty({ type: 'string', description: 'Google Drive file id of the uploaded file' })
   fileId: string;

@@ -6,9 +6,8 @@ import Link from 'next/link';
 import Icon from '@/components/common/Icon';
 
 /**
- * The animated content of the 404 page — kept in a client component so the
- * `not-found` route itself can stay a Server Component and export metadata.
- */
+ * Animated 404 body (client, so the not-found route stays a Server Component).
+ **/
 export default function NotFoundContent() {
   return (
     <main className='flex min-h-screen items-center justify-center px-4'>

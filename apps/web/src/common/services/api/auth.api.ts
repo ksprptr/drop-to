@@ -3,16 +3,11 @@ import type { AllowedFolder, AuthUser, SaveFoldersPayload } from '@dropto/types'
 
 import { getHttp } from '@/common/services/axios/axios.instance';
 
-/**
- * Server-side API functions for auth / Google-account management. All reached
- * through `getHttp()` (server-to-server, cookies forwarded) — never from the
- * browser directly.
- */
+// Server-side auth / Google-account API — reached via getHttp(), never from the browser.
 
 /**
  * Fetches the currently authenticated operator.
- * @returns The current user
- */
+ **/
 export const getMe = async (): Promise<AuthUser> => {
   const http = await getHttp();
   const { data } = await http.get<AuthUser>('/auth/me');
@@ -21,9 +16,8 @@ export const getMe = async (): Promise<AuthUser> => {
 };
 
 /**
- * Mints a short-lived access token for the Google Picker (used briefly in the browser).
- * @returns The access token
- */
+ * Mints a short-lived access token for the Google Picker.
+ **/
 export const getPickerToken = async (): Promise<string> => {
   const http = await getHttp();
   const { data } = await http.get<{ accessToken: string }>('/google-auth/picker-token');
@@ -33,9 +27,7 @@ export const getPickerToken = async (): Promise<string> => {
 
 /**
  * Persists the folders selected via the Google Picker.
- * @param payload - The selected folders (id + name)
- * @returns The saved allowed folders
- */
+ **/
 export const saveFolders = async (payload: SaveFoldersPayload): Promise<AllowedFolder[]> => {
   const http = await getHttp();
   const { data } = await http.post<AllowedFolder[]>('/google-auth/folders', payload);
@@ -45,7 +37,7 @@ export const saveFolders = async (payload: SaveFoldersPayload): Promise<AllowedF
 
 /**
  * Disconnects the Google account from the app.
- */
+ **/
 export const disconnectAccount = async (): Promise<void> => {
   const http = await getHttp();
   await http.delete('/google-auth/account');

@@ -31,24 +31,19 @@ const MENU_MOTION = {
 
 interface Props {
   path: Crumb[];
-  /** Label of the browse root (the active storage name). */
   rootLabel: string;
-  /** Heroicon name for the browse root. */
   rootIcon: string;
   entries: ViewEntry[];
   loading: boolean;
   selectedId: string | null;
   canUpload: boolean;
-  /** Whether rows can be selected/renamed/deleted (false at the roots level). */
+  /** False at the roots level (no select/rename/delete). */
   canModify: boolean;
-  /** Whether a storage backend is currently selected. */
   hasStorage: boolean;
-  /** Ids currently checked for a bulk action. */
   selectedIds: Set<string>;
   onNavigate: (index: number) => void;
   onOpenFolder: (entry: ViewEntry) => void;
   onSelect: (entry: ViewEntry) => void;
-  /** Clears the preview selection when clicking the empty finder area. */
   onDeselect: () => void;
   onUpload: (items: UploadItem[]) => void;
   onNewFolder: () => void;
@@ -59,19 +54,13 @@ interface Props {
   onDownload: (entry: ViewEntry) => void;
   onRename: (entry: ViewEntry) => void;
   onDelete: (entry: ViewEntry) => void;
-  /** Whether the split view is currently open (drives the toggle button state). */
   split?: boolean;
-  /** When provided, renders a split-view toggle button in the toolbar. */
   onToggleSplit?: () => void;
-  /** Whether this pane can currently accept an in-progress drag-to-move. */
+  /** Whether this pane can accept an in-progress drag-to-move. */
   acceptMove?: boolean;
-  /** Starts a drag-to-move of the given ids from this pane. */
   onMoveDragStart?: (ids: string[]) => void;
-  /** Ends the current drag-to-move (dropped or cancelled). */
   onMoveDragEnd?: () => void;
-  /** Items were dropped onto this pane — move them into the current folder. */
   onMoveDrop?: () => void;
-  /** When provided, the root crumb switches the active storage (mobile switcher). */
   storagePicker?: BreadcrumbStoragePicker;
 }
 
@@ -85,8 +74,8 @@ type SortKey = 'name' | 'modified' | 'size';
 type SortDir = 'asc' | 'desc';
 
 /**
- * Returns the Heroicon name for a file's MIME type.
- */
+ * Icon name for a MIME type.
+ **/
 const fileIcon = (mimeType: string | null): string => {
   if (!mimeType) return 'Document';
   if (mimeType.startsWith('image/')) return 'Photo';
@@ -98,20 +87,20 @@ const fileIcon = (mimeType: string | null): string => {
 };
 
 /**
- * Reads all entries from a directory reader (it returns at most 100 per call).
- */
+ * Reads all entries from a directory reader (≤100 per call).
+ **/
 const readAllEntries = (reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> =>
   new Promise((resolve, reject) => reader.readEntries(resolve, reject));
 
 /**
  * Resolves a file entry into a File.
- */
+ **/
 const entryToFile = (entry: FileSystemFileEntry): Promise<File> =>
   new Promise((resolve, reject) => entry.file(resolve, reject));
 
 /**
- * Recursively walks a dropped FileSystemEntry into flat upload items.
- */
+ * Recursively walks a dropped entry into flat upload items.
+ **/
 const walkEntry = async (
   entry: FileSystemEntry,
   prefix: string,
@@ -134,9 +123,8 @@ const walkEntry = async (
 };
 
 /**
- * Resolves dropped items (files and/or folders) into flat upload items, falling
- * back to the plain file list when the entry API is unavailable.
- */
+ * Dropped items → flat upload items (falls back to the plain file list).
+ **/
 const resolveDropItems = async (
   entries: FileSystemEntry[],
   flatFiles: File[],
@@ -153,9 +141,8 @@ const resolveDropItems = async (
 };
 
 /**
- * The middle pane: a Finder-like sortable list of folders and files. The whole
- * area is a drop target for uploads (files and folders) into the current folder.
- */
+ * Middle pane: Finder-like sortable list + drop target for uploads.
+ **/
 export default function FileBrowser({
   path,
   rootLabel,
@@ -255,10 +242,7 @@ export default function FileBrowser({
 
   const allSelected = entries.length > 0 && entries.every((entry) => selectedIds.has(entry.id));
 
-  // Row layout: a leading checkbox + trailing actions column only when the level
-  // is modifiable (i.e. not the roots level, where items can't be changed). The
-  // "Modified" column is dropped on mobile (hidden cell + a narrower template) so
-  // the name gets the room.
+  // Checkbox + actions columns only when modifiable; "Modified" is dropped on mobile.
   const gridCols = canModify
     ? 'grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_2rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_8rem_5rem_2rem]'
     : 'grid-cols-[minmax(0,1fr)_4.5rem] sm:grid-cols-[minmax(0,1fr)_8rem_6rem]';
@@ -544,8 +528,7 @@ export default function FileBrowser({
                         else if (entry.webViewLink) window.open(entry.webViewLink, '_blank');
                       }}
                       onKeyDown={(event) => {
-                        // Keyboard activation: Enter opens a folder / selects a file,
-                        // Space selects — so the list is fully navigable by Tab.
+                        // Enter opens a folder / selects a file; Space selects.
                         if (event.key === 'Enter') {
                           event.preventDefault();
                           if (entry.isFolder) onOpenFolder(entry);
@@ -725,9 +708,6 @@ export default function FileBrowser({
   );
 }
 
-/**
- * A single row in the row-actions dropdown menu.
- */
 function MenuItem({
   icon,
   label,

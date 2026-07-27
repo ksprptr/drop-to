@@ -3,11 +3,8 @@ import { NextResponse } from 'next/server';
 import { apiAuthHeaders, apiUrl } from '@/common/services/api/passthrough.server';
 
 /**
- * Route handler proxying a streamed file upload to the API. The browser posts here
- * (same-origin) so it gets upload progress + abort; the raw multipart body is
- * streamed straight through to the API without buffering (10 GiB uploads), never
- * exposing the API to the browser directly.
- */
+ * Proxies a streamed upload to the API: raw body streamed through (no buffering, 10 GiB).
+ **/
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ backend: string; id: string }> },
@@ -26,7 +23,6 @@ export async function POST(
       body: request.body,
       headers,
       signal: request.signal,
-      // Required when streaming a request body via fetch.
       duplex: 'half',
     } as RequestInit & { duplex: 'half' });
 

@@ -10,10 +10,8 @@ export const metadata: Metadata = {
 };
 
 /**
- * Workspace route — the Finder-like storage workspace. The proxy gates the route
- * (redirecting unauthenticated visitors); here we resolve the operator and the
- * initial storage statuses on the server so the client mounts with data.
- */
+ * Workspace route — resolves the operator and initial statuses on the server.
+ **/
 export default async function WorkspacePage() {
   const user = await getCurrentUser();
 

@@ -8,8 +8,8 @@ interface Props extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 /**
- * Shared text input with an optional label and error message.
- */
+ * Text input with optional label + error.
+ **/
 export default function Input({ label, error, className, id, ...props }: Props) {
   const inputId = id ?? props.name;
 

@@ -8,10 +8,7 @@ import type { Crumb } from '@/common/types/workspace.types';
 import Icon from '@/components/common/Icon';
 import { STORAGE_ICON } from '@/configs/storage.config';
 
-/**
- * Lets the root crumb switch the active storage. Primarily for mobile, where the
- * sidebar (and its storage switcher) is hidden.
- */
+/** Lets the root crumb switch the active storage (mobile, where the sidebar is hidden). */
 export interface BreadcrumbStoragePicker {
   storages: StorageStatus[];
   activeBackend: StorageBackend | null;
@@ -20,19 +17,15 @@ export interface BreadcrumbStoragePicker {
 
 interface Props {
   crumbs: Crumb[];
-  /** Label of the browse root (the active storage name, e.g. "Google Drive"). */
   rootLabel: string;
-  /** Icon name for the browse root. */
   rootIcon: string;
   onNavigate: (index: number) => void;
   storagePicker?: BreadcrumbStoragePicker;
 }
 
 /**
- * Breadcrumb trail for the current folder path. The first crumb is the active
- * storage (e.g. Google Drive → folder → subfolder); at the roots level, when more
- * than one storage is connected, it doubles as a dropdown to switch storage.
- */
+ * Folder-path trail; the root crumb doubles as a storage switcher at the roots level.
+ **/
 export default function Breadcrumb({
   crumbs,
   rootLabel,

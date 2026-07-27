@@ -14,8 +14,8 @@ interface Props extends ExtendedProps {
 }
 
 /**
- * Shared button with primary/secondary/danger/transparent variants.
- */
+ * Shared button with themed variants.
+ **/
 export default function Button({
   type = 'button',
   variant = 'normal',

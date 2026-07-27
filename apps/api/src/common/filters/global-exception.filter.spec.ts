@@ -4,7 +4,7 @@ import { GlobalExceptionFilter } from './global-exception.filter';
 
 /**
  * Captures the response `status()`/`json()` calls a filter makes.
- */
+ **/
 const buildHost = (): {
   host: ArgumentsHost;
   status: jest.Mock;

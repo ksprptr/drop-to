@@ -8,21 +8,13 @@ export interface RefreshContext {
   refreshToken: string;
 }
 
-/**
- * Per-instance single-flight of in-progress refreshes, keyed by the OLD refresh
- * token, so concurrent requests carrying the same refresh cookie await one promise.
- */
+// Single-flight + memo, both keyed by the OLD refresh token, so one API refresh per token.
 const inflight = new Map<string, Promise<ParsedSetCookie[]>>();
-
-/** Short-lived memo of completed refreshes, keyed by the OLD refresh token. */
 const memo = new Map<string, { tokens: ParsedSetCookie[]; expiresAt: number }>();
 
 /**
- * Calls the API refresh endpoint once and returns the rotated auth cookies parsed
- * from `Set-Cookie`.
- * @returns The rotated auth cookies
- * @throws When the refresh token is expired/revoked (non-2xx) or the network fails
- */
+ * Calls the API refresh endpoint once and returns the rotated auth cookies.
+ **/
 const doRefresh = async (): Promise<ParsedSetCookie[]> => {
   const http = await getHttp();
   const response = await http.post('/auth/refresh');
@@ -38,11 +30,8 @@ const doRefresh = async (): Promise<ParsedSetCookie[]> => {
 };
 
 /**
- * Refreshes the session with single-flight + short-TTL memoisation, both keyed by
- * the old refresh token, so at most one API refresh happens per token.
- * @param ctx - The refresh context (old refresh token)
- * @returns The rotated auth cookies to apply to the response
- */
+ * Refreshes the session (single-flight + memoised) and returns the rotated cookies.
+ **/
 export const refreshSession = async (ctx: RefreshContext): Promise<ParsedSetCookie[]> => {
   const key = ctx.refreshToken;
 
@@ -71,10 +60,8 @@ export const refreshSession = async (ctx: RefreshContext): Promise<ParsedSetCook
 };
 
 /**
- * Reports whether a refresh for the given token is in flight or freshly memoised.
- * @param refreshToken - The old refresh token
- * @returns The completed tokens if available, `'inflight'` if still running, or null
- */
+ * Completed tokens if memoised, `'inflight'` if still running, else null.
+ **/
 export const peekRefresh = (refreshToken: string): ParsedSetCookie[] | 'inflight' | null => {
   const cached = memo.get(refreshToken);
   if (cached && cached.expiresAt > Date.now()) {

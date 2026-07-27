@@ -41,12 +41,8 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 let nextId = 0;
 
 /**
- * Component providing a minimal toast notification system.
- *
- * Exposes `success`/`error`/`loading` helpers via context; success/error toasts
- * auto-dismiss after a few seconds, a `loading` toast stays until `update`d (e.g.
- * to success on completion). Toasts stack in the bottom-right corner.
- */
+ * Minimal toast system; success/error auto-dismiss, `loading` stays until `update`d.
+ **/
 export default function ToastProvider({ children }: PropsWithChildren) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -125,9 +121,8 @@ export default function ToastProvider({ children }: PropsWithChildren) {
 }
 
 /**
- * Hook to access the toast helpers.
- * @returns The toast context value
- */
+ * Access the toast helpers.
+ **/
 export function useToast(): ToastContextValue {
   const context = useContext(ToastContext);
 

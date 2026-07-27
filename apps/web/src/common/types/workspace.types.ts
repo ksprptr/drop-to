@@ -18,25 +18,19 @@ export interface Crumb {
 /** A file queued for upload, with its path relative to the drop/selection root. */
 export interface UploadItem {
   file: File;
-  /** e.g. `photos/2024/img.jpg` for folder uploads, or just `img.jpg` for loose files. */
+  /** e.g. `photos/2024/img.jpg` for folders, or `img.jpg` for loose files. */
   relativePath: string;
-  /** Overridden name used when uploading (for "keep both" duplicate handling). */
+  /** Overridden upload name (for "keep both" duplicate handling). */
   uploadName?: string;
 }
 
-/**
- * State of a single file upload:
- * - `pending`    — queued, not started,
- * - `uploading`  — the body is being sent to the API,
- * - `processing` — the API is streaming it to Google Drive,
- * - `done` / `error` / `canceled`.
- */
+/** State of a single file upload. */
 export interface UploadTask {
   id: string;
   name: string;
   size: number;
   percent: number;
-  /** Current transfer rate in bytes/sec (null when not actively uploading). */
+  /** Bytes/sec, null when not actively uploading. */
   rate: number | null;
   status: 'pending' | 'uploading' | 'processing' | 'done' | 'error' | 'canceled';
 }

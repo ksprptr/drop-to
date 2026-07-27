@@ -40,18 +40,10 @@ import { StorageStatusEntity } from './entities/storage-status.entity';
 import { UploadResultEntity } from './entities/upload-result.entity';
 import { StorageRegistry } from './storage.registry';
 
-// 10 GiB upload ceiling. The file is streamed straight through to storage (never
-// buffered to disk or memory), so the browser's upload speed is throttled by the
-// upstream upload — giving the client a real progress bar and ETA.
+// 10 GiB ceiling; the file is streamed straight through to storage (never buffered).
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 * 1024;
 
-/**
- * Class representing the storage controller.
- *
- * Fully backend-agnostic: each route takes a `:backend` key ('drive' | 's3'),
- * resolves the matching provider from the {@link StorageRegistry}, and drives it
- * through the shared {@link StorageProvider} interface.
- */
+/** Backend-agnostic: each route resolves the `:backend` provider from the StorageRegistry. */
 @ApiTags('Storage')
 @ApiCookieAuth('accessToken')
 @ApiUnauthorizedResponse({ type: ResponseEntity, description: 'Unauthorized' })
@@ -60,9 +52,6 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 * 1024;
 export class StorageController {
   constructor(private readonly registry: StorageRegistry) {}
 
-  /**
-   * Controller to report the status of every storage backend
-   */
   @ApiOperation({ summary: 'Get the status of every storage backend' })
   @ApiOkResponse({ type: [StorageStatusEntity], description: 'Per-backend status' })
   @Get('status')
@@ -70,9 +59,6 @@ export class StorageController {
     return Promise.all(this.registry.all().map((provider) => provider.status()));
   }
 
-  /**
-   * Controller to list the browse roots (authorized folders / buckets) of a backend
-   */
   @ApiOperation({ summary: 'List the browse roots of a backend' })
   @ApiOkResponse({ type: [AllowedFolderEntity], description: 'Successful' })
   @Get(':backend/folders')
@@ -80,9 +66,6 @@ export class StorageController {
     return this.registry.resolve(backend).listRoots();
   }
 
-  /**
-   * Controller to list the contents of a folder
-   */
   @ApiOperation({ summary: 'List the contents of a folder' })
   @ApiOkResponse({ type: [DriveEntryEntity], description: 'Successful' })
   @ApiForbiddenResponse({ type: ResponseEntity, description: 'Folder outside authorized tree' })
@@ -94,9 +77,6 @@ export class StorageController {
     return this.registry.resolve(backend).listContents(id);
   }
 
-  /**
-   * Controller to download a single file
-   */
   @ApiOperation({ summary: 'Download a file' })
   @ApiOkResponse({ description: 'File stream' })
   @ApiForbiddenResponse({ type: ResponseEntity, description: 'File outside authorized tree' })
@@ -111,8 +91,7 @@ export class StorageController {
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', this.contentDisposition(name));
     res.setHeader('Accept-Ranges', 'none');
-    // A known Content-Length lets the browser show a real "Downloading" progress
-    // instead of "Resuming".
+    // A known Content-Length gives the browser real download progress.
     if (size !== null) {
       res.setHeader('Content-Length', String(size));
     }
@@ -120,9 +99,6 @@ export class StorageController {
     stream.pipe(res);
   }
 
-  /**
-   * Controller to download an entire folder as a ZIP archive
-   */
   @ApiOperation({ summary: 'Download a folder as a ZIP archive' })
   @ApiOkResponse({ description: 'ZIP stream' })
   @ApiForbiddenResponse({ type: ResponseEntity, description: 'Folder outside authorized tree' })
@@ -143,19 +119,14 @@ export class StorageController {
   }
 
   /**
-   * Builds a Content-Disposition header that survives non-ASCII file names.
-   * @param fileName - The download file name
-   * @returns The header value with an ASCII fallback and a UTF-8 variant
-   */
+   * Content-Disposition with an ASCII fallback + UTF-8 variant for non-ASCII names.
+   **/
   private contentDisposition(fileName: string): string {
     const asciiFallback = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '');
 
     return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
   }
 
-  /**
-   * Controller to create a subfolder inside a folder
-   */
   @ApiOperation({ summary: 'Create a subfolder' })
   @ApiCreatedResponse({ type: DriveEntryEntity, description: 'Folder created' })
   @ApiBadRequestResponse({ type: ResponseEntity, description: 'Validation failed' })
@@ -169,9 +140,6 @@ export class StorageController {
     return this.registry.resolve(backend).createFolder(id, createSubfolderDto.name);
   }
 
-  /**
-   * Controller to upload a file into a folder
-   */
   @ApiOperation({ summary: 'Upload a file into a folder' })
   @ApiConsumes('multipart/form-data')
   @ApiCreatedResponse({ type: UploadResultEntity, description: 'File uploaded' })
@@ -185,9 +153,7 @@ export class StorageController {
   ): Promise<UploadResultEntity> {
     const provider = this.registry.resolve(backend);
 
-    // If the client disconnects *mid-upload* (e.g. a page refresh) abort the
-    // upload so it isn't left streaming in the background. `req.complete` is true
-    // once the whole body has been received, so a normal end doesn't trigger it.
+    // Abort the upload if the client disconnects mid-stream (req.complete stays false).
     const abortController = new AbortController();
     let finished = false;
     const onClose = () => {
@@ -210,7 +176,7 @@ export class StorageController {
 
         bb.on('file', (_field, stream, info) => {
           handledFile = true;
-          // Busboy decodes the multipart filename as latin1; re-decode to UTF-8.
+          // Busboy decodes the filename as latin1; re-decode to UTF-8.
           const fileName = Buffer.from(info.filename ?? 'file', 'latin1').toString('utf8');
           const mimeType = info.mimeType || 'application/octet-stream';
 
@@ -218,15 +184,13 @@ export class StorageController {
             reject(new BadRequestException('File exceeds the maximum allowed size.'));
           });
 
-          // Pipe the file part straight to storage; backpressure throttles the
-          // incoming request to the upstream upload speed.
+          // Pipe straight to storage; backpressure throttles the request to the upstream speed.
           provider
             .uploadFile(id, { body: stream, fileName, mimeType, signal: abortController.signal })
             .then(resolve)
             .catch((error: unknown) => {
               stream.resume();
-              // A client-triggered abort isn't a real failure — surface it as a
-              // handled response instead of an unhandled 500 with a huge stack.
+              // A client abort isn't a real failure — surface it as a handled response.
               reject(
                 abortController.signal.aborted
                   ? new RequestTimeoutException('Upload canceled.')
@@ -250,9 +214,6 @@ export class StorageController {
     }
   }
 
-  /**
-   * Controller to rename a file or subfolder within the authorized folder tree
-   */
   @ApiOperation({ summary: 'Rename a file or subfolder' })
   @ApiOkResponse({ type: DriveEntryEntity, description: 'Item renamed' })
   @ApiBadRequestResponse({ type: ResponseEntity, description: 'Validation failed' })
@@ -267,9 +228,6 @@ export class StorageController {
     return this.registry.resolve(backend).renameItem(id, renameItemDto.name);
   }
 
-  /**
-   * Controller to move a file or subfolder into another folder
-   */
   @ApiOperation({ summary: 'Move a file or subfolder into another folder' })
   @ApiOkResponse({ type: DriveEntryEntity, description: 'Item moved' })
   @ApiBadRequestResponse({ type: ResponseEntity, description: 'Invalid move target' })
@@ -284,9 +242,6 @@ export class StorageController {
     return this.registry.resolve(backend).moveItem(id, moveItemDto.targetFolderId);
   }
 
-  /**
-   * Controller to delete a file or subfolder within the authorized folder tree
-   */
   @ApiOperation({ summary: 'Delete a file or subfolder' })
   @ApiNoContentResponse({ description: 'No content' })
   @ApiForbiddenResponse({ type: ResponseEntity, description: 'Item outside authorized tree' })

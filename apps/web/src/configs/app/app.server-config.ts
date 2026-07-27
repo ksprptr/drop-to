@@ -6,21 +6,16 @@ interface AppServerConfig {
     isDevelopment: boolean;
   };
   urls: {
-    /** Base URL the server uses to reach the DropTo API (server-to-server). */
+    /** API base for server-to-server calls. */
     apiUrl: string;
-    /** Public origin of this web app (canonical URL, OpenGraph, robots, manifest). */
+    /** Public origin of this web app (canonical / OpenGraph / robots / manifest). */
     appUrl: string;
   };
-  /** Cookie domain applied to auth cookies (set in production only). */
+  /** Auth-cookie domain (production only; a shared parent so app + API share cookies). */
   cookieDomain: string;
 }
 
-/**
- * App configuration (server-side only). The API base URL prefers a server-only
- * `API_URL` (internal address) and falls back to the public one; the cookie
- * domain must be a shared parent in production so the Next server and the API
- * can both read/write the auth cookies.
- */
+// Server-side config. apiUrl prefers a server-only API_URL, else the public one.
 export const appServerConfig: AppServerConfig = {
   nodeEnv: {
     isProduction: process.env.NODE_ENV === 'production',

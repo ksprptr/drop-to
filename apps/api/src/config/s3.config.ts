@@ -1,15 +1,7 @@
 import { registerAs } from '@nestjs/config';
 
-/**
- * S3 storage backend configuration (a second storage next to Google Drive).
- *
- * `enabled` is a kill-switch (`S3_ENABLED="true"` to turn it on). The buckets the
- * operator may browse are listed comma-separated in `S3_BUCKETS` — each one is a
- * browse root, the same way the Picker-authorized folders are roots for Drive.
- * `endpoint`/`forcePathStyle` are optional so S3-compatible stores (MinIO,
- * Cloudflare R2, ...) work alongside AWS S3. Only `S3_ENABLED` is required in the
- * environment; the rest are validated here (and only when enabled).
- */
+// S3 backend (second storage next to Drive). `enabled` is a kill-switch; the rest
+// is validated only when enabled. `endpoint`/`forcePathStyle` support S3-compatible stores.
 export const s3Config = registerAs('s3', () => {
   const enabled = process.env['S3_ENABLED'] === 'true';
 

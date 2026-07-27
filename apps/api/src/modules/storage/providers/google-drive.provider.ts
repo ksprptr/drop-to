@@ -33,15 +33,7 @@ import {
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const MAX_ANCESTOR_DEPTH = 50;
 
-/**
- * Google Drive implementation of {@link StorageProvider}.
- *
- * Wraps the Google Drive API and enforces that every operation stays within the
- * tree of `AllowedFolder`s the account owner authorized via the Picker. No raw
- * folder id from a request is ever trusted without validation. It is one of the
- * backends registered in the `StorageRegistry`; the controller never touches a
- * concrete provider.
- */
+/** StorageProvider over the Drive API; every op is validated to stay inside the authorized folder tree. */
 @Injectable()
 export class GoogleDriveProvider implements StorageProvider {
   readonly backend: StorageBackend = 'drive';
@@ -53,10 +45,6 @@ export class GoogleDriveProvider implements StorageProvider {
     private readonly prismaService: PrismaService,
   ) {}
 
-  /**
-   * Function to report the Drive connection status and authorized roots.
-   * @returns The backend status with the authorized folders as roots
-   */
   async status(): Promise<StorageStatusEntity> {
     const status = await this.googleAuthService.getStatus();
 
@@ -64,9 +52,7 @@ export class GoogleDriveProvider implements StorageProvider {
       return { backend: this.backend, label: 'Google Drive', connected: false, email: null, roots: [] };
     }
 
-    // A stored account can still carry a dead refresh token (revoked, or expired
-    // in Google's Testing mode). Probe it so the sidebar shows a "reconnect"
-    // prompt instead of a green "connected" that fails on the first click.
+    // Probe the token so a dead one shows "reconnect" instead of a false "connected".
     try {
       const accountId = await this.googleAuthService.getActiveAccountId();
       const auth = await this.googleAuthService.getAuthorizedClient(accountId);
@@ -94,17 +80,10 @@ export class GoogleDriveProvider implements StorageProvider {
     };
   }
 
-  /**
-   * Function to build an authorized Drive v3 client for the active account.
-   * @param driveAccountId - The active DriveAccount id
-   * @returns A Drive API client
-   */
   private async getDrive(driveAccountId: string): Promise<drive_v3.Drive> {
     const auth = await this.googleAuthService.getAuthorizedClient(driveAccountId);
 
-    // Force the access-token refresh up front so a revoked/expired refresh token
-    // surfaces as a clean "reconnect" error (424) instead of a raw googleapis 500
-    // on the first Drive call.
+    // Refresh up front so a dead token surfaces as a clean 424, not a raw googleapis 500.
     try {
       await auth.getAccessToken();
     } catch (error) {
@@ -117,11 +96,6 @@ export class GoogleDriveProvider implements StorageProvider {
     return google.drive({ version: 'v3', auth });
   }
 
-  /**
-   * Function to load the set of authorized root folder ids for an account.
-   * @param driveAccountId - The active DriveAccount id
-   * @returns A set of allowed Google Drive folder ids
-   */
   private async getAllowedFolderIds(driveAccountId: string): Promise<Set<string>> {
     const folders = await this.prismaService.allowedFolder.findMany({
       where: { driveAccountId },
@@ -132,15 +106,8 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Function to assert that a Drive item lives inside the allowed folder tree.
-   *
-   * Passes when the id is an authorized root folder, or when any of its
-   * ancestors (walked up via `files.get`) is an authorized root. Throws
-   * `ForbiddenException` otherwise.
-   * @param drive - The Drive client
-   * @param itemId - The file/folder id from the request
-   * @param allowedIds - The set of authorized root folder ids
-   */
+   * Passes if the id is an authorized root or has one as an ancestor; else 403.
+   **/
   private async assertItemAllowed(
     drive: drive_v3.Drive,
     itemId: string,
@@ -169,7 +136,7 @@ export class GoogleDriveProvider implements StorageProvider {
           const res = await drive.files.get({ fileId: id, fields: 'id, parents' });
           parents = res.data.parents ?? [];
         } catch {
-          // The app cannot see this item (drive.file scope) — treat as not allowed.
+          // Not visible under drive.file scope — treat as not allowed.
           continue;
         }
 
@@ -188,10 +155,6 @@ export class GoogleDriveProvider implements StorageProvider {
     throw new ForbiddenException('This folder is outside the authorized folders.');
   }
 
-  /**
-   * Function to list the authorized root folders from the database.
-   * @returns The allowed root folders
-   */
   async listRoots(): Promise<AllowedFolderEntity[]> {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
 
@@ -202,11 +165,6 @@ export class GoogleDriveProvider implements StorageProvider {
     });
   }
 
-  /**
-   * Function to list the contents (files + folders) of an authorized folder.
-   * @param folderId - The Google Drive folder id
-   * @returns The folder entries, folders first
-   */
   async listContents(folderId: string): Promise<DriveEntryEntity[]> {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
     const drive = await this.getDrive(driveAccountId);
@@ -224,12 +182,6 @@ export class GoogleDriveProvider implements StorageProvider {
     return (res.data.files ?? []).map((file) => this.toDriveEntry(file));
   }
 
-  /**
-   * Function to create a subfolder inside an authorized folder.
-   * @param parentId - The parent folder id (must be within the allowed tree)
-   * @param name - The new folder name
-   * @returns The created folder as a Drive entry
-   */
   async createFolder(parentId: string, name: string): Promise<DriveEntryEntity> {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
     const drive = await this.getDrive(driveAccountId);
@@ -245,12 +197,6 @@ export class GoogleDriveProvider implements StorageProvider {
     return this.toDriveEntry(res.data);
   }
 
-  /**
-   * Function to upload a file into an authorized folder.
-   * @param folderId - The destination folder id (must be within the allowed tree)
-   * @param upload - The file contents stream plus its name, MIME type and abort signal
-   * @returns The upload result
-   */
   async uploadFile(folderId: string, upload: StorageUpload): Promise<UploadResultEntity> {
     const { body, fileName, mimeType, signal } = upload;
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
@@ -290,7 +236,7 @@ export class GoogleDriveProvider implements StorageProvider {
         webViewLink: res.data.webViewLink ?? null,
       };
     } catch (error) {
-      // A client-cancelled upload isn't a real failure — don't record it.
+      // A client-cancelled upload isn't a real failure — don't log it.
       if (signal?.aborted) {
         throw error;
       }
@@ -309,12 +255,8 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Function to delete a file or subfolder that lives within the authorized tree.
-   *
-   * Authorized root folders (the ones picked during setup) cannot be deleted —
-   * removing them would break the app's access grant.
-   * @param itemId - The Google Drive file or folder id
-   */
+   * Deletes an item in the authorized tree; authorized roots cannot be deleted (409).
+   **/
   async deleteItem(itemId: string): Promise<void> {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
     const drive = await this.getDrive(driveAccountId);
@@ -332,13 +274,8 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Function to rename a file or subfolder that lives within the authorized tree.
-   *
-   * Authorized root folders (the ones picked during setup) cannot be renamed.
-   * @param itemId - The Google Drive file or folder id
-   * @param name - The new name
-   * @returns The updated item as a Drive entry
-   */
+   * Renames an item in the authorized tree; authorized roots cannot be renamed (409).
+   **/
   async renameItem(itemId: string, name: string): Promise<DriveEntryEntity> {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
     const drive = await this.getDrive(driveAccountId);
@@ -362,14 +299,8 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Function to move a file or subfolder into another folder within the tree.
-   *
-   * Both the item and the destination must live inside the authorized tree; the
-   * destination may be a root, but authorized roots cannot themselves be moved.
-   * @param itemId - The Google Drive file or folder id
-   * @param targetFolderId - The destination folder id
-   * @returns The updated item as a Drive entry
-   */
+   * Moves an item within the authorized tree; the target may be a root, but roots can't be moved (409).
+   **/
   async moveItem(itemId: string, targetFolderId: string): Promise<DriveEntryEntity> {
     if (itemId === targetFolderId) {
       throw new BadRequestException('Cannot move an item into itself.');
@@ -401,11 +332,6 @@ export class GoogleDriveProvider implements StorageProvider {
     return this.toDriveEntry(res.data);
   }
 
-  /**
-   * Function to open a readable stream of a file's contents for download.
-   * @param fileId - The Google Drive file id (must be within the allowed tree)
-   * @returns The content stream plus the file name and MIME type
-   */
   async downloadFile(fileId: string): Promise<StorageDownload> {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
     const drive = await this.getDrive(driveAccountId);
@@ -424,8 +350,7 @@ export class GoogleDriveProvider implements StorageProvider {
 
     const res = await drive.files.get(
       { fileId, alt: 'media' },
-      // Force an uncompressed stream so its byte length matches the reported size
-      // (a correct Content-Length is what lets the browser show real progress).
+      // Uncompressed so the byte length matches the reported size (accurate Content-Length).
       { responseType: 'stream', headers: { 'Accept-Encoding': 'identity' } },
     );
 
@@ -433,13 +358,8 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Function to build a ZIP archive of a folder's entire subtree.
-   *
-   * The archive is populated in the background as it is consumed; the caller
-   * pipes it straight to the HTTP response.
-   * @param folderId - The Google Drive folder id (must be within the allowed tree)
-   * @returns The archive stream and the folder name
-   */
+   * Builds a ZIP of a folder's subtree, populated in the background as it's piped out.
+   **/
   async createFolderArchive(folderId: string): Promise<StorageArchive> {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
     const drive = await this.getDrive(driveAccountId);
@@ -466,12 +386,8 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Function to recursively append a folder's files (and subfolders) into an archive.
-   * @param drive - The Drive client
-   * @param folderId - The folder to walk
-   * @param prefix - The path prefix inside the archive
-   * @param archive - The archive to append entries to
-   */
+   * Recursively appends a folder's files and subfolders into the archive.
+   **/
   private async appendFolderToArchive(
     drive: drive_v3.Drive,
     folderId: string,
@@ -504,11 +420,6 @@ export class GoogleDriveProvider implements StorageProvider {
     }
   }
 
-  /**
-   * Function to map a Drive API file resource onto a DriveEntryEntity.
-   * @param file - The Drive API file resource
-   * @returns The normalized entry
-   */
   private toDriveEntry(file: drive_v3.Schema$File): DriveEntryEntity {
     const isFolder = file.mimeType === FOLDER_MIME;
 
@@ -524,11 +435,6 @@ export class GoogleDriveProvider implements StorageProvider {
     };
   }
 
-  /**
-   * Function to parse a Drive size string into a number.
-   * @param size - The size string (or null/undefined)
-   * @returns The numeric size, or null when absent
-   */
   private parseSize(size: string | null | undefined): number | null {
     if (size === null || size === undefined) {
       return null;

@@ -16,13 +16,8 @@ export interface LoginResult {
 }
 
 /**
- * Server Action: signs the operator in. Posts credentials to the API and writes
- * the returned auth cookies onto the browser (tokens never reach the browser as
- * JS values). The proxy handles the already-authenticated redirect.
- * @param username - The operator username
- * @param password - The operator password
- * @returns Whether the sign-in succeeded, with a message on failure
- */
+ * Signs the operator in and writes the returned auth cookies to the browser.
+ **/
 export async function login(username: string, password: string): Promise<LoginResult> {
   try {
     const http = await getHttp();
@@ -41,8 +36,7 @@ export async function login(username: string, password: string): Promise<LoginRe
 
     return { ok: true };
   } catch (error) {
-    // An HTTP response (any status) means the API rejected the request → bad
-    // credentials. No response means the API is unreachable.
+    // HTTP response = rejected (bad credentials); no response = API unreachable.
     if (isAxiosError(error) && error.response) {
       return { ok: false, error: extractApiError(error) ?? 'Invalid username or password.' };
     }
@@ -52,10 +46,8 @@ export async function login(username: string, password: string): Promise<LoginRe
 }
 
 /**
- * Server Action: persists the folders selected via the Google Picker.
- * @param payload - The selected folders (id + name)
- * @returns The saved allowed folders
- */
+ * Persists the folders selected via the Google Picker.
+ **/
 export async function saveFoldersAction(
   payload: SaveFoldersPayload,
 ): Promise<ActionResult<AllowedFolder[]>> {
@@ -63,17 +55,15 @@ export async function saveFoldersAction(
 }
 
 /**
- * Server Action: disconnects the Google account from the app.
- * @returns The result of the disconnect
- */
+ * Disconnects the Google account from the app.
+ **/
 export async function disconnectAction(): Promise<ActionResult> {
   return runAction(() => disconnectAccount());
 }
 
 /**
- * Server Action: mints a short-lived Google Picker access token for the browser.
- * @returns The token result
- */
+ * Mints a short-lived Google Picker access token for the browser.
+ **/
 export async function pickerTokenAction(): Promise<ActionResult<string>> {
   return runAction(() => getPickerToken());
 }

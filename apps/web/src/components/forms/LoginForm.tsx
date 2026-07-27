@@ -11,10 +11,8 @@ import Input from '@/components/common/Input';
 import { useToast } from '@/components/providers/ToastProvider';
 
 /**
- * Component driving the login screen: posts the operator credentials via a
- * Server Action and, on success, navigates to the workspace. The
- * already-authenticated redirect is handled server-side by the route.
- */
+ * Login screen — posts credentials via the `login` action, then navigates to `/`.
+ **/
 export default function LoginForm() {
   const router = useRouter();
   const toast = useToast();
@@ -23,9 +21,7 @@ export default function LoginForm() {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Some password managers / browser extensions swallow a form's implicit Enter
-  // submission depending on how the field was focused, so Enter silently does
-  // nothing. Submitting explicitly on Enter makes it deterministic.
+  // Submit explicitly on Enter — some password managers swallow the implicit submit.
   const handleKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
     if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) {
       return;

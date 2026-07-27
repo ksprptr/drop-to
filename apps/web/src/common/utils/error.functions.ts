@@ -3,10 +3,8 @@ import axios from 'axios';
 import { ApiUnavailableError } from '@/common/services/axios/axios.errors';
 
 /**
- * Function to extract a human-readable message from an unknown API error.
- * @param error - The caught error
- * @returns A message suitable for display in a toast
- */
+ * Extracts a human-readable message from an unknown API error, for a toast.
+ **/
 export const extractApiErrorMessage = (error: unknown): string => {
   if (error instanceof ApiUnavailableError) {
     return error.message;
@@ -26,18 +24,12 @@ export const extractApiErrorMessage = (error: unknown): string => {
 };
 
 /**
- * Function to detect a request that was cancelled (e.g. an aborted upload).
- * @param error - The caught error
- * @returns True when the request was cancelled rather than failed
- */
+ * True when the request was cancelled (e.g. an aborted upload).
+ **/
 export const isCanceledError = (error: unknown): boolean => axios.isCancel(error);
 
 /**
- * Function to detect a "storage backend disconnected/unavailable" error — a
- * revoked Drive token or an unreachable/misconfigured S3 bucket, which the API
- * signals with HTTP 424. Lets the UI prompt a reconnect and refresh the sidebar.
- * @param error - The caught error
- * @returns True when the active storage backend is no longer usable
- */
+ * True for a "storage disconnected/unavailable" error (API signals it with HTTP 424).
+ **/
 export const isStorageDisconnectedError = (error: unknown): boolean =>
   axios.isAxiosError(error) && error.response?.status === 424;

@@ -7,9 +7,8 @@ export const metadata: Metadata = {
 };
 
 /**
- * Login route — operator username/password sign-in. The proxy redirects
- * already-authenticated visitors to the workspace before this renders.
- */
+ * Login route — the proxy redirects already-authenticated visitors to `/`.
+ **/
 export default function LoginPage() {
   return <LoginForm />;
 }

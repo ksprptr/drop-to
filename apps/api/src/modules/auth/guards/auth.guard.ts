@@ -14,13 +14,7 @@ import { JwtRequestUser, RequestUser } from '@/common/types/auth-user.types';
 import { extractTokenFromCookies } from '@/common/utils/auth-tokens.functions';
 import { type JwtConfig, jwtConfig } from '@/config/jwt.config';
 
-/**
- * Class representing an auth guard.
- *
- * Verifies the short-lived access token from the request cookie on every route
- * except those marked `@Public()`. When the access token is missing or expired
- * the guard rejects with 401 — the client is expected to call `POST /auth/refresh`.
- */
+/** Verifies the access-token cookie on every non-`@Public()` route; missing/expired → 401. */
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
@@ -29,12 +23,6 @@ export class AuthGuard implements CanActivate {
     @Inject(jwtConfig.KEY) private readonly jwtCfg: JwtConfig,
   ) {}
 
-  /**
-   * Determines whether the request may proceed.
-   * @param context - The execution context
-   * @returns True when the route is public or the access token is valid
-   * @throws UnauthorizedException when the access token is missing, invalid or expired
-   */
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
@@ -58,11 +46,8 @@ export class AuthGuard implements CanActivate {
   }
 
   /**
-   * Verifies an access token.
-   * @param token - The JWT access token
-   * @returns The token payload, or null when the token is expired
-   * @throws UnauthorizedException when the token is malformed
-   */
+   * Verifies an access token; null when expired, throws when malformed.
+   **/
   private async tryVerify(token: string): Promise<RequestUser | null> {
     try {
       const payload: JwtRequestUser = await this.jwtService.verifyAsync(token, {

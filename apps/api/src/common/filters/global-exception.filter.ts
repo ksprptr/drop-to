@@ -1,28 +1,16 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
-/**
- * Class representing a global exception filter
- */
+/** Normalizes every exception to `{ status, message }`; unknown errors → 500. */
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
 
-  /**
-   * Handles all uncaught exceptions in the application
-   * @param exception - The caught exception
-   * @param host - The arguments host containing the request and response objects
-   *
-   * Logs the error and sends a standardized JSON response.
-   * - Returns the original status and message for HttpException
-   * - Returns 500 for unknown errors
-   */
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    // Handle HttpExceptions
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const message = this.extractHttpExceptionMessage(exception);
@@ -36,7 +24,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    // Handle unknown errors
     this.logger.error(
       `Unhandled exception at ${request.method} ${request.url} from ${request.ip}`,
       exception instanceof Error ? exception : String(exception),
@@ -46,11 +33,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     return;
   }
 
-  /**
-   * Helper function to extract message from HttpException
-   * @param exception - The HttpException instance
-   * @returns The extracted message or the original response if no message is found
-   */
   private extractHttpExceptionMessage(exception: HttpException): unknown {
     const response = exception.getResponse();
 

@@ -1,12 +1,8 @@
 import { ImageResponse } from 'next/og';
 
 /**
- * Loads a Poppins weight from Google Fonts as TTF/OTF data for Satori (the app
- * uses Poppins, so the OG wordmark matches the UI headings).
- * @param weight - The font weight to load
- * @param text - The glyphs to subset (keeps the download tiny)
- * @returns The font file bytes
- */
+ * Loads a Poppins weight from Google Fonts as TTF/OTF data for Satori (`text` subsets it).
+ **/
 async function loadPoppins(weight: number, text: string): Promise<ArrayBuffer> {
   const url = `https://fonts.googleapis.com/css2?family=Poppins:wght@${weight}&text=${encodeURIComponent(text)}`;
   const css = await fetch(url).then((res) => res.text());
@@ -20,9 +16,8 @@ async function loadPoppins(weight: number, text: string): Promise<ArrayBuffer> {
 }
 
 /**
- * OG image endpoint (`GET /api/og`): the DropTo brand card — the app's green
- * cloud badge and Poppins wordmark, centred on a plain light zinc background.
- */
+ * OG image (`GET /api/og`) — the DropTo badge + wordmark on a light zinc background.
+ **/
 export async function GET() {
   const poppins = await loadPoppins(600, 'DropTo');
 

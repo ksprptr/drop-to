@@ -1,7 +1,4 @@
-/**
- * Internal token pair returned by the auth service (never serialized directly —
- * the controller writes the tokens into httpOnly cookies).
- */
+/** Internal token pair (written into httpOnly cookies by the controller). */
 export class AuthResponseEntity {
   accessToken: string;
   refreshToken: string;

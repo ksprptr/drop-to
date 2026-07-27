@@ -20,9 +20,6 @@ interface Props {
   onRename: (entry: ViewEntry) => void;
 }
 
-/**
- * A single metadata row in the details panel.
- */
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className='flex items-start justify-between gap-x-3'>
@@ -33,9 +30,8 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * The right pane: preview and metadata of the selected file or folder, with
- * download (file / folder-as-ZIP) and delete actions.
- */
+ * Right pane: preview + metadata of the selected item, with download/rename/delete.
+ **/
 export default function PreviewPanel({
   entry,
   isRoot,
@@ -45,12 +41,11 @@ export default function PreviewPanel({
   onDownload,
   onRename,
 }: Props) {
-  // Track which entry's image failed to load, so switching items re-tries fresh.
+  // Per-entry image-failure, so switching items retries fresh.
   const [failedId, setFailedId] = useState<string | null>(null);
 
   const isImage = !!entry && !entry.isFolder && !!entry.mimeType?.startsWith('image/');
   const imageFailed = !!entry && failedId === entry.id;
-  // Images preview via the download endpoint (cookie-authenticated, same-site).
   const imageUrl = entry && !entry.isFolder && backend ? fileDownloadUrl(backend, entry.id) : '';
 
   return (

@@ -3,9 +3,8 @@ import type { MetadataRoute } from 'next';
 import { metadataConfig } from '@/configs/seo/metadata.config';
 
 /**
- * Web app manifest (PWA). Icons are uploaded to `public/`.
- * @returns The manifest definition
- */
+ * Web app manifest (PWA); icons live in `public/`.
+ **/
 export default function Manifest(): MetadataRoute.Manifest {
   return {
     name: metadataConfig.title,

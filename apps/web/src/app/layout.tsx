@@ -52,7 +52,7 @@ export const viewport: Viewport = {
 
 /**
  * Root layout: fonts, theme + toast providers, and base surface colors.
- */
+ **/
 export default function RootLayout({ children }: Readonly<PropsWithChildren>) {
   return (
     <html lang='en' data-scroll-behavior='smooth' suppressHydrationWarning>

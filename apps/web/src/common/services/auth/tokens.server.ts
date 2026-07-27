@@ -4,7 +4,7 @@ import type { ResponseCookies } from 'next/dist/server/web/spec-extension/cookie
 import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/common/constants/auth.constants';
 import { appServerConfig } from '@/configs/app/app.server-config';
 
-/** A cookie writer — both `cookies()` and `NextResponse.cookies` satisfy this shape. */
+/** Both `cookies()` and `NextResponse.cookies` satisfy this shape. */
 export interface CookieWriter {
   set: ResponseCookies['set'];
   delete: (name: string) => void;
@@ -16,15 +16,11 @@ export interface ParsedSetCookie {
   maxAge?: number;
 }
 
-/** The auth cookies carried from an API response onto the browser (the session pair). */
 const AUTH_COOKIE_NAMES = new Set([ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE]);
 
 /**
- * Parses raw `Set-Cookie` header values into name/value/maxAge, keeping only the
- * auth-related cookies.
- * @param setCookies - The `set-cookie` header array from the API response
- * @returns Parsed auth cookies
- */
+ * Parses `Set-Cookie` headers, keeping only the auth cookies.
+ **/
 export const parseAuthSetCookies = (setCookies: string[] | undefined): ParsedSetCookie[] => {
   if (!setCookies) {
     return [];
@@ -57,11 +53,8 @@ export const parseAuthSetCookies = (setCookies: string[] | undefined): ParsedSet
 };
 
 /**
- * Writes the given cookies onto a cookie store using attributes consistent with
- * the API (httpOnly, secure in production, cookie domain in production only).
- * @param writer - The target cookie store
- * @param cookiesToSet - The parsed cookies to persist
- */
+ * Writes auth cookies (httpOnly, secure + domain in production).
+ **/
 export const applyAuthCookies = (writer: CookieWriter, cookiesToSet: ParsedSetCookie[]): void => {
   const { isProduction } = appServerConfig.nodeEnv;
 
@@ -78,9 +71,8 @@ export const applyAuthCookies = (writer: CookieWriter, cookiesToSet: ParsedSetCo
 };
 
 /**
- * Clears every auth cookie (used on logout and on a failed refresh).
- * @param writer - The target cookie store
- */
+ * Clears every auth cookie (logout / failed refresh).
+ **/
 export const clearAuthCookies = (writer: CookieWriter): void => {
   for (const name of AUTH_COOKIE_NAMES) {
     writer.delete(name);

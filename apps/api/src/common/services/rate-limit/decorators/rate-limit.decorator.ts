@@ -10,7 +10,5 @@ export type RateLimitRule = {
 
 /**
  * Applies a per-route rate limit rule.
- * @param rule - The points (max requests), duration (window seconds) and optional error message
- * @returns A decorator that attaches the rule metadata to the handler
- */
+ **/
 export const RateLimit = (rule: RateLimitRule) => SetMetadata(RATE_LIMIT_META_KEY, rule);

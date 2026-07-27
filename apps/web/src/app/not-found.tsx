@@ -7,9 +7,8 @@ export const metadata: Metadata = {
 };
 
 /**
- * Custom 404 page (Server Component so it can set its title; the animated body
- * lives in a client child).
- */
+ * 404 page — a Server Component (for the title) wrapping the animated client body.
+ **/
 export default function NotFound() {
   return <NotFoundContent />;
 }

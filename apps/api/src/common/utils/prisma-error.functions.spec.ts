@@ -5,7 +5,7 @@ import { handlePrismaError } from './prisma-error.functions';
 
 /**
  * Builds a Prisma known-request error with the given code.
- */
+ **/
 const prismaError = (code: string): PrismaClientKnownRequestError =>
   new PrismaClientKnownRequestError('boom', { code, clientVersion: '7.0.0' });
 

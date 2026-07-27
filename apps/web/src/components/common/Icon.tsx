@@ -42,15 +42,12 @@ import type { ExtendedProps } from '@/common/types/global.types';
 
 interface Props extends ExtendedProps {
   icon: string;
-  /** Kept for backwards compatibility; lucide icons have a single (outline) style. */
+  /** Ignored — lucide has a single style. */
   type?: 'solid' | 'outlined';
   onClick?: () => void;
 }
 
-/**
- * Maps the app's icon names (originally Heroicon names) to lucide-react icons, so
- * call sites can keep using `<Icon icon="..." />` without importing icons directly.
- */
+/** App icon names (Heroicon-style) → lucide icons. */
 const ICONS: Record<string, LucideIcon> = {
   ArchiveBox: Archive,
   ArrowDownTray: Download,
@@ -88,9 +85,6 @@ const ICONS: Record<string, LucideIcon> = {
   XMark: X,
 };
 
-/**
- * Component rendering an icon by name (mapped to a lucide-react icon).
- */
 export default function Icon({ icon, className, onClick }: Props) {
   const Component = ICONS[icon];
 

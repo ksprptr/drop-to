@@ -9,11 +9,8 @@ interface ExtractTokenFromCookiesParams {
 }
 
 /**
- * Function to extract an auth token from the request cookies.
- * @param type - The token to extract (accessToken or refreshToken)
- * @param request - The incoming HTTP request
- * @returns The token value, or undefined when absent
- */
+ * Extracts an auth token from the request cookies (undefined when absent).
+ **/
 export const extractTokenFromCookies = ({
   type,
   request,

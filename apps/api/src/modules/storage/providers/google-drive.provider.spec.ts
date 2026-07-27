@@ -29,7 +29,7 @@ describe('GoogleDriveProvider', () => {
 
   /**
    * Points `getAllowedFolderIds` at the given set of authorized root folder ids.
-   */
+   **/
   const withAllowedRoots = (...folderIds: string[]) =>
     prisma.allowedFolder.findMany.mockResolvedValue(folderIds.map((folderId) => ({ folderId })));
 

@@ -25,9 +25,6 @@ interface Props {
   loggingOut: boolean;
 }
 
-/**
- * A small uppercase section label.
- */
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <p className='mb-2 px-1 text-[10px] font-semibold tracking-wider text-zinc-600 uppercase dark:text-zinc-400'>
@@ -37,10 +34,8 @@ function SectionLabel({ children }: { children: ReactNode }) {
 }
 
 /**
- * The left pane: the Google account category (connect / pick folders / disconnect),
- * the S3 storage category (status from the API), a switcher to choose which storage
- * to browse, and the session footer.
- */
+ * Left pane: Google account + S3 status, storage switcher, and the session footer.
+ **/
 export default function AccountSidebar({
   statuses,
   driveStatus,

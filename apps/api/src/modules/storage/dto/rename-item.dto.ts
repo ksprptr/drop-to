@@ -1,9 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, Matches, MaxLength } from 'class-validator';
 
-/**
- * Class representing the payload to rename a file or subfolder.
- */
 export class RenameItemDto {
   @ApiProperty({
     type: 'string',

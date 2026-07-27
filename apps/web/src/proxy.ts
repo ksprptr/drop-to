@@ -21,10 +21,8 @@ const isPublicPath = (pathname: string): boolean =>
   PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 
 /**
- * Rebuilds the incoming request's `Cookie` header with the rotated session applied,
- * so THIS request's Server Components read the fresh access token via `cookies()`
- * instead of the stale one the browser sent.
- */
+ * Applies the rotated session to this request's Cookie header so RSC reads the fresh token.
+ **/
 const withRefreshedCookies = (request: NextRequest, tokens: ParsedSetCookie[]): Headers => {
   const jar = new Map(request.cookies.getAll().map(({ name, value }) => [name, value]));
   jar.delete(REFRESH_LOCK_COOKIE);
@@ -39,7 +37,9 @@ const withRefreshedCookies = (request: NextRequest, tokens: ParsedSetCookie[]): 
   return headers;
 };
 
-/** Builds a redirect to the login page, optionally flagging an expired session. */
+/**
+ * Builds a redirect to the login page, optionally flagging an expired session.
+ **/
 const redirectToLogin = (request: NextRequest, sessionExpired: boolean): NextResponse => {
   const url = new URL('/login', request.url);
   if (sessionExpired) {
@@ -53,11 +53,8 @@ const redirectToLogin = (request: NextRequest, sessionExpired: boolean): NextRes
 };
 
 /**
- * Waits for an in-flight refresh (started by a concurrent request) to complete,
- * polling the local memo.
- * @param refreshToken - The old refresh token being rotated
- * @returns The rotated cookies once available, or null on timeout
- */
+ * Waits for a concurrent in-flight refresh to land (polls the memo), or null on timeout.
+ **/
 const waitForRefresh = async (refreshToken: string): Promise<ParsedSetCookie[] | null> => {
   for (let attempt = 0; attempt < REFRESH_WAIT_MAX_ATTEMPTS; attempt += 1) {
     const state = peekRefresh(refreshToken);
@@ -73,14 +70,8 @@ const waitForRefresh = async (refreshToken: string): Promise<ParsedSetCookie[] |
 };
 
 /**
- * Auth proxy: guards workspace routes and keeps the access token fresh before
- * render. Decodes the access token's `exp` (no signature check — the API verifies)
- * and refreshes proactively when it is missing or within {@link ACCESS_EXP_SKEW_MS}
- * of expiry, collapsing concurrent refreshes with a single-flight + lock cookie.
- * A failed refresh clears cookies and redirects to login.
- * @param request - The incoming request
- * @returns The response (next, or a redirect)
- */
+ * Auth gate: guards routes and proactively refreshes the access token (single-flight) before render.
+ **/
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
   const cookieStore = await cookies();

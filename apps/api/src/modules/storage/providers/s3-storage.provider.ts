@@ -45,11 +45,7 @@ import {
 /** Marker used for zero-byte "folder" objects (a prefix ending in a slash). */
 const FOLDER_SUFFIX = '/';
 
-/**
- * How long a probed backend status is cached. Status is polled frequently by the
- * sidebar, so caching avoids re-probing S3 (and re-logging when it is down) on
- * every request while still reflecting a change within a few seconds.
- */
+// Cache the probed status; the sidebar polls often and we don't want to re-probe/re-log every request.
 const STATUS_CACHE_TTL_MS = 30_000;
 
 /** Common extension → MIME map so previews (images especially) work in the UI. */
@@ -76,31 +72,22 @@ const MIME_BY_EXT: Record<string, string> = {
   md: 'text/markdown',
 };
 
-/**
- * A decoded S3 item reference: the bucket plus the key (a prefix ending in `/`
- * for folders, `''` for a bucket root, an object key otherwise).
- */
+/** A decoded S3 item: bucket + key (prefix ending in `/` for folders, `''` for a bucket root). */
 interface S3Ref {
   bucket: string;
   key: string;
 }
 
 /**
- * Encodes a bucket + key into an opaque, URL-path-safe id (S3 keys contain
- * slashes, so they cannot go into a route param raw).
- * @param ref - The bucket and key
- * @returns The opaque id
- */
+ * Encodes a bucket + key into an opaque, URL-path-safe id (keys contain slashes).
+ **/
 function encodeId(ref: S3Ref): string {
   return Buffer.from(JSON.stringify([ref.bucket, ref.key])).toString('base64url');
 }
 
 /**
- * Decodes an opaque id back into its bucket and key.
- * @param id - The opaque id
- * @returns The bucket and key
- * @throws BadRequestException when the id is malformed
- */
+ * Decodes an opaque id back into its bucket and key; 400 when malformed.
+ **/
 function decodeId(id: string): S3Ref {
   try {
     const parsed = JSON.parse(Buffer.from(id, 'base64url').toString('utf8'));
@@ -114,10 +101,8 @@ function decodeId(id: string): S3Ref {
 }
 
 /**
- * Returns the last path segment of an S3 key (folder or file name).
- * @param key - The S3 key (may end in a slash for folders)
- * @returns The display name
- */
+ * Returns the last path segment of an S3 key (the display name).
+ **/
 function baseName(key: string): string {
   const trimmed = key.endsWith(FOLDER_SUFFIX) ? key.slice(0, -1) : key;
   const slash = trimmed.lastIndexOf('/');
@@ -126,10 +111,8 @@ function baseName(key: string): string {
 }
 
 /**
- * Guesses a MIME type from a file name extension.
- * @param name - The file name
- * @returns The guessed MIME type (octet-stream when unknown)
- */
+ * Guesses a MIME type from a file name extension (octet-stream when unknown).
+ **/
 function guessMimeType(name: string): string {
   const dot = name.lastIndexOf('.');
   const ext = dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
@@ -137,17 +120,8 @@ function guessMimeType(name: string): string {
   return MIME_BY_EXT[ext] ?? 'application/octet-stream';
 }
 
-/**
- * S3 implementation of {@link StorageProvider}.
- *
- * Each configured bucket (`S3_BUCKETS`) is a browse root, mirroring how the
- * Picker-authorized folders are roots for Google Drive. S3 has no real folders,
- * so "folders" are key prefixes: listing uses a `/` delimiter, and creating a
- * folder writes a zero-byte marker object at `prefix/`. Every operation asserts
- * the target bucket is one of the configured (allowed) buckets — no bucket from a
- * request is ever trusted. Works with AWS S3 and S3-compatible stores (via an
- * optional custom endpoint + path-style addressing).
- */
+// StorageProvider over S3: each configured bucket is a root, "folders" are key prefixes,
+// every op asserts the bucket is configured. Works with AWS and S3-compatible stores.
 @Injectable()
 export class S3StorageProvider implements StorageProvider {
   readonly backend: StorageBackend = 's3';
@@ -166,15 +140,8 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Function to report whether S3 is enabled, reachable, and expose the configured
-   * buckets as roots.
-   *
-   * When S3 is enabled the buckets may still not exist or the credentials may be
-   * wrong, so every configured bucket is probed; if any probe fails the backend is
-   * reported as disconnected with a clear error for the sidebar (rather than
-   * letting the first browse blow up with a raw SDK 500).
-   * @returns The backend status
-   */
+   * Probes every configured bucket; any failure → disconnected with a sidebar error.
+   **/
   async status(): Promise<StorageStatusEntity> {
     if (!this.cfg.enabled) {
       return { backend: this.backend, label: 'S3 Storage', connected: false, email: null, roots: [] };
@@ -226,10 +193,6 @@ export class S3StorageProvider implements StorageProvider {
     return entity;
   }
 
-  /**
-   * Function to list the configured buckets as browse roots.
-   * @returns The buckets as root entries
-   */
   listRoots(): Promise<AllowedFolderEntity[]> {
     this.ensureEnabled();
 
@@ -243,11 +206,6 @@ export class S3StorageProvider implements StorageProvider {
     );
   }
 
-  /**
-   * Function to list the folders and files directly inside a bucket/prefix.
-   * @param folderId - The opaque id of the bucket root or a prefix
-   * @returns The entries, folders first
-   */
   async listContents(folderId: string): Promise<DriveEntryEntity[]> {
     const ref = this.resolve(folderId);
     const client = this.getClient();
@@ -284,9 +242,7 @@ export class S3StorageProvider implements StorageProvider {
         token = res.IsTruncated ? res.NextContinuationToken : undefined;
       } while (token);
     } catch (error) {
-      // A missing bucket / bad credentials / unreachable endpoint means the whole
-      // backend is unusable — surface it as a clean "reconnect" error (424) rather
-      // than a raw SDK 500 so the client can prompt and refresh the sidebar.
+      // Whole-backend failure → clean 424 so the client can prompt a reconnect.
       if (isS3Unavailable(error)) {
         throw new StorageDisconnectedException(S3_UNAVAILABLE_MESSAGE);
       }
@@ -297,11 +253,8 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Function to create a "folder" (a zero-byte prefix marker) inside a bucket/prefix.
-   * @param parentId - The opaque id of the parent bucket root or prefix
-   * @param name - The new folder name
-   * @returns The created folder entry
-   */
+   * Creates a "folder" as a zero-byte prefix marker object.
+   **/
   async createFolder(parentId: string, name: string): Promise<DriveEntryEntity> {
     const ref = this.resolve(parentId);
     const client = this.getClient();
@@ -312,12 +265,6 @@ export class S3StorageProvider implements StorageProvider {
     return this.toFolderEntry(ref.bucket, key);
   }
 
-  /**
-   * Function to upload a file into a bucket/prefix, streamed through the SDK.
-   * @param folderId - The opaque id of the destination bucket root or prefix
-   * @param upload - The file stream plus its name, MIME type and abort signal
-   * @returns The upload result
-   */
   async uploadFile(folderId: string, upload: StorageUpload): Promise<UploadResultEntity> {
     const { body, fileName, mimeType, signal } = upload;
     const ref = this.resolve(folderId);
@@ -356,7 +303,7 @@ export class S3StorageProvider implements StorageProvider {
         webViewLink: null,
       };
     } catch (error) {
-      // A client-cancelled upload isn't a real failure — don't record it.
+      // A client-cancelled upload isn't a real failure — don't log it.
       if (signal?.aborted) {
         throw error;
       }
@@ -377,11 +324,8 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Function to delete a file, or a folder (prefix) and everything under it.
-   *
-   * Bucket roots (the configured buckets) cannot be deleted.
-   * @param itemId - The opaque id of the file or folder
-   */
+   * Deletes a file, or a folder prefix and everything under it; buckets can't be deleted (409).
+   **/
   async deleteItem(itemId: string): Promise<void> {
     const ref = this.resolve(itemId);
     const client = this.getClient();
@@ -400,15 +344,8 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Function to rename a file, or a folder (prefix) and everything under it.
-   *
-   * S3 has no native rename, so this copies to the new key/prefix and deletes the
-   * old one. The new name replaces the last path segment; the parent prefix and
-   * the target bucket stay the same. Bucket roots cannot be renamed.
-   * @param itemId - The opaque id of the file or folder
-   * @param name - The new name (a single path segment, no slashes)
-   * @returns The renamed item as an entry
-   */
+   * Renames via copy + delete (S3 has no native rename); buckets can't be renamed (409).
+   **/
   async renameItem(itemId: string, name: string): Promise<DriveEntryEntity> {
     const ref = this.resolve(itemId);
     const client = this.getClient();
@@ -418,7 +355,7 @@ export class S3StorageProvider implements StorageProvider {
     }
 
     if (ref.key.endsWith(FOLDER_SUFFIX)) {
-      // A folder is a prefix: prefix/old/ -> prefix/new/ (copy every object under it).
+      // Folder rename: prefix/old/ -> prefix/new/ (copies every object under it).
       const parent = ref.key.slice(0, -FOLDER_SUFFIX.length);
       const slash = parent.lastIndexOf('/');
       const newKey = `${slash === -1 ? '' : parent.slice(0, slash + 1)}${name}${FOLDER_SUFFIX}`;
@@ -448,16 +385,8 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Function to move a file, or a folder (prefix) and everything under it, into
-   * another folder.
-   *
-   * S3 has no native move, so this copies to the destination and deletes the
-   * source. The item keeps its name; only its parent prefix (and possibly bucket)
-   * changes. Bucket roots cannot be moved.
-   * @param itemId - The opaque id of the file or folder to move
-   * @param targetFolderId - The opaque id of the destination bucket root or prefix
-   * @returns The moved item as an entry
-   */
+   * Moves via copy + delete (S3 has no native move, works cross-bucket); buckets can't be moved (409).
+   **/
   async moveItem(itemId: string, targetFolderId: string): Promise<DriveEntryEntity> {
     const src = this.resolve(itemId);
     const dest = this.resolve(targetFolderId);
@@ -487,7 +416,7 @@ export class S3StorageProvider implements StorageProvider {
 
     const newKey = `${dest.key}${name}`;
     if (src.bucket === dest.bucket && newKey === src.key) {
-      // Already in this folder — copying onto itself then deleting would lose it.
+      // Copy-onto-itself then delete would lose the object.
       throw new BadRequestException('The item is already in that folder.');
     }
 
@@ -506,11 +435,6 @@ export class S3StorageProvider implements StorageProvider {
     return this.toFileEntry(dest.bucket, newKey, size ?? undefined, undefined);
   }
 
-  /**
-   * Function to open a readable stream of an object's contents for download.
-   * @param fileId - The opaque id of the file
-   * @returns The content stream plus name, MIME type and size
-   */
   async downloadFile(fileId: string): Promise<StorageDownload> {
     const ref = this.resolve(fileId);
     const client = this.getClient();
@@ -530,11 +454,6 @@ export class S3StorageProvider implements StorageProvider {
     };
   }
 
-  /**
-   * Function to build a ZIP archive of a bucket/prefix and everything under it.
-   * @param folderId - The opaque id of the bucket root or prefix
-   * @returns The archive stream and the folder name
-   */
   async createFolderArchive(folderId: string): Promise<StorageArchive> {
     const ref = this.resolve(folderId);
     const name = ref.key === '' ? ref.bucket : baseName(ref.key);
@@ -552,10 +471,8 @@ export class S3StorageProvider implements StorageProvider {
   // --- Internals ----------------------------------------------------------------
 
   /**
-   * Function to decode an id and assert its bucket is one of the configured buckets.
-   * @param id - The opaque item id
-   * @returns The validated bucket/key reference
-   */
+   * Decodes an id and asserts its bucket is configured (else 403).
+   **/
   private resolve(id: string): S3Ref {
     this.ensureEnabled();
 
@@ -568,9 +485,8 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Function to assert S3 is enabled before any operation runs.
-   * @throws NotFoundException when S3 is disabled
-   */
+   * Asserts S3 is enabled (else 404).
+   **/
   private ensureEnabled(): void {
     if (!this.cfg.enabled) {
       throw new NotFoundException('S3 storage is not enabled.');
@@ -578,9 +494,8 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Function to lazily build (and cache) the S3 client from configuration.
-   * @returns The S3 client
-   */
+   * Lazily builds and caches the S3 client from configuration.
+   **/
   private getClient(): S3Client {
     if (!this.client) {
       this.client = new S3Client({
@@ -598,11 +513,8 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Function to fetch an object's size via a HEAD request.
-   * @param bucket - The bucket
-   * @param key - The object key
-   * @returns The size in bytes, or null when unavailable
-   */
+   * Fetches an object's size via HEAD (null when unavailable).
+   **/
   private async headSize(bucket: string, key: string): Promise<number | null> {
     try {
       const head = await this.getClient().send(
@@ -616,10 +528,8 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Function to delete every object under a prefix (folder), in batches.
-   * @param bucket - The bucket
-   * @param prefix - The folder prefix (ending in a slash)
-   */
+   * Deletes every object under a prefix, in batches.
+   **/
   private async deletePrefix(bucket: string, prefix: string): Promise<void> {
     const client = this.getClient();
     let token: string | undefined;
@@ -647,12 +557,8 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Function to copy every object under a prefix to a new prefix, then delete the
-   * originals — the S3 way to "rename" a folder.
-   * @param bucket - The bucket
-   * @param oldPrefix - The current folder prefix (ending in a slash)
-   * @param newPrefix - The destination folder prefix (ending in a slash)
-   */
+   * Copies every object under a prefix to a new prefix, then deletes the originals.
+   **/
   private async renamePrefix(
     bucket: string,
     oldPrefix: string,
@@ -687,13 +593,8 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Function to copy every object under a prefix to a new bucket/prefix, without
-   * deleting the source — the copy half of a folder move (works cross-bucket).
-   * @param srcBucket - The source bucket
-   * @param srcPrefix - The source folder prefix (ending in a slash)
-   * @param destBucket - The destination bucket
-   * @param destPrefix - The destination folder prefix (ending in a slash)
-   */
+   * Copies every object under a prefix to a new bucket/prefix (the copy half of a move).
+   **/
   private async copyPrefix(
     srcBucket: string,
     srcPrefix: string,
@@ -728,12 +629,8 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Function to build a URL-encoded `CopySource` value (`bucket/key`) that keeps
-   * the key's path separators intact while escaping special characters per segment.
-   * @param bucket - The bucket
-   * @param key - The object key
-   * @returns The encoded copy-source string
-   */
+   * Builds a `CopySource` (`bucket/key`), escaping per segment to keep path separators.
+   **/
   private copySource(bucket: string, key: string): string {
     const encodedKey = key
       .split('/')
@@ -744,11 +641,8 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Function to recursively append every object under a prefix into an archive.
-   * @param bucket - The bucket
-   * @param prefix - The folder prefix (`''` for a whole bucket)
-   * @param archive - The archive to append entries to
-   */
+   * Appends every object under a prefix into the archive.
+   **/
   private async appendPrefixToArchive(
     bucket: string,
     prefix: string,
@@ -777,12 +671,6 @@ export class S3StorageProvider implements StorageProvider {
     } while (token);
   }
 
-  /**
-   * Function to map an S3 prefix onto a folder entry.
-   * @param bucket - The bucket
-   * @param prefix - The folder prefix (ending in a slash)
-   * @returns The folder entry
-   */
   private toFolderEntry(bucket: string, prefix: string): DriveEntryEntity {
     return {
       id: encodeId({ bucket, key: prefix }),
@@ -796,14 +684,6 @@ export class S3StorageProvider implements StorageProvider {
     };
   }
 
-  /**
-   * Function to map an S3 object onto a file entry.
-   * @param bucket - The bucket
-   * @param key - The object key
-   * @param size - The object size in bytes
-   * @param lastModified - The object's last-modified date
-   * @returns The file entry
-   */
   private toFileEntry(
     bucket: string,
     key: string,

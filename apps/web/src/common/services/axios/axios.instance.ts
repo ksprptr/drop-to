@@ -6,15 +6,8 @@ import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/common/constants/au
 import { ApiUnavailableError } from '@/common/services/axios/axios.errors';
 import { appServerConfig } from '@/configs/app/app.server-config';
 
-/**
- * Builds a server-side axios instance for talking to the DropTo API.
- *
- * Auth rides in httpOnly cookies, so on every call we forward the session cookies
- * from the incoming request (`cookies()`). This must only be called from Server
- * Components, Server Actions or Route Handlers — tokens never reach the browser,
- * and the API is only ever reached server-to-server, never directly from a browser.
- * @returns A configured axios instance scoped to the current request's cookies
- */
+// Server-side axios for the API, scoped to the request's cookies. Server-only —
+// tokens never reach the browser; the API is reached server-to-server.
 export const getHttp = async (): Promise<AxiosInstance> => {
   const cookieStore = await cookies();
   const headersList = await headers();
@@ -40,14 +33,13 @@ export const getHttp = async (): Promise<AxiosInstance> => {
       config.headers.set('Cookie', parts.join('; '));
     }
 
-    // Forward the real end-user IP — this call is server-to-server, so without it
-    // the API's IP-keyed rate limiter would only ever see this container's address.
+    // Forward the real client IP so the API's IP-keyed rate limiter isn't blind.
     const clientIp = headersList.get('cf-connecting-ip') ?? headersList.get('x-forwarded-for');
     if (clientIp) {
       config.headers.set('X-Forwarded-For', clientIp);
     }
 
-    // For multipart uploads, drop the default JSON content-type so the boundary is kept.
+    // Drop JSON content-type for multipart so the boundary is kept.
     if (config.data instanceof FormData) {
       config.headers.delete('Content-Type');
     }

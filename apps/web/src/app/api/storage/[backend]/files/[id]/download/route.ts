@@ -1,10 +1,8 @@
 import { proxyDownload } from '@/common/services/api/passthrough.server';
 
 /**
- * Route handler streaming a single file download from the API (used both by the
- * download action and as the `<img>` source for image previews). Cookie-auth'd
- * same-origin, forwarded server-to-server to the API.
- */
+ * Streams a file download from the API (also the `<img>` source for previews).
+ **/
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ backend: string; id: string }> },

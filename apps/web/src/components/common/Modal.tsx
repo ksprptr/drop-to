@@ -14,8 +14,8 @@ interface Props extends ExtendedProps {
 }
 
 /**
- * Shared animated modal dialog with a backdrop and optional titled header.
- */
+ * Animated modal dialog with a backdrop and optional title.
+ **/
 export default function Modal({ open, onClose, title, maxWidth = 'max-w-md', children }: Props) {
   useEffect(() => {
     if (!open) {

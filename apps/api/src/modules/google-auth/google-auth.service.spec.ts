@@ -13,7 +13,7 @@ jest.mock('googleapis', () => ({
 
 /**
  * Encodes a minimal id_token JWT carrying the given payload.
- */
+ **/
 const idToken = (payload: Record<string, unknown>): string => {
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
   return `header.${body}.signature`;

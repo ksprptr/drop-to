@@ -54,21 +54,19 @@ interface BatchRuntime {
 
 interface Props {
   username: string;
-  /** Storage statuses fetched on the server, so the sidebar has data on first paint. */
+  /** Statuses fetched server-side, for first paint. */
   initialStatuses: StorageStatus[];
 }
 
 /**
- * Returns the first connected backend (or null), used to auto-select a storage.
- */
+ * First connected backend (or null) — used to auto-select a storage.
+ **/
 const pickDefaultBackend = (statuses: StorageStatus[]): StorageBackend | null =>
   statuses.find((status) => status.connected)?.backend ?? null;
 
 /**
- * Splits a file name into its base and extension (the extension includes the
- * leading dot, e.g. `.png`). A leading dot (hidden files) or a trailing dot is
- * treated as "no extension", matching how a desktop file manager sees it.
- */
+ * Splits a name into base + extension (leading/trailing dot = no extension).
+ **/
 const splitExtension = (name: string): { base: string; ext: string } => {
   const dot = name.lastIndexOf('.');
   if (dot <= 0 || dot === name.length - 1) {
@@ -90,11 +88,8 @@ interface ExtensionWarning {
 }
 
 /**
- * The main workspace: a Finder-like three-pane view (storage sidebar, file
- * browser, preview panel) with drag-and-drop uploads and account management. The
- * sidebar switches between storage backends (Google Drive, S3); the active
- * backend's roots (authorized folders / buckets) are the top level.
- */
+ * Main workspace: sidebar + file browser + preview, with uploads and account management.
+ **/
 export default function WorkspaceClient({ username, initialStatuses }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -180,9 +175,7 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
     [activeStatus],
   );
 
-  // Refreshes statuses on demand (after connect/disconnect/save or a disconnect
-  // mid-session). The initial statuses come from the server, so there is no
-  // load-on-mount waterfall here.
+  // Refresh statuses on demand; the initial ones come from the server (no mount fetch).
   const loadStatus = useCallback(async () => {
     setLoadingStatus(true);
     const result = await statusesAction();
@@ -208,8 +201,7 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
   // The second (split) pane: an independent browser over the same backend.
   const paneB = useBrowsePane(activeBackend, roots, onPaneError);
 
-  // Keep the active backend valid: default to the first connected one, and drop
-  // it if the current one becomes disconnected.
+  // Keep the active backend valid (default to the first connected; drop if disconnected).
   useEffect(() => {
     setActiveBackend((current) => {
       const stillConnected =
@@ -270,8 +262,7 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
       );
     } else {
       toast.error(result.error ?? 'Failed to open the folder.');
-      // The active storage went away mid-session (revoked Drive token / dead S3):
-      // refresh the statuses so the sidebar flips to its reconnect/unavailable state.
+      // Storage disconnected mid-session — refresh so the sidebar reflects it.
       if (result.status === 424) {
         void loadStatus();
       }
@@ -420,12 +411,10 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
     }, UPLOAD_LINGER_MS);
   }, []);
 
-  // Undo an entire batch: delete every file/folder it created, so cancelling a
-  // multi-file or folder upload leaves nothing behind.
+  // Undo a batch: delete everything it created so a cancel leaves nothing behind.
   const rollbackBatch = useCallback(
     async (batchId: string, backend: StorageBackend) => {
-      // Flip the batch (and all its rows) to a cancelled state — the dock turns
-      // the bars and labels red.
+      // Flip the batch and its rows to cancelled (the dock turns them red).
       setBatches((current) =>
         current.map((batch) =>
           batch.id === batchId
@@ -489,8 +478,7 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
       const conflicts = [...topLevel.keys()].filter((name) => existingNames.has(name));
 
       const renameMap = new Map<string, string>();
-      // For "replace" we upload the new items first and delete the originals only
-      // once they're safely in — so cancelling never destroys the existing file.
+      // "Replace": upload first, delete originals only once they're safely in.
       let replaceIds: string[] = [];
       if (conflicts.length > 0) {
         const choice = await askDuplicate(conflicts);
@@ -568,8 +556,7 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
         },
       ]);
 
-      // Recreate the (possibly nested) folder structure, tracking the top-level
-      // folders so a cancel can delete them.
+      // Recreate the nested folder structure, tracking top-level folders for cancel.
       const folderIdByPath = new Map<string, string>([['', targetFolderId]]);
       const ensureFolder = async (dirPath: string): Promise<string> => {
         const cached = folderIdByPath.get(dirPath);
@@ -665,10 +652,7 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
       const id = crypto.randomUUID();
       setDownloads((current) => [...current, { id, name: entry.name }]);
 
-      // Trigger the download without navigating the SPA; the server's
-      // Content-Disposition drives the filename (the `download` attr is ignored
-      // cross-origin). We can't observe when it starts, so clear "Preparing" after
-      // a short delay.
+      // Download via a transient anchor; can't observe start, so clear "Preparing" after a delay.
       const anchor = document.createElement('a');
       anchor.href = url;
       anchor.rel = 'noopener';
@@ -819,8 +803,7 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
       if (!renameTarget || activeBackend === null) {
         return;
       }
-      // Renaming to the exact current name is a no-op — and for S3 (copy+delete)
-      // it would delete the file, so guard it here for every path into rename.
+      // Renaming to the same name is a no-op (and an S3 self-delete) — guard it.
       if (name === renameTarget.name) {
         setRenameTarget(null);
         setExtWarning(null);
@@ -836,8 +819,7 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
           return;
         }
         await reloadPanes();
-        // The id can change on rename (S3 ids encode the key), so drop the old id
-        // from the preview and any multi-selection pointing at the renamed item.
+        // The id can change on rename (S3 keys), so drop the old id from selection/preview.
         if (selected?.id === renameTarget.id) {
           setSelected(null);
         }
@@ -875,8 +857,7 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
         return;
       }
 
-      // Warn (Finder-style) before changing a file's extension, since it changes
-      // how the file is typed/opened. Folders have no extension, so skip them.
+      // Warn (Finder-style) before changing a file's extension. Folders have none.
       if (!renameTarget.isFolder) {
         const fromExt = splitExtension(renameTarget.name).ext;
         const { base, ext: toExt } = splitExtension(name);
@@ -933,8 +914,7 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
 
   const handleLogout = useCallback(() => {
     setLoggingOut(true);
-    // The /logout route handler revokes the session, clears the cookies and
-    // redirects to /login — a full navigation so nothing stale is left behind.
+    // /logout revokes the session, clears cookies and redirects (full navigation).
     window.location.href = '/logout';
   }, []);
 

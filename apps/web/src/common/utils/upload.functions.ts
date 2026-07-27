@@ -1,21 +1,19 @@
 /**
- * Returns the top-level segment an item contributes to the current folder
- * (the file name for loose files, or the folder name for folder uploads).
- */
+ * Top-level segment of an item's path (file name, or the folder it lives in).
+ **/
 export const topLevelName = (relativePath: string): string => {
   const slash = relativePath.indexOf('/');
   return slash === -1 ? relativePath : relativePath.slice(0, slash);
 };
 
 /**
- * Whether the item lives inside a folder (its top-level segment is a folder).
- */
+ * Whether the item lives inside a folder.
+ **/
 export const isTopLevelFolder = (relativePath: string): boolean => relativePath.includes('/');
 
 /**
- * Returns a name unique among `existing`, appending " (1)", " (2)", … before the
- * file extension (e.g. `report.pdf` → `report (1).pdf`).
- */
+ * Name unique among `existing`, appending " (1)", " (2)"… before the extension.
+ **/
 export const uniqueName = (name: string, existing: Set<string>): string => {
   if (!existing.has(name)) {
     return name;

@@ -11,12 +11,8 @@ const adapter = new PrismaPg({
 
 const prisma = new PrismaClient({ adapter });
 
-/**
- * Function representing a seeding script for a database using Prisma ORM
- */
 async function main() {
-  // No seed data required — the DriveAccount and AllowedFolders are created
-  // at runtime through the Google OAuth + Picker setup flow.
+  // No seed data required — accounts/folders are created at runtime via the OAuth + Picker flow.
 }
 
 main()

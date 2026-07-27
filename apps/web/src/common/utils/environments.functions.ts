@@ -1,9 +1,4 @@
-/**
- * Typed reader for public (browser-exposed) environment variables.
- *
- * `NEXT_PUBLIC_*` vars are inlined at build time, so they must be referenced by
- * their full static name — this helper centralizes the lookup and fallback.
- */
+// NEXT_PUBLIC_* vars are inlined at build time, so they must be referenced by full name.
 interface EnvOptions {
   key: string;
   fallback?: string;
@@ -17,10 +12,8 @@ const PUBLIC_ENV: Record<string, string | undefined> = {
 };
 
 /**
- * Function to read a public environment variable as a string.
- * @param options - The variable key and an optional fallback
- * @returns The variable value, or the fallback (defaults to an empty string)
- */
+ * Reads a public env var, falling back to `fallback` (default `''`).
+ **/
 export const getEnvString = ({ key, fallback = '' }: EnvOptions): string => {
   return PUBLIC_ENV[key] ?? fallback;
 };

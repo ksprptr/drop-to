@@ -5,19 +5,13 @@ import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/common/constants/au
 import { appServerConfig } from '@/configs/app/app.server-config';
 
 /**
- * Builds an absolute API URL for a route-handler passthrough.
- * @param path - The API path (e.g. `/storage/drive/files/x/download`)
- * @returns The absolute URL
- */
+ * Absolute API URL for a route-handler passthrough.
+ **/
 export const apiUrl = (path: string): string => `${appServerConfig.urls.apiUrl}${path}`;
 
 /**
- * Builds the request headers for a route-handler passthrough to the API: forwards
- * the operator session cookies and the real client IP. Used by the streaming
- * upload/download routes (which cannot go through the JSON `getHttp` client).
- * @param base - Optional base headers to extend
- * @returns The headers to send to the API
- */
+ * Passthrough request headers to the API: forwards session cookies and the client IP.
+ **/
 export const apiAuthHeaders = async (base?: HeadersInit): Promise<Headers> => {
   const cookieStore = await cookies();
   const headersList = await headers();
@@ -42,17 +36,11 @@ export const apiAuthHeaders = async (base?: HeadersInit): Promise<Headers> => {
   return result;
 };
 
-/** Response headers forwarded from the API on a download passthrough. */
 const DOWNLOAD_HEADERS = ['content-type', 'content-disposition', 'content-length', 'accept-ranges'];
 
 /**
- * Streams a GET download from the API back to the browser, forwarding the relevant
- * headers (content type, disposition, length). Used by the file/folder download
- * route handlers so the browser never hits the API directly.
- * @param path - The API path to stream
- * @param signal - The incoming request's abort signal
- * @returns A streamed Response
- */
+ * Streams a GET download from the API back to the browser, forwarding the key headers.
+ **/
 export const proxyDownload = async (path: string, signal: AbortSignal): Promise<Response> => {
   const apiResponse = await fetch(apiUrl(path), { headers: await apiAuthHeaders(), signal });
 
