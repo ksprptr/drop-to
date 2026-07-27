@@ -11,7 +11,9 @@ import {
   useState,
 } from 'react';
 
-type ToastVariant = 'success' | 'error';
+import LoadingIndicator from '@/components/loadings/LoadingIndicator';
+
+type ToastVariant = 'success' | 'error' | 'loading';
 
 interface Toast {
   id: number;
@@ -19,9 +21,19 @@ interface Toast {
   variant: ToastVariant;
 }
 
+interface ToastUpdate {
+  message?: string;
+  variant?: ToastVariant;
+}
+
 interface ToastContextValue {
   success: (message: string) => void;
   error: (message: string) => void;
+  /** Shows a persistent spinner toast; returns its id to later `update`/`dismiss`. */
+  loading: (message: string) => number;
+  /** Updates a toast (e.g. a loading toast → success/error) and auto-dismisses it. */
+  update: (id: number, next: ToastUpdate) => void;
+  dismiss: (id: number) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -31,8 +43,9 @@ let nextId = 0;
 /**
  * Component providing a minimal toast notification system.
  *
- * Exposes `success`/`error` helpers via context; toasts auto-dismiss after a
- * few seconds and stack in the bottom-right corner.
+ * Exposes `success`/`error`/`loading` helpers via context; success/error toasts
+ * auto-dismiss after a few seconds, a `loading` toast stays until `update`d (e.g.
+ * to success on completion). Toasts stack in the bottom-right corner.
  */
 export default function ToastProvider({ children }: PropsWithChildren) {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -42,9 +55,22 @@ export default function ToastProvider({ children }: PropsWithChildren) {
   }, []);
 
   const push = useCallback(
-    (message: string, variant: ToastVariant) => {
+    (message: string, variant: ToastVariant, autoDismiss = true) => {
       const id = nextId++;
       setToasts((current) => [...current, { id, message, variant }]);
+      if (autoDismiss) {
+        setTimeout(() => dismiss(id), 5000);
+      }
+      return id;
+    },
+    [dismiss],
+  );
+
+  const update = useCallback(
+    (id: number, next: ToastUpdate) => {
+      setToasts((current) =>
+        current.map((toast) => (toast.id === id ? { ...toast, ...next } : toast)),
+      );
       setTimeout(() => dismiss(id), 5000);
     },
     [dismiss],
@@ -52,10 +78,13 @@ export default function ToastProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<ToastContextValue>(
     () => ({
-      success: (message) => push(message, 'success'),
-      error: (message) => push(message, 'error'),
+      success: (message) => void push(message, 'success'),
+      error: (message) => void push(message, 'error'),
+      loading: (message) => push(message, 'loading', false),
+      update,
+      dismiss,
     }),
-    [push],
+    [push, update, dismiss],
   );
 
   return (
@@ -75,9 +104,13 @@ export default function ToastProvider({ children }: PropsWithChildren) {
               className={`pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-xl border px-4 py-3 text-left text-sm shadow-lg ${
                 toast.variant === 'success'
                   ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-200'
-                  : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200'
+                  : toast.variant === 'error'
+                    ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200'
+                    : 'border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200'
               }`}>
-              {toast.variant === 'success' ? (
+              {toast.variant === 'loading' ? (
+                <LoadingIndicator className='mt-px h-4 w-4 shrink-0' />
+              ) : toast.variant === 'success' ? (
                 <CircleCheck className='h-5 w-5 shrink-0' />
               ) : (
                 <CircleAlert className='h-5 w-5 shrink-0' />

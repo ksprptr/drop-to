@@ -361,6 +361,10 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
         return;
       }
 
+      const count = `${ids.length} item${ids.length === 1 ? '' : 's'}`;
+      // A move can take a while (S3 copies whole folders), so show a live toast.
+      const toastId = toast.loading(`Moving ${count}…`);
+
       const results = await Promise.all(ids.map((id) => moveItemAction(backend, id, targetFolderId)));
       const failed = results.filter((result) => !result.ok).length;
 
@@ -372,9 +376,12 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
       }
 
       if (failed > 0) {
-        toast.error(`Failed to move ${failed} item${failed === 1 ? '' : 's'}.`);
+        toast.update(toastId, {
+          variant: 'error',
+          message: `Failed to move ${failed} item${failed === 1 ? '' : 's'}.`,
+        });
       } else {
-        toast.success(`Moved ${ids.length} item${ids.length === 1 ? '' : 's'}.`);
+        toast.update(toastId, { variant: 'success', message: `Moved ${count}.` });
       }
     },
     [dragMove, activeBackend, currentFolderId, paneB, reloadPanes, selected, toast],
