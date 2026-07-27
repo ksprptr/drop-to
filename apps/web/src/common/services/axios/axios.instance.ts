@@ -1,65 +1,75 @@
-import axios, { AxiosError } from 'axios';
+import 'server-only';
+import axios, { type AxiosInstance } from 'axios';
+import { cookies, headers } from 'next/headers';
 
-import { getEnvString } from '@/common/utils/environments.functions';
-
-import { ApiUnavailableError } from './axios.errors';
+import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/common/constants/auth.constants';
+import { ApiUnavailableError } from '@/common/services/axios/axios.errors';
+import { appServerConfig } from '@/configs/app/app.server-config';
 
 /**
- * Shared axios instance for talking to the DropTo API.
+ * Builds a server-side axios instance for talking to the DropTo API.
  *
- * Auth tokens live in httpOnly cookies, so `withCredentials` is on for every call.
- * A response interceptor normalizes unreachable-server errors, retries a dropped
- * connection once, and — on a 401 — silently rotates the token via `/auth/refresh`
- * before retrying, redirecting to `/login` when the session is truly gone.
+ * Auth rides in httpOnly cookies, so on every call we forward the session cookies
+ * from the incoming request (`cookies()`). This must only be called from Server
+ * Components, Server Actions or Route Handlers — tokens never reach the browser,
+ * and the API is only ever reached server-to-server, never directly from a browser.
+ * @returns A configured axios instance scoped to the current request's cookies
  */
-export const http = axios.create({
-  baseURL: getEnvString({ key: 'NEXT_PUBLIC_API_URL', fallback: 'http://localhost:4000/api/v1' }),
-  timeout: 30000,
-  withCredentials: true,
-});
+export const getHttp = async (): Promise<AxiosInstance> => {
+  const cookieStore = await cookies();
+  const headersList = await headers();
 
-// Endpoints that must never trigger the silent-refresh flow (they ARE the flow).
-const AUTH_ENDPOINTS = ['/auth/login', '/auth/refresh', '/auth/logout'];
+  const http = axios.create({
+    baseURL: appServerConfig.urls.apiUrl,
+    headers: { 'Content-Type': 'application/json' },
+    withCredentials: true,
+    timeout: 30_000,
+  });
 
-/**
- * Redirects the browser to the login page (no-op on the server or when already there).
- */
-const redirectToLogin = (): void => {
-  if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-    window.location.href = '/login';
-  }
-};
+  http.interceptors.request.use((config) => {
+    const parts: string[] = [];
 
-http.interceptors.response.use(
-  (response) => response,
-  async (
-    error: AxiosError & { config?: { __isRetry?: boolean; __isAuthRetry?: boolean; url?: string } },
-  ) => {
-    if (error.code === 'ERR_NETWORK') {
-      return Promise.reject(new ApiUnavailableError());
-    }
-
-    if (error.code === 'ECONNRESET' && error.config && !error.config.__isRetry) {
-      error.config.__isRetry = true;
-      return http.request(error.config);
-    }
-
-    const config = error.config;
-    const url = config?.url ?? '';
-    const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint));
-
-    if (error.response?.status === 401 && config && !config.__isAuthRetry && !isAuthEndpoint) {
-      config.__isAuthRetry = true;
-
-      try {
-        await http.post('/auth/refresh');
-        return await http.request(config);
-      } catch {
-        redirectToLogin();
-        return Promise.reject(error);
+    for (const name of [ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE]) {
+      const value = cookieStore.get(name)?.value;
+      if (value) {
+        parts.push(`${name}=${value}`);
       }
     }
 
-    return Promise.reject(error);
-  },
-);
+    if (parts.length > 0) {
+      config.headers.set('Cookie', parts.join('; '));
+    }
+
+    // Forward the real end-user IP — this call is server-to-server, so without it
+    // the API's IP-keyed rate limiter would only ever see this container's address.
+    const clientIp = headersList.get('cf-connecting-ip') ?? headersList.get('x-forwarded-for');
+    if (clientIp) {
+      config.headers.set('X-Forwarded-For', clientIp);
+    }
+
+    // For multipart uploads, drop the default JSON content-type so the boundary is kept.
+    if (config.data instanceof FormData) {
+      config.headers.delete('Content-Type');
+    }
+
+    return config;
+  });
+
+  http.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+      if (error.code === 'ERR_NETWORK') {
+        return Promise.reject(new ApiUnavailableError());
+      }
+
+      if (error.code === 'ECONNRESET' && error.config && !error.config.__isRetry) {
+        error.config.__isRetry = true;
+        return http.request(error.config);
+      }
+
+      return Promise.reject(error);
+    },
+  );
+
+  return http;
+};

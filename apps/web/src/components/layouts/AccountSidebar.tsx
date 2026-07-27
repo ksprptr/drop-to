@@ -3,7 +3,7 @@
 import type { StorageBackend, StorageStatus } from '@dropto/types';
 import type { ReactNode } from 'react';
 
-import { getGoogleAuthUrl } from '@/common/services/api/auth.api';
+import { getGoogleAuthUrl } from '@/common/services/api/auth.client';
 import Button from '@/components/common/Button';
 import Icon from '@/components/common/Icon';
 import ThemeToggle from '@/components/common/ThemeToggle';

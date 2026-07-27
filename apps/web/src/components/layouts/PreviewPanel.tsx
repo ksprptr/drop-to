@@ -3,7 +3,7 @@
 import type { StorageBackend } from '@dropto/types';
 import { useState } from 'react';
 
-import { fileDownloadUrl } from '@/common/services/api/storage.api';
+import { fileDownloadUrl } from '@/common/services/api/storage.client';
 import type { ViewEntry } from '@/common/types/workspace.types';
 import { formatBytes, formatDateTime } from '@/common/utils/format.functions';
 import Button from '@/components/common/Button';

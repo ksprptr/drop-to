@@ -2,19 +2,18 @@
 
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useState } from 'react';
 
-import { getMe, login } from '@/common/services/api/auth.api';
-import { extractApiErrorMessage } from '@/common/utils/error.functions';
+import { login } from '@/actions/auth/auth.actions';
 import Button from '@/components/common/Button';
 import Icon from '@/components/common/Icon';
 import Input from '@/components/common/Input';
-import LoadingIndicator from '@/components/loadings/LoadingIndicator';
 import { useToast } from '@/components/providers/ToastProvider';
 
 /**
- * Component driving the login screen: posts the operator credentials and, on
- * success, redirects to the workspace.
+ * Component driving the login screen: posts the operator credentials via a
+ * Server Action and, on success, navigates to the workspace. The
+ * already-authenticated redirect is handled server-side by the route.
  */
 export default function LoginForm() {
   const router = useRouter();
@@ -23,24 +22,6 @@ export default function LoginForm() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
-
-  // Already-authenticated visitors are sent straight to the workspace.
-  useEffect(() => {
-    let active = true;
-
-    getMe()
-      .then(() => router.replace('/'))
-      .catch(() => {
-        if (active) {
-          setCheckingSession(false);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [router]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -50,23 +31,15 @@ export default function LoginForm() {
     }
 
     setSubmitting(true);
-    try {
-      await login({ username: username.trim(), password });
+    const result = await login(username.trim(), password);
+    if (result.ok) {
       router.replace('/');
-    } catch (error) {
-      toast.error(extractApiErrorMessage(error));
-    } finally {
-      setSubmitting(false);
+      router.refresh();
+      return;
     }
+    toast.error(result.error ?? 'Invalid username or password.');
+    setSubmitting(false);
   };
-
-  if (checkingSession) {
-    return (
-      <main className='flex min-h-screen items-center justify-center'>
-        <LoadingIndicator className='h-6 w-6' />
-      </main>
-    );
-  }
 
   return (
     <main className='flex min-h-screen items-center justify-center px-4'>

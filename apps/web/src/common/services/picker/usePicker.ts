@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from 'react';
 
-import { getPickerToken } from '@/common/services/api/auth.api';
+import { pickerTokenAction } from '@/actions/auth/auth.actions';
 import { getEnvString } from '@/common/utils/environments.functions';
 
 /** A folder selected through the Google Picker. */
@@ -86,7 +86,11 @@ export function usePicker() {
     async (onPicked: (folders: PickedFolder[]) => void): Promise<void> => {
       await ensurePicker();
 
-      const token = await getPickerToken();
+      const tokenResult = await pickerTokenAction();
+      if (!tokenResult.ok || !tokenResult.data) {
+        throw new Error(tokenResult.error ?? 'Failed to authorize the Google Picker.');
+      }
+      const token = tokenResult.data;
       const apiKey = getEnvString({ key: 'NEXT_PUBLIC_GOOGLE_API_KEY' });
       const appId = getEnvString({ key: 'NEXT_PUBLIC_GOOGLE_APP_ID' });
       const picker = window.google!.picker;

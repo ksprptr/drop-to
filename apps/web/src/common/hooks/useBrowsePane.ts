@@ -3,8 +3,14 @@
 import type { StorageBackend } from '@dropto/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { getFolderContents } from '@/common/services/api/storage.api';
+import { listContentsAction } from '@/actions/storage/storage.actions';
 import type { Crumb, ViewEntry } from '@/common/types/workspace.types';
+
+/** A failed read, surfaced to the pane's error handler. */
+export interface PaneError {
+  error?: string;
+  status?: number;
+}
 
 /** A single independently-browsable pane of folders/files. */
 export interface BrowsePane {
@@ -37,7 +43,7 @@ export interface BrowsePane {
 export function useBrowsePane(
   backend: StorageBackend | null,
   roots: ViewEntry[],
-  onError: (error: unknown) => void,
+  onError: (error: PaneError) => void,
 ): BrowsePane {
   const [path, setPath] = useState<Crumb[]>([]);
   const [entries, setEntries] = useState<ViewEntry[]>([]);
@@ -64,10 +70,10 @@ export function useBrowsePane(
     }
 
     setLoading(true);
-    try {
-      const contents = await getFolderContents(backend, currentFolderId);
+    const result = await listContentsAction(backend, currentFolderId);
+    if (result.ok) {
       setEntries(
-        contents.map((entry) => ({
+        (result.data ?? []).map((entry) => ({
           id: entry.id,
           name: entry.name,
           isFolder: entry.isFolder,
@@ -77,11 +83,10 @@ export function useBrowsePane(
           webViewLink: entry.webViewLink,
         })),
       );
-    } catch (error) {
-      onError(error);
-    } finally {
-      setLoading(false);
+    } else {
+      onError({ error: result.error, status: result.status });
     }
+    setLoading(false);
   }, [backend, currentFolderId, roots, onError]);
 
   useEffect(() => {

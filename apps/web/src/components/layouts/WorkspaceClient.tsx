@@ -5,19 +5,17 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useBrowsePane } from '@/common/hooks/useBrowsePane';
-import { disconnectAccount, logout, saveFolders } from '@/common/services/api/auth.api';
+import { disconnectAction, saveFoldersAction } from '@/actions/auth/auth.actions';
 import {
-  createSubfolder,
-  deleteItem,
-  fileDownloadUrl,
-  folderDownloadUrl,
-  getFolderContents,
-  getStorageStatuses,
-  moveItem,
-  renameItem,
-  uploadFile,
-} from '@/common/services/api/storage.api';
+  createFolderAction,
+  deleteItemAction,
+  listContentsAction,
+  moveItemAction,
+  renameItemAction,
+  statusesAction,
+} from '@/actions/storage/storage.actions';
+import { useBrowsePane } from '@/common/hooks/useBrowsePane';
+import { fileDownloadUrl, folderDownloadUrl, uploadFile } from '@/common/services/api/storage.client';
 import { type PickedFolder, usePicker } from '@/common/services/picker/usePicker';
 import type {
   Crumb,
@@ -27,11 +25,7 @@ import type {
   UploadTask,
   ViewEntry,
 } from '@/common/types/workspace.types';
-import {
-  extractApiErrorMessage,
-  isCanceledError,
-  isStorageDisconnectedError,
-} from '@/common/utils/error.functions';
+import { extractApiErrorMessage, isCanceledError } from '@/common/utils/error.functions';
 import { isTopLevelFolder, topLevelName, uniqueName } from '@/common/utils/upload.functions';
 import Button from '@/components/common/Button';
 import Icon from '@/components/common/Icon';
@@ -57,6 +51,8 @@ interface BatchRuntime {
 
 interface Props {
   username: string;
+  /** Storage statuses fetched on the server, so the sidebar has data on first paint. */
+  initialStatuses: StorageStatus[];
 }
 
 /**
@@ -96,14 +92,14 @@ interface ExtensionWarning {
  * sidebar switches between storage backends (Google Drive, S3); the active
  * backend's roots (authorized folders / buckets) are the top level.
  */
-export default function WorkspaceClient({ username }: Props) {
+export default function WorkspaceClient({ username, initialStatuses }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const toast = useToast();
   const { openPicker } = usePicker();
 
-  const [statuses, setStatuses] = useState<StorageStatus[]>([]);
-  const [loadingStatus, setLoadingStatus] = useState(true);
+  const [statuses, setStatuses] = useState<StorageStatus[]>(initialStatuses);
+  const [loadingStatus, setLoadingStatus] = useState(false);
   const [activeBackend, setActiveBackend] = useState<StorageBackend | null>(null);
   const [path, setPath] = useState<Crumb[]>([]);
   const [entries, setEntries] = useState<ViewEntry[]>([]);
@@ -181,24 +177,25 @@ export default function WorkspaceClient({ username }: Props) {
     [activeStatus],
   );
 
+  // Refreshes statuses on demand (after connect/disconnect/save or a disconnect
+  // mid-session). The initial statuses come from the server, so there is no
+  // load-on-mount waterfall here.
   const loadStatus = useCallback(async () => {
-    try {
-      setStatuses(await getStorageStatuses());
-    } catch (error) {
-      toast.error(extractApiErrorMessage(error));
-    } finally {
-      setLoadingStatus(false);
+    setLoadingStatus(true);
+    const result = await statusesAction();
+    if (result.ok) {
+      setStatuses(result.data ?? []);
+    } else {
+      toast.error(result.error ?? 'Failed to load storage status.');
     }
+    setLoadingStatus(false);
   }, [toast]);
 
-  useEffect(() => {
-    void loadStatus();
-  }, [loadStatus]);
-
   const onPaneError = useCallback(
-    (error: unknown) => {
-      toast.error(extractApiErrorMessage(error));
-      if (isStorageDisconnectedError(error)) {
+    (error: { error?: string; status?: number }) => {
+      toast.error(error.error ?? 'Failed to open the folder.');
+      // The active storage went away mid-session (revoked Drive token / dead S3).
+      if (error.status === 424) {
         void loadStatus();
       }
     },
@@ -255,10 +252,10 @@ export default function WorkspaceClient({ username }: Props) {
     }
 
     setLoadingEntries(true);
-    try {
-      const contents = await getFolderContents(activeBackend, currentFolderId);
+    const result = await listContentsAction(activeBackend, currentFolderId);
+    if (result.ok) {
       setEntries(
-        contents.map((entry) => ({
+        (result.data ?? []).map((entry) => ({
           id: entry.id,
           name: entry.name,
           isFolder: entry.isFolder,
@@ -268,16 +265,15 @@ export default function WorkspaceClient({ username }: Props) {
           webViewLink: entry.webViewLink,
         })),
       );
-    } catch (error) {
-      toast.error(extractApiErrorMessage(error));
+    } else {
+      toast.error(result.error ?? 'Failed to open the folder.');
       // The active storage went away mid-session (revoked Drive token / dead S3):
       // refresh the statuses so the sidebar flips to its reconnect/unavailable state.
-      if (isStorageDisconnectedError(error)) {
+      if (result.status === 424) {
         void loadStatus();
       }
-    } finally {
-      setLoadingEntries(false);
     }
+    setLoadingEntries(false);
   }, [activeBackend, currentFolderId, roots, toast, loadStatus]);
 
   useEffect(() => {
@@ -366,10 +362,8 @@ export default function WorkspaceClient({ username }: Props) {
         return;
       }
 
-      const results = await Promise.allSettled(
-        ids.map((id) => moveItem(backend, id, targetFolderId)),
-      );
-      const failed = results.filter((result) => result.status === 'rejected').length;
+      const results = await Promise.all(ids.map((id) => moveItemAction(backend, id, targetFolderId)));
+      const failed = results.filter((result) => !result.ok).length;
 
       await reloadPanes();
       setSelectedIds(new Set());
@@ -440,7 +434,7 @@ export default function WorkspaceClient({ username }: Props) {
       if (runtime) {
         await Promise.all(
           [...runtime.rootFolderIds, ...runtime.looseFileIds].map((id) =>
-            deleteItem(backend, id).catch(() => undefined),
+            deleteItemAction(backend, id),
           ),
         );
         batchRuntime.current.delete(batchId);
@@ -577,7 +571,11 @@ export default function WorkspaceClient({ username }: Props) {
         const parentPath = slash === -1 ? '' : dirPath.slice(0, slash);
         const name = slash === -1 ? dirPath : dirPath.slice(slash + 1);
         const parentId = await ensureFolder(parentPath);
-        const created = await createSubfolder(backend, parentId, name);
+        const result = await createFolderAction(backend, parentId, name);
+        if (!result.ok || !result.data) {
+          throw new Error(result.error ?? 'Failed to create folder.');
+        }
+        const created = result.data;
         folderIdByPath.set(dirPath, created.id);
         if (parentPath === '') {
           runtime.rootFolderIds.push(created.id);
@@ -624,7 +622,7 @@ export default function WorkspaceClient({ username }: Props) {
       } else {
         // Replacements are in — now remove the originals they superseded.
         if (replaceIds.length > 0) {
-          await Promise.all(replaceIds.map((id) => deleteItem(backend, id).catch(() => undefined)));
+          await Promise.all(replaceIds.map((id) => deleteItemAction(backend, id)));
         }
         batchRuntime.current.delete(batchId);
         await reloadPanes();
@@ -687,7 +685,11 @@ export default function WorkspaceClient({ username }: Props) {
 
       setCreating(true);
       try {
-        await createSubfolder(activeBackend, targetFolderId, name);
+        const result = await createFolderAction(activeBackend, targetFolderId, name);
+        if (!result.ok) {
+          toast.error(result.error ?? 'Something went wrong.');
+          return;
+        }
         await reloadPanes();
         toast.success(`Folder "${name}" created.`);
         setNewFolderOpen(false);
@@ -709,7 +711,11 @@ export default function WorkspaceClient({ username }: Props) {
 
     setDeleting(true);
     try {
-      await deleteItem(activeBackend, entry.id);
+      const result = await deleteItemAction(activeBackend, entry.id);
+      if (!result.ok) {
+        toast.error(result.error ?? 'Something went wrong.');
+        return;
+      }
       await reloadPanes();
       if (selected?.id === entry.id) {
         setSelected(null);
@@ -759,8 +765,8 @@ export default function WorkspaceClient({ username }: Props) {
 
     setBulkDeleting(true);
     try {
-      const results = await Promise.allSettled(ids.map((id) => deleteItem(backend, id)));
-      const failed = results.filter((result) => result.status === 'rejected').length;
+      const results = await Promise.all(ids.map((id) => deleteItemAction(backend, id)));
+      const failed = results.filter((result) => !result.ok).length;
 
       await reloadPanes();
       if (selected && ids.includes(selected.id)) {
@@ -806,7 +812,11 @@ export default function WorkspaceClient({ username }: Props) {
       setRenaming(true);
       setPendingRename(name);
       try {
-        await renameItem(activeBackend, renameTarget.id, name);
+        const result = await renameItemAction(activeBackend, renameTarget.id, name);
+        if (!result.ok) {
+          toast.error(result.error ?? 'Something went wrong.');
+          return;
+        }
         await reloadPanes();
         // The id can change on rename (S3 ids encode the key), so drop the old id
         // from the preview and any multi-selection pointing at the renamed item.
@@ -871,7 +881,11 @@ export default function WorkspaceClient({ username }: Props) {
         }
         setSaving(true);
         try {
-          await saveFolders({ folders });
+          const result = await saveFoldersAction({ folders });
+          if (!result.ok) {
+            toast.error(result.error ?? 'Something went wrong.');
+            return;
+          }
           await loadStatus();
           toast.success(`Saved ${folders.length} allowed folder(s).`);
         } catch (error) {
@@ -887,7 +901,11 @@ export default function WorkspaceClient({ username }: Props) {
 
   const handleDisconnect = useCallback(async () => {
     try {
-      await disconnectAccount();
+      const result = await disconnectAction();
+      if (!result.ok) {
+        toast.error(result.error ?? 'Something went wrong.');
+        return;
+      }
       await loadStatus();
       toast.success('Google account disconnected.');
     } catch (error) {
@@ -895,16 +913,12 @@ export default function WorkspaceClient({ username }: Props) {
     }
   }, [loadStatus, toast]);
 
-  const handleLogout = useCallback(async () => {
+  const handleLogout = useCallback(() => {
     setLoggingOut(true);
-    try {
-      await logout();
-      router.replace('/login');
-    } catch (error) {
-      toast.error(extractApiErrorMessage(error));
-      setLoggingOut(false);
-    }
-  }, [router, toast]);
+    // The /logout route handler revokes the session, clears the cookies and
+    // redirects to /login — a full navigation so nothing stale is left behind.
+    window.location.href = '/logout';
+  }, []);
 
   const rootLabel = activeStatus?.label ?? 'Home';
   const rootIcon = activeBackend ? STORAGE_ICON[activeBackend] : 'Home';
