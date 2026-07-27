@@ -8,6 +8,8 @@ interface AppServerConfig {
   urls: {
     /** Base URL the server uses to reach the DropTo API (server-to-server). */
     apiUrl: string;
+    /** Public origin of this web app (canonical URL, OpenGraph, robots, manifest). */
+    appUrl: string;
   };
   /** Cookie domain applied to auth cookies (set in production only). */
   cookieDomain: string;
@@ -30,6 +32,7 @@ export const appServerConfig: AppServerConfig = {
       process.env.NEXT_PUBLIC_API_URL ??
       'http://localhost:4000/api/v1'
     ).replace(/\/$/, ''),
+    appUrl: (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, ''),
   },
   cookieDomain: process.env.COOKIE_DOMAIN ?? 'localhost',
 };
