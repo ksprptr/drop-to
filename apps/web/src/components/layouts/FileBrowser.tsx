@@ -40,6 +40,8 @@ interface Props {
   onNavigate: (index: number) => void;
   onOpenFolder: (entry: ViewEntry) => void;
   onSelect: (entry: ViewEntry) => void;
+  /** Clears the preview selection when clicking the empty finder area. */
+  onDeselect: () => void;
   onUpload: (items: UploadItem[]) => void;
   onNewFolder: () => void;
   onToggleSelect: (id: string) => void;
@@ -158,6 +160,7 @@ export default function FileBrowser({
   onNavigate,
   onOpenFolder,
   onSelect,
+  onDeselect,
   onUpload,
   onNewFolder,
   onToggleSelect,
@@ -401,6 +404,7 @@ export default function FileBrowser({
 
       {/* Content / drop zone */}
       <div
+        onClick={onDeselect}
         onDragOver={handleDragOver}
         onDragLeave={(event) => {
           // Ignore leave events bubbling up from children still inside the zone.
@@ -488,7 +492,11 @@ export default function FileBrowser({
                       draggable={canModify}
                       onDragStart={(event) => handleRowDragStart(event, entry)}
                       onDragEnd={() => onMoveDragEnd?.()}
-                      onClick={() => onSelect(entry)}
+                      onClick={(event) => {
+                        // Don't let the click reach the finder's deselect handler.
+                        event.stopPropagation();
+                        onSelect(entry);
+                      }}
                       onDoubleClick={() => {
                         if (entry.isFolder) onOpenFolder(entry);
                         else if (entry.webViewLink) window.open(entry.webViewLink, '_blank');
