@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, type KeyboardEvent, useState } from 'react';
 
 import { login } from '@/actions/auth/auth.actions';
 import Button from '@/components/common/Button';
@@ -22,6 +22,17 @@ export default function LoginForm() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Some password managers / browser extensions swallow a form's implicit Enter
+  // submission depending on how the field was focused, so Enter silently does
+  // nothing. Submitting explicitly on Enter makes it deterministic.
+  const handleKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) {
+      return;
+    }
+    event.preventDefault();
+    event.currentTarget.requestSubmit();
+  };
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -56,7 +67,7 @@ export default function LoginForm() {
           <p className='mt-1 text-sm text-zinc-600 dark:text-zinc-400'>Sign in to continue</p>
         </div>
 
-        <form onSubmit={handleSubmit} className='flex flex-col gap-y-4'>
+        <form onSubmit={handleSubmit} onKeyDownCapture={handleKeyDown} className='flex flex-col gap-y-4'>
           <Input
             name='username'
             label='Username'

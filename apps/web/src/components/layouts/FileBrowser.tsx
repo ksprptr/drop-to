@@ -175,23 +175,21 @@ export default function FileBrowser({
   onMoveDrop,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const folderInputRef = useRef<HTMLInputElement>(null);
   const [dragKind, setDragKind] = useState<'upload' | 'move' | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [menu, setMenu] = useState<RowMenu | null>(null);
+  const [toolbarMenu, setToolbarMenu] = useState<DOMRect | null>(null);
 
-  // `webkitdirectory` has no typed React prop, so set it imperatively.
+  // Close any open menu on an outside click, scroll, resize, or Escape.
   useEffect(() => {
-    folderInputRef.current?.setAttribute('webkitdirectory', '');
-  }, []);
-
-  // Close the row menu on any outside click, scroll, resize, or Escape.
-  useEffect(() => {
-    if (!menu) {
+    if (!menu && !toolbarMenu) {
       return;
     }
-    const close = () => setMenu(null);
+    const close = () => {
+      setMenu(null);
+      setToolbarMenu(null);
+    };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') close();
     };
@@ -205,7 +203,7 @@ export default function FileBrowser({
       window.removeEventListener('scroll', close, true);
       window.removeEventListener('keydown', onKey);
     };
-  }, [menu]);
+  }, [menu, toolbarMenu]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1;
@@ -249,9 +247,20 @@ export default function FileBrowser({
     setMenu((current) => (current?.entry.id === entry.id ? null : { entry, rect }));
   };
 
+  const openToolbarMenu = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setToolbarMenu((current) => (current ? null : rect));
+  };
+
   const runMenuAction = (action: (entry: ViewEntry) => void, entry: ViewEntry) => {
     setMenu(null);
     action(entry);
+  };
+
+  const runToolbarAction = (action: () => void) => {
+    setToolbarMenu(null);
+    action();
   };
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
@@ -349,43 +358,18 @@ export default function FileBrowser({
               {entries.length} item{entries.length === 1 ? '' : 's'}
             </span>
           )}
-          {onToggleSplit && (
+          {(canUpload || onToggleSplit) && (
             <button
               type='button'
-              onClick={onToggleSplit}
-              title={split ? 'Close split view' : 'Split view'}
+              onClick={openToolbarMenu}
+              title='Actions'
               className={`inline-flex h-9 w-9 items-center justify-center rounded-lg transition ${
-                split
-                  ? 'bg-green-600/10 text-green-600'
+                toolbarMenu
+                  ? 'bg-zinc-200 text-zinc-950 dark:bg-zinc-800 dark:text-zinc-50'
                   : 'text-zinc-600 hover:bg-zinc-200 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'
               }`}>
-              <Icon icon={split ? 'XMark' : 'ViewColumns'} className='h-5 w-5' />
+              <Icon icon='EllipsisVertical' className='h-5 w-5' />
             </button>
-          )}
-          {canUpload && (
-            <>
-              <button
-                type='button'
-                onClick={onNewFolder}
-                title='New folder'
-                className='inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'>
-                <Icon icon='FolderPlus' className='h-5 w-5' />
-              </button>
-              <button
-                type='button'
-                onClick={() => folderInputRef.current?.click()}
-                title='Upload folder'
-                className='inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'>
-                <Icon icon='FolderArrowDown' className='h-5 w-5' />
-              </button>
-              <button
-                type='button'
-                onClick={() => fileInputRef.current?.click()}
-                title='Upload files'
-                className='inline-flex h-9 w-9 items-center justify-center rounded-lg text-green-600 transition hover:bg-green-600/10'>
-                <Icon icon='ArrowUpTray' className='h-5 w-5' />
-              </button>
-            </>
           )}
         </div>
       </header>
@@ -569,7 +553,38 @@ export default function FileBrowser({
       </div>
 
       <input ref={fileInputRef} type='file' multiple className='hidden' onChange={handleInput} />
-      <input ref={folderInputRef} type='file' className='hidden' onChange={handleInput} />
+
+      {/* Toolbar actions menu (upload / new folder / split), same style as row menu */}
+      {toolbarMenu && (
+        <div
+          role='menu'
+          onClick={(event) => event.stopPropagation()}
+          style={{ left: Math.max(8, toolbarMenu.right - 176), top: toolbarMenu.bottom + 4, width: 176 }}
+          className='fixed z-50 flex flex-col gap-y-0.5 rounded-xl border border-zinc-300 bg-zinc-50 p-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-800'>
+          {canUpload && (
+            <MenuItem
+              icon='ArrowUpTray'
+              label='Upload'
+              tone='primary'
+              onClick={() => runToolbarAction(() => fileInputRef.current?.click())}
+            />
+          )}
+          {canUpload && (
+            <MenuItem
+              icon='FolderPlus'
+              label='New folder'
+              onClick={() => runToolbarAction(onNewFolder)}
+            />
+          )}
+          {onToggleSplit && (
+            <MenuItem
+              icon={split ? 'XMark' : 'ViewColumns'}
+              label={split ? 'Close split view' : 'Split view'}
+              onClick={() => runToolbarAction(onToggleSplit)}
+            />
+          )}
+        </div>
+      )}
 
       {/* Row actions menu (fixed so it is never clipped by the scroll container) */}
       {menu && (
@@ -610,7 +625,7 @@ export default function FileBrowser({
           <MenuItem
             icon='Trash'
             label='Delete'
-            danger
+            tone='danger'
             onClick={() => runMenuAction(onDelete, menu.entry)}
           />
         </div>
@@ -626,23 +641,26 @@ function MenuItem({
   icon,
   label,
   onClick,
-  danger,
+  tone = 'default',
 }: {
   icon: string;
   label: string;
   onClick: () => void;
-  danger?: boolean;
+  tone?: 'default' | 'danger' | 'primary';
 }) {
+  const toneClass =
+    tone === 'danger'
+      ? 'text-red-500 hover:bg-red-500/10'
+      : tone === 'primary'
+        ? 'text-green-600 hover:bg-green-600/10'
+        : 'text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700';
+
   return (
     <button
       type='button'
       role='menuitem'
       onClick={onClick}
-      className={`flex items-center gap-x-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
-        danger
-          ? 'text-red-500 hover:bg-red-500/10'
-          : 'text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700'
-      }`}>
+      className={`flex items-center gap-x-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${toneClass}`}>
       <Icon icon={icon} className='h-4 w-4 shrink-0' />
       {label}
     </button>
