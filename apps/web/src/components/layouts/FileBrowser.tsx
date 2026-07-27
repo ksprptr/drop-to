@@ -253,12 +253,16 @@ export default function FileBrowser({
   const openMenu = (event: MouseEvent<HTMLButtonElement>, entry: ViewEntry) => {
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
+    // Opening a row menu closes the toolbar menu (they must never overlap).
+    setToolbarMenu(null);
     setMenu((current) => (current?.entry.id === entry.id ? null : { entry, rect }));
   };
 
   const openToolbarMenu = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
+    // Opening the toolbar menu closes any open row menu.
+    setMenu(null);
     setToolbarMenu((current) => (current ? null : rect));
   };
 
