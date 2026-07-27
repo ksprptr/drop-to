@@ -43,7 +43,9 @@ import { StorageRegistry } from './storage.registry';
 // 10 GiB ceiling; the file is streamed straight through to storage (never buffered).
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 * 1024;
 
-/** Backend-agnostic: each route resolves the `:backend` provider from the StorageRegistry. */
+/**
+ * Backend-agnostic: each route resolves the `:backend` provider from the StorageRegistry.
+ **/
 @ApiTags('Storage')
 @ApiCookieAuth('accessToken')
 @ApiUnauthorizedResponse({ type: ResponseEntity, description: 'Unauthorized' })

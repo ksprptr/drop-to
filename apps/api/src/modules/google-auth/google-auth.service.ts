@@ -9,7 +9,9 @@ import { SaveFoldersDto } from './dto/save-folders.dto';
 import { AllowedFolderEntity } from './entities/allowed-folder.entity';
 import { DriveAccountStatusEntity } from './entities/drive-account-status.entity';
 
-/** OAuth lifecycle for the single Drive account: consent, token exchange, encrypted storage, authorized clients. */
+/**
+ * OAuth lifecycle for the single Drive account: consent, token exchange, encrypted storage, authorized clients.
+ **/
 @Injectable()
 export class GoogleAuthService {
   private readonly logger = new Logger(GoogleAuthService.name);

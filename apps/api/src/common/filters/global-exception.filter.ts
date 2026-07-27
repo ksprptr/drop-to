@@ -1,7 +1,9 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
-/** Normalizes every exception to `{ status, message }`; unknown errors → 500. */
+/**
+ * Normalizes every exception to `{ status, message }`; unknown errors → 500.
+ **/
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);

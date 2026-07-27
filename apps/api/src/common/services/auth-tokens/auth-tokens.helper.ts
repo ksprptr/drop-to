@@ -15,7 +15,9 @@ interface AddTokenToResponseParams {
   value: string;
 }
 
-/** Serializes access/refresh tokens into httpOnly cookies (empty value clears them). */
+/**
+ * Serializes access/refresh tokens into httpOnly cookies (empty value clears them).
+ **/
 @Injectable()
 export class AuthTokensHelper {
   private readonly cookieDomain?: string;

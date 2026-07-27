@@ -6,9 +6,7 @@ import { AUTH_STATE_ID } from './auth.constants';
 
 /**
  * Owns the operator's token version — the single source of truth for JWT revocation.
- * Reads are lock-free (default 0 until the first bump); a logout bumps it, invalidating
- * every token issued with the previous version.
- */
+ **/
 @Injectable()
 export class AuthStateService {
   constructor(private readonly prismaService: PrismaService) {}

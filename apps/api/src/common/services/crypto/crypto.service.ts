@@ -12,7 +12,9 @@ const ALGORITHM: CipherGCMTypes = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 
-/** AES-256-GCM encryption for the Drive refresh token; envelope `iv:authTag:data` (hex). */
+/**
+ * AES-256-GCM encryption for the Drive refresh token; envelope `iv:authTag:data` (hex).
+ **/
 @Injectable()
 export class CryptoService {
   private readonly key: Buffer;

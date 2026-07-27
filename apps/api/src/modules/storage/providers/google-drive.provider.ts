@@ -34,7 +34,9 @@ import { sanitizeZipEntryPath } from '../storage.functions';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const MAX_ANCESTOR_DEPTH = 50;
 
-/** StorageProvider over the Drive API; every op is validated to stay inside the authorized folder tree. */
+/**
+ * StorageProvider over the Drive API; every op is validated to stay inside the authorized folder tree.
+ **/
 @Injectable()
 export class GoogleDriveProvider implements StorageProvider {
   readonly backend: StorageBackend = 'drive';

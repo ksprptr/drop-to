@@ -12,7 +12,9 @@ interface GetLimiterParams {
   rule: RateLimitRule;
 }
 
-/** Resolves the subject key and caches one Redis-backed limiter per (method, path, rule). */
+/**
+ * Resolves the subject key and caches one Redis-backed limiter per (method, path, rule).
+ **/
 @Injectable()
 export class RateLimitHelpers {
   private readonly limiterCache = new Map<string, RateLimiterRedis>();

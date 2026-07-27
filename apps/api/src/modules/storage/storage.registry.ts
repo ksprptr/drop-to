@@ -8,7 +8,9 @@ import {
 import { GoogleDriveProvider } from './providers/google-drive.provider';
 import { S3StorageProvider } from './providers/s3-storage.provider';
 
-/** Resolves a StorageProvider by its backend key. */
+/**
+ * Resolves a StorageProvider by its backend key.
+ **/
 @Injectable()
 export class StorageRegistry {
   private readonly providers: Record<StorageBackend, StorageProvider>;

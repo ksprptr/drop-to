@@ -121,8 +121,9 @@ function guessMimeType(name: string): string {
   return MIME_BY_EXT[ext] ?? 'application/octet-stream';
 }
 
-// StorageProvider over S3: each configured bucket is a root, "folders" are key prefixes,
-// every op asserts the bucket is configured. Works with AWS and S3-compatible stores.
+/**
+ * StorageProvider over S3: each configured bucket is a browse root, "folders" are key prefixes, every op asserts the bucket is configured.
+ **/
 @Injectable()
 export class S3StorageProvider implements StorageProvider {
   readonly backend: StorageBackend = 's3';

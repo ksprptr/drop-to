@@ -8,7 +8,9 @@ import { RateLimitGuard } from './guards/rate-limit.guard';
 import { RateLimitHelpers } from './helpers/rate-limit.helpers';
 import { REDIS_RATE_LIMIT } from './rate-limit.constants';
 
-/** Registers RateLimitGuard globally + the shared ioredis client backing the limiter. */
+/**
+ * Registers RateLimitGuard globally + the shared ioredis client backing the limiter.
+ **/
 @Global()
 @Module({
   providers: [

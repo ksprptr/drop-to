@@ -8,7 +8,9 @@ import {
 import { TokenPayload } from '@/common/types/auth-user.types';
 import { type JwtConfig, jwtConfig } from '@/config/jwt.config';
 
-/** Signs the access and refresh JWTs (same `{ sub, ver }` payload, different secret/lifetime). */
+/**
+ * Signs the access and refresh JWTs (same `{ sub, ver }` payload, different secret/lifetime).
+ **/
 @Injectable()
 export class AuthHelpers {
   constructor(

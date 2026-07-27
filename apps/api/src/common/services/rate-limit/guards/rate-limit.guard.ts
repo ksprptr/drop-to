@@ -15,7 +15,9 @@ import { RATE_LIMIT_META_KEY, RateLimitRule } from '../decorators/rate-limit.dec
 import { SKIP_RATE_LIMIT_META_KEY } from '../decorators/skip-rate-limit.decorator';
 import { RateLimitHelpers } from '../helpers/rate-limit.helpers';
 
-/** Per-route `@RateLimit` rule (or default) keyed by client IP; `@SkipRateLimit` opts out; over → 429. */
+/**
+ * Per-route `@RateLimit` rule (or default) keyed by client IP; `@SkipRateLimit` opts out; over → 429.
+ **/
 @Injectable()
 export class RateLimitGuard implements CanActivate {
   constructor(

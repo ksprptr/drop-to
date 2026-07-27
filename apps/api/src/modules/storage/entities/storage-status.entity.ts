@@ -2,7 +2,9 @@ import { ApiProperty } from '@nestjs/swagger';
 
 import { StorageBackend } from '../interfaces/storage-provider.interface';
 
-/** A browse root within a backend: a Drive folder or an S3 bucket. */
+/**
+ * A browse root within a backend: a Drive folder or an S3 bucket.
+ **/
 export class StorageRootEntity {
   @ApiProperty({ type: 'string', description: 'Opaque id used to browse into this root' })
   id: string;

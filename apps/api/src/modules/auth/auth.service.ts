@@ -11,7 +11,9 @@ import { LoginDto } from './dto/login.dto';
 import { AuthResponseEntity } from './entities/auth-response.entity';
 import { AuthHelpers } from './helpers/auth.helpers';
 
-/** Authenticates the single env-defined operator and issues revocable access/refresh JWTs. */
+/**
+ * Authenticates the single env-defined operator and issues revocable access/refresh JWTs.
+ **/
 @Injectable()
 export class AuthService {
   constructor(

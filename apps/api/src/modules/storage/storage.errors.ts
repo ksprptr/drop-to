@@ -7,7 +7,9 @@ export const DRIVE_DISCONNECTED_MESSAGE = 'Your Google Drive was disconnected. P
 export const S3_UNAVAILABLE_MESSAGE =
   "This S3 storage doesn't exist or the credentials are invalid.";
 
-// 424 (not 401/5xx): lets the client detect a disconnected backend without tripping silent-refresh.
+/**
+ * 424 (not 401/5xx): lets the client detect a disconnected backend without tripping silent-refresh.
+ **/
 export class StorageDisconnectedException extends HttpException {
   constructor(message: string) {
     super(message, HttpStatus.FAILED_DEPENDENCY);

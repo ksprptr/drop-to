@@ -17,7 +17,9 @@ import { PrismaService } from '@/prisma/prisma.service';
 
 import { AUTH_STATE_ID } from '../auth.constants';
 
-/** Verifies the access-token cookie on every non-`@Public()` route; missing/expired/revoked → 401. */
+/**
+ * Verifies the access-token cookie on every non-`@Public()` route; missing/expired/revoked → 401.
+ **/
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(

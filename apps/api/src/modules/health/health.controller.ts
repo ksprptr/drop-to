@@ -13,7 +13,9 @@ import { PrismaService } from '@/prisma/prisma.service';
 
 const MEMORY_HEAP_THRESHOLD_BYTES = 512 * 1024 * 1024;
 
-/** API health: process heap usage + Postgres reachability. */
+/**
+ * API health: process heap usage + Postgres reachability.
+ **/
 @ApiExcludeController()
 @SkipRateLimit()
 @Controller('health')
