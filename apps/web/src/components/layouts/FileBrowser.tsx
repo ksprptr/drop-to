@@ -178,11 +178,17 @@ export default function FileBrowser({
   onMoveDrop,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const [dragKind, setDragKind] = useState<'upload' | 'move' | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [menu, setMenu] = useState<RowMenu | null>(null);
   const [toolbarMenu, setToolbarMenu] = useState<DOMRect | null>(null);
+
+  // `webkitdirectory` has no typed React prop, so set it imperatively.
+  useEffect(() => {
+    folderInputRef.current?.setAttribute('webkitdirectory', '');
+  }, []);
 
   // Close any open menu on an outside click, scroll, resize, or Escape.
   useEffect(() => {
@@ -561,6 +567,7 @@ export default function FileBrowser({
       </div>
 
       <input ref={fileInputRef} type='file' multiple className='hidden' onChange={handleInput} />
+      <input ref={folderInputRef} type='file' className='hidden' onChange={handleInput} />
 
       {/* Toolbar actions menu (upload / new folder / split), same style as row menu */}
       {toolbarMenu && (
@@ -572,9 +579,17 @@ export default function FileBrowser({
           {canUpload && (
             <MenuItem
               icon='ArrowUpTray'
-              label='Upload'
+              label='Upload files'
               tone='primary'
               onClick={() => runToolbarAction(() => fileInputRef.current?.click())}
+            />
+          )}
+          {canUpload && (
+            <MenuItem
+              icon='FolderArrowDown'
+              label='Upload folder'
+              tone='primary'
+              onClick={() => runToolbarAction(() => folderInputRef.current?.click())}
             />
           )}
           {canUpload && (
