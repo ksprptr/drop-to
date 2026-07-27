@@ -978,7 +978,10 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
             setSelected(entry);
             setActivePane(0);
           }}
-          onDeselect={() => setSelected(null)}
+          onDeselect={() => {
+            setSelected(null);
+            clearSelection();
+          }}
           onUpload={(items) => handleUpload(items, 0)}
           onNewFolder={() => {
             setNewFolderPane(0);
@@ -1024,7 +1027,10 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
                   setSelected(entry);
                   setActivePane(1);
                 }}
-                onDeselect={() => setSelected(null)}
+                onDeselect={() => {
+                  setSelected(null);
+                  paneB.clearSelection();
+                }}
                 onUpload={(items) => handleUpload(items, 1)}
                 onNewFolder={() => {
                   setNewFolderPane(1);

@@ -416,16 +416,16 @@ export default function FileBrowser({
               <button
                 type='button'
                 onClick={onClearSelection}
-                className='inline-flex h-8 items-center gap-x-1.5 rounded-lg px-2.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'>
+                title='Clear selection'
+                className='inline-flex h-8 w-8 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'>
                 <Icon icon='XMark' className='h-4 w-4' />
-                Clear
               </button>
               <button
                 type='button'
                 onClick={onBulkDelete}
-                className='inline-flex h-8 items-center gap-x-1.5 rounded-lg px-2.5 text-xs font-medium text-red-500 transition hover:bg-red-500/10'>
+                title='Delete selected'
+                className='inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 transition hover:bg-red-500/10'>
                 <Icon icon='Trash' className='h-4 w-4' />
-                Delete
               </button>
             </div>
           </motion.div>
@@ -534,6 +534,18 @@ export default function FileBrowser({
                       onDoubleClick={() => {
                         if (entry.isFolder) onOpenFolder(entry);
                         else if (entry.webViewLink) window.open(entry.webViewLink, '_blank');
+                      }}
+                      onKeyDown={(event) => {
+                        // Keyboard activation: Enter opens a folder / selects a file,
+                        // Space selects — so the list is fully navigable by Tab.
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          if (entry.isFolder) onOpenFolder(entry);
+                          else onSelect(entry);
+                        } else if (event.key === ' ') {
+                          event.preventDefault();
+                          onSelect(entry);
+                        }
                       }}
                       className={`grid ${gridCols} w-full items-center gap-x-3 rounded-lg px-3 py-2 text-left transition ${
                         canModify ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'

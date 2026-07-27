@@ -21,6 +21,18 @@
     @apply hover:cursor-pointer disabled:cursor-not-allowed;
   }
 
+  /* Keyboard-focus ring for interactive elements (visible on Tab, not on click). */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [role='button']:focus-visible,
+  [role='menuitem']:focus-visible,
+  [tabindex]:not([tabindex='-1']):focus-visible {
+    @apply ring-2 ring-green-600 ring-offset-2 ring-offset-zinc-50 outline-none dark:ring-offset-zinc-900;
+  }
+
   ::-webkit-scrollbar {
     @apply h-1.5 w-1.5 bg-zinc-100 dark:bg-zinc-900;
   }
