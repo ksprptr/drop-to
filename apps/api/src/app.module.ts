@@ -30,6 +30,8 @@ import { PrismaModule } from './prisma/prisma.module';
     // Runtime / Platform
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: [path.join(__dirname, '..', '.env'), path.join(__dirname, '..', '.env.local')],
+
       load: [
         appConfig,
         authConfig,
@@ -41,7 +43,7 @@ import { PrismaModule } from './prisma/prisma.module';
         s3Config,
       ],
       validate: (config) => {
-        const envExample = fs.readFileSync(path.join(process.cwd(), '.env.example'), 'utf-8');
+        const envExample = fs.readFileSync(path.join(__dirname, '..', '.env.example'), 'utf-8');
 
         const required = envExample
           .split('\n')
