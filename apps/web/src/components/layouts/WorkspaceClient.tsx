@@ -1,7 +1,6 @@
 'use client';
 
 import type { StorageBackend, StorageStatus } from '@dropto/types';
-import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -941,9 +940,17 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
       />
 
       <main className='flex min-w-0 flex-1 gap-3'>
-        <FileBrowser
-          path={path}
-          rootLabel={rootLabel}
+        {/* Both panes live in a grid whose second column animates 1fr↔0fr, so the
+            left pane resizes smoothly in sync with the right one appearing/leaving. */}
+        <div
+          className='grid min-w-0 flex-1 grid-rows-1 transition-all duration-300 ease-out'
+          style={{
+            gridTemplateColumns: `minmax(0,1fr) minmax(0,${split ? 1 : 0}fr)`,
+            columnGap: split ? '0.75rem' : '0px',
+          }}>
+          <FileBrowser
+            path={path}
+            rootLabel={rootLabel}
           rootIcon={rootIcon}
           entries={entries}
           loading={currentFolderId === null ? loadingStatus : loadingEntries}
@@ -982,15 +989,11 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
           onDelete={setConfirmTarget}
         />
 
-        <AnimatePresence>
-          {split && (
-            <motion.div
-              key='pane-b'
-              initial={{ opacity: 0, x: 24 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 24 }}
-              transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-              className='flex min-w-0 flex-1 flex-col border-l border-zinc-200 pl-3 dark:border-zinc-800'>
+          <div className='min-w-0 overflow-hidden'>
+            <div
+              className={`flex h-full min-w-0 flex-col border-l border-zinc-200 pl-3 transition-opacity duration-300 dark:border-zinc-800 ${
+                split ? 'opacity-100' : 'pointer-events-none opacity-0'
+              }`}>
               <FileBrowser
                 path={paneB.path}
                 rootLabel={rootLabel}
@@ -1031,9 +1034,9 @@ export default function WorkspaceClient({ username, initialStatuses }: Props) {
                 onRename={openRename}
                 onDelete={setConfirmTarget}
               />
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+          </div>
+        </div>
 
         <PreviewPanel
           entry={selected}
