@@ -3,6 +3,7 @@
 import type { StorageBackend, StorageStatus } from '@dropto/types';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { Crumb } from '@/common/types/workspace.types';
 import Icon from '@/components/common/Icon';
@@ -34,27 +35,43 @@ export default function Breadcrumb({
   storagePicker,
 }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const [isMobile, setIsMobile] = useState(false);
+
+  // The sidebar (with its storage switcher) is hidden below `md`; there the root crumb becomes the
+  // switcher. On desktop it's a plain home button back to the storage roots.
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 767px)');
+    const update = () => setIsMobile(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
 
   const atRoots = crumbs.length === 0;
-  const isPicker = atRoots && Boolean(storagePicker && storagePicker.storages.length > 1);
+  const isPicker = isMobile && Boolean(storagePicker && storagePicker.storages.length > 1);
 
   useEffect(() => {
     if (!pickerOpen) {
       return;
     }
     const close = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) {
         setPickerOpen(false);
       }
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setPickerOpen(false);
     };
-    window.addEventListener('click', close);
+    // mousedown (not click) so it also fires when opening a menu whose button stops click propagation.
+    window.addEventListener('mousedown', close);
     window.addEventListener('keydown', onKey);
     return () => {
-      window.removeEventListener('click', close);
+      window.removeEventListener('mousedown', close);
       window.removeEventListener('keydown', onKey);
     };
   }, [pickerOpen]);
@@ -64,7 +81,17 @@ export default function Breadcrumb({
       <div ref={rootRef} className='relative shrink-0'>
         <button
           type='button'
-          onClick={() => (isPicker ? setPickerOpen((open) => !open) : onNavigate(-1))}
+          onClick={() => {
+            if (!isPicker) {
+              onNavigate(-1);
+              return;
+            }
+            if (!pickerOpen && rootRef.current) {
+              const rect = rootRef.current.getBoundingClientRect();
+              setMenuPos({ top: rect.bottom + 4, left: rect.left });
+            }
+            setPickerOpen((open) => !open);
+          }}
           className={`flex shrink-0 items-center gap-x-1 hover:text-green-600 ${
             atRoots
               ? 'font-medium text-zinc-950 dark:text-zinc-50'
@@ -75,38 +102,53 @@ export default function Breadcrumb({
           {isPicker && <Icon icon='ChevronUpDown' className='h-3.5 w-3.5 shrink-0 opacity-60' />}
         </button>
 
-        <AnimatePresence>
-          {isPicker && pickerOpen && storagePicker && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96, y: -4 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: -4 }}
-              transition={{ duration: 0.08, ease: 'easeOut' }}
-              style={{ transformOrigin: 'top left' }}
-              className='absolute top-full left-0 z-30 mt-1 flex w-48 flex-col gap-y-0.5 rounded-xl border border-zinc-300 bg-zinc-50 p-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-800'>
-              {storagePicker.storages.map((storage) => {
-                const active = storage.backend === storagePicker.activeBackend;
-                return (
-                  <button
-                    key={storage.backend}
-                    type='button'
-                    onClick={() => {
-                      storagePicker.onSelect(storage.backend);
-                      setPickerOpen(false);
-                    }}
-                    className={`flex items-center gap-x-2.5 rounded-lg px-3 py-2 text-left font-medium transition ${
-                      active
-                        ? 'bg-green-600/10 text-green-600'
-                        : 'text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700'
-                    }`}>
-                    <Icon icon={STORAGE_ICON[storage.backend]} className='h-4 w-4 shrink-0' />
-                    <span className='truncate'>{storage.label}</span>
-                  </button>
-                );
-              })}
-            </motion.div>
+        {typeof document !== 'undefined' &&
+          createPortal(
+            <AnimatePresence>
+              {isPicker && pickerOpen && storagePicker && menuPos && (
+                <motion.div
+                  ref={menuRef}
+                  initial={{ opacity: 0, scale: 0.96, y: -4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: -4 }}
+                  transition={{ duration: 0.08, ease: 'easeOut' }}
+                  style={{ transformOrigin: 'top left', top: menuPos.top, left: menuPos.left }}
+                  className='fixed z-50 flex w-48 flex-col gap-y-0.5 rounded-xl border border-zinc-300 bg-zinc-50 p-1.5 text-sm shadow-xl dark:border-zinc-700 dark:bg-zinc-800'>
+                  {storagePicker.storages.map((storage) => {
+                    const active = storage.backend === storagePicker.activeBackend;
+                    const disabled = !storage.connected;
+                    return (
+                      <button
+                        key={storage.backend}
+                        type='button'
+                        disabled={disabled}
+                        onClick={() => {
+                          if (disabled) {
+                            return;
+                          }
+                          storagePicker.onSelect(storage.backend);
+                          setPickerOpen(false);
+                        }}
+                        className={`flex items-center gap-x-2.5 rounded-lg px-3 py-2 text-left font-medium transition ${
+                          active
+                            ? 'bg-green-600/10 text-green-600'
+                            : disabled
+                              ? 'cursor-not-allowed text-zinc-400 dark:text-zinc-600'
+                              : 'text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                        }`}>
+                        <Icon icon={STORAGE_ICON[storage.backend]} className='h-4 w-4 shrink-0' />
+                        <span className='truncate'>{storage.label}</span>
+                        {disabled && (
+                          <span className='ml-auto shrink-0 text-xs opacity-70'>Not connected</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>,
+            document.body,
           )}
-        </AnimatePresence>
       </div>
 
       {crumbs.map((crumb, index) => (
@@ -123,7 +165,9 @@ export default function Breadcrumb({
                 ? 'font-medium text-zinc-950 dark:text-zinc-50'
                 : 'text-zinc-600 dark:text-zinc-400'
             }`}>
-            {crumb.name}
+            {crumb.name || (
+              <span className='inline-block h-3 w-16 animate-pulse rounded bg-zinc-300 align-middle dark:bg-zinc-700' />
+            )}
           </button>
         </span>
       ))}

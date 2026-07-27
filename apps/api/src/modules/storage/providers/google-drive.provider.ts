@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Archiver, ZipArchive } from 'archiver';
 import { drive_v3, google } from 'googleapis';
@@ -93,7 +94,10 @@ export class GoogleDriveProvider implements StorageProvider {
       if (isInvalidGrant(error)) {
         throw new StorageDisconnectedException(DRIVE_DISCONNECTED_MESSAGE);
       }
-      throw error;
+      // Transient network error reaching Google — clean 503, and never let the raw gaxios error
+      // (which carries the refresh token) reach the logger.
+      this.logger.warn(`Google Drive token refresh failed: ${(error as Error).message}`);
+      throw new ServiceUnavailableException('Google Drive is temporarily unreachable. Try again.');
     }
 
     return google.drive({ version: 'v3', auth });
@@ -192,6 +196,25 @@ export class GoogleDriveProvider implements StorageProvider {
     } while (pageToken);
 
     return files.map((file) => this.toDriveEntry(file));
+  }
+
+  async resolveNames(ids: string[]): Promise<Array<{ id: string; name: string }>> {
+    const driveAccountId = await this.googleAuthService.getActiveAccountId();
+    const drive = await this.getDrive(driveAccountId);
+
+    // Names for a breadcrumb only — one parallel files.get per id (no ancestor walk, which would be
+    // several sequential round-trips each). drive.file scope already limits what's visible; real data
+    // access (listContents/download) keeps the full allowed-tree validation.
+    return Promise.all(
+      ids.map(async (id) => {
+        try {
+          const res = await drive.files.get({ fileId: id, fields: 'id, name' });
+          return { id, name: res.data.name ?? '' };
+        } catch {
+          return { id, name: '' };
+        }
+      }),
+    );
   }
 
   async createFolder(parentId: string, name: string): Promise<DriveEntryEntity> {
@@ -376,6 +399,10 @@ export class GoogleDriveProvider implements StorageProvider {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
     const drive = await this.getDrive(driveAccountId);
     const allowedIds = await this.getAllowedFolderIds(driveAccountId);
+
+    if (allowedIds.has(folderId)) {
+      throw new BadRequestException('Authorized root folders cannot be downloaded as a ZIP.');
+    }
 
     await this.assertItemAllowed(drive, folderId, allowedIds);
 

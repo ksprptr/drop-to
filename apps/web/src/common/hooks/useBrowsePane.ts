@@ -28,6 +28,7 @@ export interface BrowsePane {
   toggleSelect: (id: string) => void;
   selectAll: () => void;
   clearSelection: () => void;
+  setSelection: (ids: string[]) => void;
   pruneSelection: (id: string) => void;
 }
 
@@ -113,6 +114,8 @@ export function useBrowsePane(
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
+  const setSelection = useCallback((ids: string[]) => setSelectedIds(new Set(ids)), []);
+
   const pruneSelection = useCallback((id: string) => {
     setSelectedIds((current) => {
       if (!current.has(id)) {
@@ -139,6 +142,7 @@ export function useBrowsePane(
       toggleSelect,
       selectAll,
       clearSelection,
+      setSelection,
       pruneSelection,
     }),
     [
@@ -155,6 +159,7 @@ export function useBrowsePane(
       toggleSelect,
       selectAll,
       clearSelection,
+      setSelection,
       pruneSelection,
     ],
   );

@@ -254,6 +254,16 @@ export class S3StorageProvider implements StorageProvider {
     return [...folders, ...files];
   }
 
+  resolveNames(ids: string[]): Promise<Array<{ id: string; name: string }>> {
+    return Promise.resolve(
+      ids.map((id) => {
+        const ref = this.resolve(id);
+
+        return { id, name: ref.key === '' ? ref.bucket : baseName(ref.key) };
+      }),
+    );
+  }
+
   /**
    * Creates a "folder" as a zero-byte prefix marker object.
    **/
@@ -458,7 +468,12 @@ export class S3StorageProvider implements StorageProvider {
 
   async createFolderArchive(folderId: string): Promise<StorageArchive> {
     const ref = this.resolve(folderId);
-    const name = ref.key === '' ? ref.bucket : baseName(ref.key);
+
+    if (ref.key === '') {
+      throw new BadRequestException('Buckets cannot be downloaded as a ZIP.');
+    }
+
+    const name = baseName(ref.key);
     const archive = new ZipArchive({ zlib: { level: 9 } });
 
     void this.appendPrefixToArchive(ref.bucket, ref.key, archive).then(

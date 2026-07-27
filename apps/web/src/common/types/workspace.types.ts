@@ -10,6 +10,9 @@ export interface ViewEntry {
 }
 
 /** A single hop in the folder navigation path. */
+export type SortKey = 'name' | 'modified' | 'size';
+export type SortDir = 'asc' | 'desc';
+
 export interface Crumb {
   id: string;
   name: string;

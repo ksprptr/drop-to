@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   RequestTimeoutException,
   Res,
@@ -77,6 +78,21 @@ export class StorageController {
     @Param('id') id: string,
   ): Promise<DriveEntryEntity[]> {
     return this.registry.resolve(backend).listContents(id);
+  }
+
+  @ApiOperation({ summary: 'Resolve display names for a set of ids (breadcrumb rebuild)' })
+  @ApiOkResponse({ description: 'Id → name pairs' })
+  @Get(':backend/names')
+  async resolveNames(
+    @Param('backend') backend: string,
+    @Query('ids') ids?: string,
+  ): Promise<Array<{ id: string; name: string }>> {
+    const list = (ids ?? '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+    return list.length === 0 ? [] : this.registry.resolve(backend).resolveNames(list);
   }
 
   @ApiOperation({ summary: 'Download a file' })

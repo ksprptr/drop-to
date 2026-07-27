@@ -32,6 +32,21 @@ export const listContents = async (
 };
 
 /**
+ * Resolves the display names of a set of ids (rebuilding a breadcrumb from a deep link).
+ **/
+export const resolveNames = async (
+  backend: StorageBackend,
+  ids: string[],
+): Promise<{ id: string; name: string }[]> => {
+  const http = await getHttp();
+  const { data } = await http.get<{ id: string; name: string }[]>(`/storage/${backend}/names`, {
+    params: { ids: ids.join(',') },
+  });
+
+  return data;
+};
+
+/**
  * Creates a subfolder inside a folder.
  **/
 export const createSubfolder = async (

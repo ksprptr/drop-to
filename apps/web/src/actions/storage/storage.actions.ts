@@ -9,6 +9,7 @@ import {
   listContents,
   moveItem,
   renameItem,
+  resolveNames,
 } from '@/common/services/api/storage.api';
 import { type ActionResult, runAction } from '@/common/utils/action.functions';
 
@@ -27,6 +28,16 @@ export async function listContentsAction(
   folderId: string,
 ): Promise<ActionResult<DriveEntry[]>> {
   return runAction(() => listContents(backend, folderId));
+}
+
+/**
+ * Resolves display names for a set of ids (rebuilding a breadcrumb from a deep link).
+ **/
+export async function resolvePathAction(
+  backend: StorageBackend,
+  ids: string[],
+): Promise<ActionResult<{ id: string; name: string }[]>> {
+  return runAction(() => resolveNames(backend, ids));
 }
 
 /**

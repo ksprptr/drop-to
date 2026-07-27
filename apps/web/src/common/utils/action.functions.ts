@@ -10,18 +10,6 @@ export interface ActionResult<T = void> {
 }
 
 /**
- * Wraps a server-side API call into a serializable {@link ActionResult} (never throws).
- **/
-export async function runAction<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
-  try {
-    return { ok: true, data: await fn() };
-  } catch (error) {
-    const status = isAxiosError(error) ? error.response?.status : undefined;
-    return { ok: false, error: extractApiError(error), status };
-  }
-}
-
-/**
  * Extracts the NestJS `{ message }` from a caught API error, or undefined.
  **/
 export const extractApiError = (error: unknown): string | undefined => {
@@ -35,3 +23,15 @@ export const extractApiError = (error: unknown): string | undefined => {
 
   return undefined;
 };
+
+/**
+ * Wraps a server-side API call into a serializable {@link ActionResult} (never throws).
+ **/
+export async function runAction<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
+  try {
+    return { ok: true, data: await fn() };
+  } catch (error) {
+    const status = isAxiosError(error) ? error.response?.status : undefined;
+    return { ok: false, error: extractApiError(error), status };
+  }
+}

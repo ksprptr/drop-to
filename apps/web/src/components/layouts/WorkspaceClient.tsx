@@ -1,7 +1,7 @@
 'use client';
 
 import type { StorageBackend, StorageStatus } from '@dropto/types';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { disconnectAction, saveFoldersAction } from '@/actions/auth/auth.actions';
@@ -11,6 +11,7 @@ import {
   listContentsAction,
   moveItemAction,
   renameItemAction,
+  resolvePathAction,
   statusesAction,
 } from '@/actions/storage/storage.actions';
 import { useBrowsePane } from '@/common/hooks/useBrowsePane';
@@ -23,11 +24,14 @@ import { type PickedFolder, usePicker } from '@/common/services/picker/usePicker
 import type {
   BatchRuntime,
   Crumb,
+  SortDir,
+  SortKey,
   UploadBatch,
   UploadItem,
   ViewEntry,
 } from '@/common/types/workspace.types';
 import { extractApiErrorMessage, isCanceledError } from '@/common/utils/error.functions';
+import { buildWorkspaceUrl, slugify } from '@/common/utils/storage-url';
 import { isTopLevelFolder, topLevelName, uniqueName } from '@/common/utils/upload.functions';
 import Button from '@/components/common/Button';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -50,6 +54,12 @@ interface Props {
   username: string;
   /** Statuses fetched server-side, for first paint. */
   initialStatuses: StorageStatus[];
+  /** Backend from the URL (already validated connected), for first paint without a flash. */
+  initialBackend?: StorageBackend | null;
+  /** Breadcrumb resolved server-side (root + named folders), so a deep link paints with real names. */
+  initialPath?: Crumb[];
+  /** The URL points at a folder that doesn't exist / isn't authorized (server-detected 404). */
+  initialNotFound?: boolean;
 }
 
 /**
@@ -84,9 +94,16 @@ interface ExtensionWarning {
 /**
  * Main workspace: sidebar + file browser + preview, with uploads and account management.
  **/
-function WorkspaceInner({ username, initialStatuses }: Props) {
+function WorkspaceInner({
+  username,
+  initialStatuses,
+  initialBackend,
+  initialPath,
+  initialNotFound,
+}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const toast = useToast();
   const { openPicker } = usePicker();
   const { setBatches, setDownloads, updateTask, setBatchStatus, scheduleRemoveBatch, batchRuntime } =
@@ -94,8 +111,8 @@ function WorkspaceInner({ username, initialStatuses }: Props) {
 
   const [statuses, setStatuses] = useState<StorageStatus[]>(initialStatuses);
   const [loadingStatus, setLoadingStatus] = useState(false);
-  const [activeBackend, setActiveBackend] = useState<StorageBackend | null>(null);
-  const [path, setPath] = useState<Crumb[]>([]);
+  const [activeBackend, setActiveBackend] = useState<StorageBackend | null>(initialBackend ?? null);
+  const [path, setPath] = useState<Crumb[]>(initialPath ?? []);
   const [entries, setEntries] = useState<ViewEntry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
   const [selected, setSelected] = useState<ViewEntry | null>(null);
@@ -123,6 +140,10 @@ function WorkspaceInner({ username, initialStatuses }: Props) {
 
   const handledParams = useRef(false);
   const duplicateResolve = useRef<((choice: 'replace' | 'keep' | 'cancel') => void) | null>(null);
+  // id → display name, so navigating (and rebuilding a deep-linked breadcrumb) shows real names.
+  const nameCache = useRef<Map<string, string>>(
+    new Map((initialPath ?? []).map((crumb) => [crumb.id, crumb.name])),
+  );
 
   const driveStatus = statuses.find((status) => status.backend === 'drive') ?? null;
   const activeStatus = activeBackend
@@ -131,6 +152,16 @@ function WorkspaceInner({ username, initialStatuses }: Props) {
 
   const currentFolderId = path.length > 0 ? path[path.length - 1].id : null;
   const atRoots = path.length === 0;
+
+  // Server-detected 404 (bad folder URL): show it in the file area while still on that URL; it
+  // clears as soon as the operator navigates elsewhere.
+  const notFoundPathname = useRef(initialNotFound ? pathname : null);
+  const notFound = notFoundPathname.current !== null && notFoundPathname.current === pathname;
+
+  // Sort lives in the URL query (?sort=&dir=) so it's shareable; the main pane is controlled by it.
+  const sortParam = searchParams.get('sort');
+  const sortKey: SortKey = sortParam === 'modified' || sortParam === 'size' ? sortParam : 'name';
+  const sortDir: SortDir = searchParams.get('dir') === 'desc' ? 'desc' : 'asc';
 
   const roots = useMemo<ViewEntry[]>(
     () =>
@@ -172,20 +203,79 @@ function WorkspaceInner({ username, initialStatuses }: Props) {
   // The second (split) pane: an independent browser over the same backend.
   const paneB = useBrowsePane(activeBackend, roots, onPaneError);
 
-  // Keep the active backend valid (default to the first connected; drop if disconnected).
+  // Derive the browse location from the URL (/<backend>/<rootSlug>/<id…>). Navigation updates the URL
+  // via window.history (client-only, no server round-trip), so this stays fast — like a real Drive.
   useEffect(() => {
-    setActiveBackend((current) => {
-      const stillConnected =
-        current !== null && statuses.some((s) => s.backend === current && s.connected);
-      return stillConnected ? current : pickDefaultBackend(statuses);
-    });
-  }, [statuses]);
+    const segments = pathname.split('/').filter(Boolean).map(decodeURIComponent);
+    const paramBackend = segments[0] === 'drive' || segments[0] === 's3' ? segments[0] : null;
+    const connected = statuses.filter((status) => status.connected).map((status) => status.backend);
 
-  // Reset the browse path whenever the active storage changes.
-  useEffect(() => {
-    setPath([]);
+    // Server-detected 404: keep the sidebar (select the backend) but don't load the bad folder.
+    if (notFound) {
+      if (paramBackend && connected.includes(paramBackend)) {
+        setActiveBackend(paramBackend);
+      }
+      setPath([]);
+      return;
+    }
+
+    // Only connected backends are browsable; redirect away from an unknown/disconnected URL.
+    if (paramBackend === null || !connected.includes(paramBackend)) {
+      const fallback = pickDefaultBackend(statuses);
+      if (fallback === null) {
+        setActiveBackend(null);
+        setPath([]);
+        setSelected(null);
+        return;
+      }
+      router.replace(`/${fallback}`);
+      return;
+    }
+
+    const backend = paramBackend;
+    const backendRoots = statuses.find((status) => status.backend === backend)?.roots ?? [];
+    const folderSegs = segments.slice(1);
+    const root = folderSegs.length > 0 && backendRoots.find((r) => slugify(r.name) === folderSegs[0]);
+
+    if (!root) {
+      setActiveBackend(backend);
+      setPath([]);
+      setSelected(null);
+      return;
+    }
+
+    // Names come from the cache (populated by clicks and the server-resolved initial path), so the
+    // breadcrumb paints instantly. Any gap (rare) is filled once, with no placeholder shown.
+    const restIds = folderSegs.slice(1);
+    setActiveBackend(backend);
+    setPath([
+      { id: root.id, name: root.name },
+      ...restIds.map((id) => ({ id, name: nameCache.current.get(id) ?? '' })),
+    ]);
     setSelected(null);
-  }, [activeBackend]);
+
+    const missing = restIds.filter((id) => !nameCache.current.has(id));
+    if (missing.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const result = await resolvePathAction(backend, missing);
+      if (cancelled || !result.ok) {
+        return;
+      }
+      for (const pair of result.data ?? []) {
+        nameCache.current.set(pair.id, pair.name);
+      }
+      setPath((current) =>
+        current.map((crumb) => ({ ...crumb, name: nameCache.current.get(crumb.id) ?? crumb.name })),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, statuses, router]);
 
   // Drop any multi-select whenever the folder or storage changes.
   useEffect(() => {
@@ -207,9 +297,9 @@ function WorkspaceInner({ username, initialStatuses }: Props) {
       toast.error(`Failed to connect the Google account (${error}).`);
     }
     if (searchParams.get('connected') || searchParams.get('error')) {
-      router.replace('/');
+      window.history.replaceState(null, '', window.location.pathname);
     }
-  }, [searchParams, toast, loadStatus, router]);
+  }, [searchParams, toast, loadStatus]);
 
   const loadEntries = useCallback(async () => {
     if (currentFolderId === null || activeBackend === null) {
@@ -250,19 +340,48 @@ function WorkspaceInner({ username, initialStatuses }: Props) {
     await Promise.all([loadEntries(), split ? paneB.reload() : Promise.resolve()]);
   }, [loadEntries, split, paneB]);
 
-  const openFolder = useCallback((entry: ViewEntry) => {
-    setSelected(null);
-    setPath((current) => [...current, { id: entry.id, name: entry.name }]);
-  }, []);
+  const openFolder = useCallback(
+    (entry: ViewEntry) => {
+      if (activeBackend === null) {
+        return;
+      }
+      nameCache.current.set(entry.id, entry.name);
+      const url = buildWorkspaceUrl(activeBackend, [...path, { id: entry.id, name: entry.name }]);
+      window.history.pushState(null, '', url);
+    },
+    [activeBackend, path],
+  );
 
-  const navigate = useCallback((index: number) => {
-    setSelected(null);
-    setPath((current) => (index < 0 ? [] : current.slice(0, index + 1)));
-  }, []);
+  const navigate = useCallback(
+    (index: number) => {
+      if (activeBackend === null) {
+        return;
+      }
+      const url = buildWorkspaceUrl(activeBackend, index < 0 ? [] : path.slice(0, index + 1));
+      window.history.pushState(null, '', url);
+    },
+    [activeBackend, path],
+  );
 
   const selectStorage = useCallback((backend: StorageBackend) => {
-    setActiveBackend(backend);
+    window.history.pushState(null, '', `/${backend}`);
   }, []);
+
+  const handleCopyLink = useCallback(() => {
+    void navigator.clipboard.writeText(window.location.href);
+    toast.success('Link copied to clipboard.');
+  }, [toast]);
+
+  const handleToggleSort = useCallback(
+    (key: SortKey) => {
+      const nextDir: SortDir = key === sortKey ? (sortDir === 'asc' ? 'desc' : 'asc') : 'asc';
+      const base = activeBackend ? buildWorkspaceUrl(activeBackend, path) : window.location.pathname;
+      // Default (name/asc) stays out of the URL to keep it clean.
+      const query = key === 'name' && nextDir === 'asc' ? '' : `?sort=${key}&dir=${nextDir}`;
+      window.history.replaceState(null, '', `${base}${query}`);
+    },
+    [sortKey, sortDir, activeBackend, path],
+  );
 
   // --- Split view + drag-to-move ------------------------------------------------
 
@@ -527,10 +646,10 @@ function WorkspaceInner({ username, initialStatuses }: Props) {
         }
         updateTask(batchId, taskId, { status: 'uploading' });
         try {
-          const targetFolderId = await ensureFolder(dirPath);
+          const uploadFolderId = await ensureFolder(dirPath);
           const result = await uploadFile(
             backend,
-            targetFolderId,
+            uploadFolderId,
             item.file,
             ({ percent, rate }) => {
               updateTask(batchId, taskId, {
@@ -699,6 +818,8 @@ function WorkspaceInner({ username, initialStatuses }: Props) {
   }, [entries]);
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const setSelection = useCallback((ids: string[]) => setSelectedIds(new Set(ids)), []);
 
   const confirmBulkDelete = useCallback(async () => {
     const ids = bulkPane === 0 ? [...selectedIds] : [...paneB.selectedIds];
@@ -895,6 +1016,7 @@ function WorkspaceInner({ username, initialStatuses }: Props) {
             rootIcon={rootIcon}
             entries={entries}
             loading={currentFolderId === null ? loadingStatus : loadingEntries}
+            notFound={notFound}
             selectedId={activePane === 0 ? (selected?.id ?? null) : null}
             canUpload={currentFolderId !== null}
             canModify={currentFolderId !== null}
@@ -924,6 +1046,7 @@ function WorkspaceInner({ username, initialStatuses }: Props) {
             onToggleSelect={toggleSelect}
             onSelectAll={selectAll}
             onClearSelection={clearSelection}
+            onSetSelectedIds={setSelection}
             onBulkDelete={() => {
               setBulkPane(0);
               setBulkDeleteOpen(true);
@@ -932,10 +1055,14 @@ function WorkspaceInner({ username, initialStatuses }: Props) {
             onRename={openRename}
             onDelete={setConfirmTarget}
             storagePicker={{
-              storages: statuses.filter((status) => status.connected),
+              storages: statuses,
               activeBackend,
               onSelect: selectStorage,
             }}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onToggleSort={handleToggleSort}
+            onCopyLink={handleCopyLink}
           />
 
           <div className='min-w-0 overflow-hidden'>
@@ -978,6 +1105,7 @@ function WorkspaceInner({ username, initialStatuses }: Props) {
                 onToggleSelect={paneB.toggleSelect}
                 onSelectAll={paneB.selectAll}
                 onClearSelection={paneB.clearSelection}
+                onSetSelectedIds={paneB.setSelection}
                 onBulkDelete={() => {
                   setBulkPane(1);
                   setBulkDeleteOpen(true);

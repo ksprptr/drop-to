@@ -49,6 +49,9 @@ export interface StorageProvider {
   /** Lists the files and subfolders directly inside an authorized folder. */
   listContents(folderId: string): Promise<DriveEntryEntity[]>;
 
+  /** Resolves the display names of ids (for rebuilding a breadcrumb from a deep link). */
+  resolveNames(ids: string[]): Promise<Array<{ id: string; name: string }>>;
+
   /** Creates a subfolder inside an authorized folder. */
   createFolder(parentId: string, name: string): Promise<DriveEntryEntity>;
 

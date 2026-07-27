@@ -11,7 +11,13 @@ import {
   useState,
 } from 'react';
 
-import type { Crumb, UploadItem, ViewEntry } from '@/common/types/workspace.types';
+import type {
+  Crumb,
+  SortDir,
+  SortKey,
+  UploadItem,
+  ViewEntry,
+} from '@/common/types/workspace.types';
 import { formatBytes, formatDate } from '@/common/utils/format.functions';
 import Icon from '@/components/common/Icon';
 import LoadingIndicator from '@/components/loadings/LoadingIndicator';
@@ -35,6 +41,8 @@ interface Props {
   rootIcon: string;
   entries: ViewEntry[];
   loading: boolean;
+  /** The current folder URL doesn't exist / isn't authorized — show a 404 in the file area. */
+  notFound?: boolean;
   selectedId: string | null;
   canUpload: boolean;
   /** False at the roots level (no select/rename/delete). */
@@ -50,18 +58,26 @@ interface Props {
   onToggleSelect: (id: string) => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
+  /** Replaces the whole selection set (used for Shift-click range select on desktop). */
+  onSetSelectedIds?: (ids: string[]) => void;
   onBulkDelete: () => void;
   onDownload: (entry: ViewEntry) => void;
   onRename: (entry: ViewEntry) => void;
   onDelete: (entry: ViewEntry) => void;
   split?: boolean;
   onToggleSplit?: () => void;
+  /** Copies the current folder's shareable URL (main pane only). */
+  onCopyLink?: () => void;
   /** Whether this pane can accept an in-progress drag-to-move. */
   acceptMove?: boolean;
   onMoveDragStart?: (ids: string[]) => void;
   onMoveDragEnd?: () => void;
   onMoveDrop?: () => void;
   storagePicker?: BreadcrumbStoragePicker;
+  /** Controlled sort (URL-driven); falls back to internal state when omitted (e.g. the split pane). */
+  sortKey?: SortKey;
+  sortDir?: SortDir;
+  onToggleSort?: (key: SortKey) => void;
 }
 
 /** An open row-actions menu, anchored to the three-dot button's screen position. */
@@ -70,8 +86,6 @@ interface RowMenu {
   rect: DOMRect;
 }
 
-type SortKey = 'name' | 'modified' | 'size';
-type SortDir = 'asc' | 'desc';
 
 /**
  * Icon name for a MIME type.
@@ -149,6 +163,7 @@ export default function FileBrowser({
   rootIcon,
   entries,
   loading,
+  notFound = false,
   selectedId,
   canUpload,
   canModify,
@@ -163,23 +178,32 @@ export default function FileBrowser({
   onToggleSelect,
   onSelectAll,
   onClearSelection,
+  onSetSelectedIds,
   onBulkDelete,
   onDownload,
   onRename,
   onDelete,
   split = false,
   onToggleSplit,
+  onCopyLink,
   acceptMove = false,
   onMoveDragStart,
   onMoveDragEnd,
   onMoveDrop,
   storagePicker,
+  sortKey: controlledSortKey,
+  sortDir: controlledSortDir,
+  onToggleSort,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  // Anchor row for Shift-click range selection.
+  const selectionAnchor = useRef<string | null>(null);
   const [dragKind, setDragKind] = useState<'upload' | 'move' | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>('name');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [internalSortKey, setInternalSortKey] = useState<SortKey>('name');
+  const [internalSortDir, setInternalSortDir] = useState<SortDir>('asc');
+  const sortKey = controlledSortKey ?? internalSortKey;
+  const sortDir = controlledSortDir ?? internalSortDir;
   const [menu, setMenu] = useState<RowMenu | null>(null);
   const [toolbarMenu, setToolbarMenu] = useState<DOMRect | null>(null);
 
@@ -232,11 +256,15 @@ export default function FileBrowser({
   }, [entries, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
-    if (key === sortKey) {
-      setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'));
+    if (onToggleSort) {
+      onToggleSort(key);
+      return;
+    }
+    if (key === internalSortKey) {
+      setInternalSortDir((current) => (current === 'asc' ? 'desc' : 'asc'));
     } else {
-      setSortKey(key);
-      setSortDir('asc');
+      setInternalSortKey(key);
+      setInternalSortDir('asc');
     }
   };
 
@@ -374,7 +402,7 @@ export default function FileBrowser({
               {entries.length} item{entries.length === 1 ? '' : 's'}
             </span>
           )}
-          {(canUpload || onToggleSplit) && (
+          {(canUpload || onToggleSplit || onCopyLink) && (
             <button
               type='button'
               onClick={openToolbarMenu}
@@ -389,38 +417,6 @@ export default function FileBrowser({
           )}
         </div>
       </header>
-
-      {/* Bulk selection bar */}
-      <AnimatePresence initial={false}>
-        {canModify && selectedIds.size > 0 && (
-          <motion.div
-            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-            animate={{ opacity: 1, height: 'auto', marginBottom: 4 }}
-            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-            transition={{ duration: 0.12, ease: 'easeInOut' }}
-            className='flex items-center justify-between gap-x-3 overflow-hidden rounded-lg bg-green-600/10 px-3 py-2'>
-            <span className='text-xs font-medium text-green-700 dark:text-green-400'>
-              {selectedIds.size} selected
-            </span>
-            <div className='flex items-center gap-x-1'>
-              <button
-                type='button'
-                onClick={onClearSelection}
-                title='Clear selection'
-                className='inline-flex h-8 w-8 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'>
-                <Icon icon='XMark' className='h-4 w-4' />
-              </button>
-              <button
-                type='button'
-                onClick={onBulkDelete}
-                title='Delete selected'
-                className='inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 transition hover:bg-red-500/10'>
-                <Icon icon='Trash' className='h-4 w-4' />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Content / drop zone */}
       <div
@@ -455,7 +451,15 @@ export default function FileBrowser({
           )}
         </AnimatePresence>
 
-        {loading ? (
+        {notFound ? (
+          <div className='flex h-full flex-col items-center justify-center text-center text-zinc-600 dark:text-zinc-400'>
+            <Icon icon='FolderOpen' className='mb-3 h-9 w-9 opacity-40' />
+            <p className='text-sm font-medium text-zinc-950 dark:text-zinc-50'>
+              404 — Folder not found
+            </p>
+            <p className='mt-1 text-xs'>This folder doesn’t exist or isn’t available.</p>
+          </div>
+        ) : loading ? (
           <div className='flex h-full items-center justify-center gap-x-2 text-sm text-zinc-600 dark:text-zinc-400'>
             <LoadingIndicator />
             Loading…
@@ -521,7 +525,29 @@ export default function FileBrowser({
                       onClick={(event) => {
                         // Don't let the click reach the finder's deselect handler.
                         event.stopPropagation();
+                        const ids = sorted.map((row) => row.id);
+                        // Shift-click: select the range from the anchor to this row.
+                        if (event.shiftKey && onSetSelectedIds && selectionAnchor.current) {
+                          const from = ids.indexOf(selectionAnchor.current);
+                          const to = ids.indexOf(entry.id);
+                          if (from !== -1 && to !== -1) {
+                            const [lo, hi] = from < to ? [from, to] : [to, from];
+                            onSetSelectedIds(ids.slice(lo, hi + 1));
+                            return;
+                          }
+                        }
+                        // Cmd/Ctrl-click: toggle this row in the multi-selection.
+                        if ((event.metaKey || event.ctrlKey) && canModify) {
+                          onToggleSelect(entry.id);
+                          selectionAnchor.current = entry.id;
+                          return;
+                        }
+                        // Plain click: single select (preview) and drop any multi-selection.
                         onSelect(entry);
+                        if (canModify) {
+                          onClearSelection();
+                        }
+                        selectionAnchor.current = entry.id;
                       }}
                       onDoubleClick={() => {
                         if (entry.isFolder) onOpenFolder(entry);
@@ -538,21 +564,27 @@ export default function FileBrowser({
                           onSelect(entry);
                         }
                       }}
-                      className={`grid ${gridCols} w-full items-center gap-x-3 rounded-lg px-3 py-2 text-left transition ${
-                        canModify ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
-                      } ${
+                      className={`grid ${gridCols} w-full cursor-pointer items-center gap-x-3 rounded-lg px-3 py-2 text-left transition ${
                         checked || selected
                           ? 'bg-green-600/10'
                           : 'hover:bg-zinc-200 dark:hover:bg-zinc-800'
                       }`}>
                       {canModify && (
-                        <input
-                          type='checkbox'
-                          checked={checked}
-                          onClick={(event) => event.stopPropagation()}
-                          onChange={() => onToggleSelect(entry.id)}
-                          className='h-4 w-4 cursor-pointer accent-green-600'
-                        />
+                        // Wrapper keeps the grid cell on desktop (so columns stay aligned); the
+                        // checkbox itself shows only on mobile — desktop multi-select is Shift/Cmd-click.
+                        <span className='flex h-4 w-4 items-center justify-center'>
+                          <input
+                            type='checkbox'
+                            checked={checked}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={() => onToggleSelect(entry.id)}
+                            className='hidden h-4 w-4 cursor-pointer accent-green-600 max-sm:block'
+                          />
+                          {/* Desktop: a check indicator (no checkbox) for selected rows. */}
+                          {checked && (
+                            <Icon icon='Check' className='hidden h-4 w-4 text-green-600 sm:block' />
+                          )}
+                        </span>
                       )}
                       <span className='flex min-w-0 items-center gap-x-2.5'>
                         {entry.isFolder ? (
@@ -596,6 +628,38 @@ export default function FileBrowser({
           </div>
         )}
       </div>
+
+      {/* Bulk selection bar — below the list, styled like the sidebar */}
+      <AnimatePresence initial={false}>
+        {canModify && selectedIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, marginTop: 0 }}
+            animate={{ opacity: 1, height: 'auto', marginTop: 8 }}
+            exit={{ opacity: 0, height: 0, marginTop: 0 }}
+            transition={{ duration: 0.12, ease: 'easeInOut' }}
+            className='flex shrink-0 items-center justify-between gap-x-3 overflow-hidden rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800'>
+            <span className='text-xs font-medium text-zinc-700 dark:text-zinc-300'>
+              {selectedIds.size} selected
+            </span>
+            <div className='flex items-center gap-x-1'>
+              <button
+                type='button'
+                onClick={onClearSelection}
+                title='Clear selection'
+                className='inline-flex h-8 w-8 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'>
+                <Icon icon='XMark' className='h-4 w-4' />
+              </button>
+              <button
+                type='button'
+                onClick={onBulkDelete}
+                title='Delete selected'
+                className='inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 transition hover:bg-red-500/10'>
+                <Icon icon='Trash' className='h-4 w-4' />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <input ref={fileInputRef} type='file' multiple className='hidden' onChange={handleInput} />
       <input ref={folderInputRef} type='file' className='hidden' onChange={handleInput} />
@@ -648,6 +712,13 @@ export default function FileBrowser({
                 onClick={() => runToolbarAction(onToggleSplit)}
               />
             )}
+            {onCopyLink && (
+              <MenuItem
+                icon='LinkIcon'
+                label='Copy link'
+                onClick={() => runToolbarAction(onCopyLink)}
+              />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -660,7 +731,7 @@ export default function FileBrowser({
             role='menu'
             onClick={(event) => event.stopPropagation()}
             style={(() => {
-              const width = 176;
+              const width = 200;
               const left = Math.max(8, menu.rect.right - width);
               const flipUp =
                 typeof window !== 'undefined' && menu.rect.bottom + 200 > window.innerHeight;

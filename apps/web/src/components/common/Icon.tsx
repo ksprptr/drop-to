@@ -3,6 +3,7 @@
 import {
   Archive,
   BadgeCheck,
+  Check,
   ChevronDown,
   ChevronRight,
   ChevronsUpDown,
@@ -55,6 +56,7 @@ const ICONS: Record<string, LucideIcon> = {
   ArrowTopRightOnSquare: ExternalLink,
   ArrowUpTray: Upload,
   ArrowsPointingIn: Move,
+  Check: Check,
   CheckBadge: BadgeCheck,
   ChevronDown,
   ChevronRight,

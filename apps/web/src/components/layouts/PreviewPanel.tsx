@@ -112,10 +112,13 @@ export default function PreviewPanel({
             </div>
 
             <div className='mt-6 flex flex-col gap-y-2'>
-              <Button variant='primary' fullWidth onClick={() => onDownload(entry)}>
-                <Icon icon='ArrowDownTray' className='h-4 w-4' />
-                {entry.isFolder ? 'Download as ZIP' : 'Download'}
-              </Button>
+              {/* Root folders (storage roots) can't be downloaded as a ZIP. */}
+              {!isRoot && (
+                <Button variant='primary' fullWidth onClick={() => onDownload(entry)}>
+                  <Icon icon='ArrowDownTray' className='h-4 w-4' />
+                  {entry.isFolder ? 'Download as ZIP' : 'Download'}
+                </Button>
+              )}
               {entry.webViewLink && !entry.isFolder && (
                 <a
                   href={entry.webViewLink}
