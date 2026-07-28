@@ -1,9 +1,7 @@
 import type { JwtService } from '@nestjs/jwt';
+import { createHash } from 'node:crypto';
 
-import {
-  ACCESS_TOKEN_TTL_SECONDS,
-  REFRESH_TOKEN_TTL_SECONDS,
-} from '@/common/services/auth-tokens/auth-tokens.constants';
+import { ACCESS_TOKEN_TTL_SECONDS } from '@/common/services/auth-tokens/auth-tokens.constants';
 import type { JwtConfig } from '@/config/jwt.config';
 
 import { AuthHelpers } from './auth.helpers';
@@ -11,7 +9,7 @@ import { AuthHelpers } from './auth.helpers';
 describe('AuthHelpers', () => {
   const signAsync = jest.fn().mockResolvedValue('signed');
   const jwt = { signAsync } as unknown as JwtService;
-  const cfg = { accessSecret: 'access-secret', refreshSecret: 'refresh-secret' } as JwtConfig;
+  const cfg = { accessSecret: 'access-secret' } as JwtConfig;
   const helpers = new AuthHelpers(jwt, cfg);
 
   beforeEach(() => signAsync.mockClear());
@@ -24,11 +22,20 @@ describe('AuthHelpers', () => {
     );
   });
 
-  it('signs the refresh token with the refresh secret, HS256 and TTL', async () => {
-    await helpers.signRefreshToken({ sub: 'admin', ver: 2 });
-    expect(signAsync).toHaveBeenCalledWith(
-      { sub: 'admin', ver: 2 },
-      { secret: 'refresh-secret', algorithm: 'HS256', expiresIn: REFRESH_TOKEN_TTL_SECONDS },
-    );
+  it('mints a high-entropy, unique refresh secret each call', () => {
+    const a = helpers.generateRefreshSecret();
+    const b = helpers.generateRefreshSecret();
+
+    expect(a).not.toBe(b);
+    expect(a).toMatch(/^[A-Za-z0-9_-]+$/); // base64url
+    expect(a.length).toBeGreaterThanOrEqual(43); // 48 bytes → 64 base64url chars
+  });
+
+  it('hashes a token with SHA-256 (deterministic, never the raw value)', () => {
+    const hash = helpers.hashToken('secret-token');
+
+    expect(hash).toBe(createHash('sha256').update('secret-token').digest('hex'));
+    expect(hash).not.toContain('secret-token');
+    expect(helpers.hashToken('secret-token')).toBe(hash);
   });
 });

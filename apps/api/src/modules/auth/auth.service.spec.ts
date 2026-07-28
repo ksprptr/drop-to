@@ -1,8 +1,6 @@
 import { UnauthorizedException } from '@nestjs/common';
-import { JsonWebTokenError, JwtService } from '@nestjs/jwt';
 
 import { type AuthConfig } from '@/config/auth.config';
-import { type JwtConfig } from '@/config/jwt.config';
 import { PrismaService } from '@/prisma/prisma.service';
 
 import { AuthService } from './auth.service';
@@ -11,10 +9,10 @@ import { AuthHelpers } from './helpers/auth.helpers';
 
 describe('AuthService', () => {
   let service: AuthService;
-  let jwtService: { verifyAsync: jest.Mock };
-  let authHelpers: { signAccessToken: jest.Mock; signRefreshToken: jest.Mock };
+  let authHelpers: { signAccessToken: jest.Mock; generateRefreshSecret: jest.Mock; hashToken: jest.Mock };
   let authState: { getTokenVersion: jest.Mock; bumpTokenVersion: jest.Mock };
   let prisma: {
+    $transaction: jest.Mock;
     refreshToken: {
       create: jest.Mock;
       findUnique: jest.Mock;
@@ -25,39 +23,39 @@ describe('AuthService', () => {
   };
 
   const authCfg = { username: 'operator', password: 'secret', cookieDomain: undefined } as AuthConfig;
-  const jwtCfg = { accessSecret: 'access', refreshSecret: 'refresh' } as JwtConfig;
 
   const liveRow = () => ({
     id: 'row-1',
+    tokenHash: 'hashed',
     subject: 'operator',
     revokedAt: null,
     expiresAt: new Date(Date.now() + 60_000),
+    sessionExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
   });
 
   beforeEach(() => {
-    jwtService = { verifyAsync: jest.fn() };
     authHelpers = {
       signAccessToken: jest.fn().mockResolvedValue('access-token'),
-      signRefreshToken: jest.fn().mockResolvedValue('refresh-token'),
+      generateRefreshSecret: jest.fn().mockReturnValue('raw-secret'),
+      hashToken: jest.fn().mockReturnValue('hashed'),
     };
     authState = {
       getTokenVersion: jest.fn().mockResolvedValue(0),
       bumpTokenVersion: jest.fn().mockResolvedValue(undefined),
     };
     prisma = {
+      $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(prisma)),
       refreshToken: {
         create: jest.fn().mockResolvedValue({ id: 'row-2' }),
         findUnique: jest.fn().mockResolvedValue(liveRow()),
         update: jest.fn().mockResolvedValue(undefined),
-        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
     };
 
     service = new AuthService(
       authCfg,
-      jwtCfg,
-      jwtService as unknown as JwtService,
       authHelpers as unknown as AuthHelpers,
       authState as unknown as AuthStateService,
       prisma as unknown as PrismaService,
@@ -65,14 +63,14 @@ describe('AuthService', () => {
   });
 
   describe('login', () => {
-    it('issues a token pair (backed by a new refresh row) for valid credentials', async () => {
+    it('issues a pair (opaque refresh secret + new row) for valid credentials', async () => {
       await expect(service.login({ username: 'operator', password: 'secret' })).resolves.toEqual({
         accessToken: 'access-token',
-        refreshToken: 'refresh-token',
+        refreshToken: 'raw-secret',
       });
-      expect(prisma.refreshToken.create).toHaveBeenCalledTimes(1);
-      expect(authHelpers.signRefreshToken).toHaveBeenCalledWith(
-        expect.objectContaining({ sub: 'operator', jti: 'row-2' }),
+      // Only the hash of the freshly-minted secret is persisted.
+      expect(prisma.refreshToken.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ tokenHash: 'hashed', subject: 'operator' }) }),
       );
     });
 
@@ -90,14 +88,19 @@ describe('AuthService', () => {
   });
 
   describe('refreshTokens', () => {
-    it('rotates the pair from a valid, current token and revokes the old row', async () => {
-      jwtService.verifyAsync.mockResolvedValue({ sub: 'operator', ver: 0, jti: 'row-1' });
+    it('rotates the pair, revoking the old row and inheriting its absolute deadline', async () => {
+      const row = liveRow();
+      prisma.refreshToken.findUnique.mockResolvedValue(row);
 
-      await expect(service.refreshTokens('valid-refresh')).resolves.toEqual({
+      await expect(service.refreshTokens('raw-refresh')).resolves.toEqual({
         accessToken: 'access-token',
-        refreshToken: 'refresh-token',
+        refreshToken: 'raw-secret',
       });
-      // Old row marked revoked and linked to its replacement; expired rows pruned.
+      // New row inherits the original session deadline (no extension past login + absolute TTL).
+      expect(prisma.refreshToken.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ sessionExpiresAt: row.sessionExpiresAt }) }),
+      );
+      // Old row revoked + linked to its replacement; expired rows pruned.
       expect(prisma.refreshToken.update).toHaveBeenCalledWith({
         where: { id: 'row-1' },
         data: { revokedAt: expect.any(Date), replacedByTokenId: 'row-2' },
@@ -109,25 +112,7 @@ describe('AuthService', () => {
       await expect(service.refreshTokens(null)).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
-    it('rejects a refresh token whose subject is not the operator', async () => {
-      jwtService.verifyAsync.mockResolvedValue({ sub: 'someone-else', ver: 0, jti: 'row-1' });
-
-      await expect(service.refreshTokens('valid-refresh')).rejects.toBeInstanceOf(
-        UnauthorizedException,
-      );
-    });
-
-    it('rejects a refresh token whose version was revoked', async () => {
-      jwtService.verifyAsync.mockResolvedValue({ sub: 'operator', ver: 0, jti: 'row-1' });
-      authState.getTokenVersion.mockResolvedValue(3);
-
-      await expect(service.refreshTokens('stale-refresh')).rejects.toBeInstanceOf(
-        UnauthorizedException,
-      );
-    });
-
-    it('rejects an unknown token id (row was pruned / never issued)', async () => {
-      jwtService.verifyAsync.mockResolvedValue({ sub: 'operator', ver: 0, jti: 'gone' });
+    it('rejects an unknown token (no matching hash)', async () => {
       prisma.refreshToken.findUnique.mockResolvedValue(null);
 
       await expect(service.refreshTokens('orphan')).rejects.toBeInstanceOf(UnauthorizedException);
@@ -135,7 +120,6 @@ describe('AuthService', () => {
     });
 
     it('detects reuse of an already-revoked row and revokes every session', async () => {
-      jwtService.verifyAsync.mockResolvedValue({ sub: 'operator', ver: 0, jti: 'row-1' });
       prisma.refreshToken.findUnique.mockResolvedValue({ ...liveRow(), revokedAt: new Date() });
 
       await expect(service.refreshTokens('reused')).rejects.toBeInstanceOf(UnauthorizedException);
@@ -146,33 +130,33 @@ describe('AuthService', () => {
       expect(authState.bumpTokenVersion).toHaveBeenCalledTimes(1);
     });
 
-    it('rejects an expired row', async () => {
-      jwtService.verifyAsync.mockResolvedValue({ sub: 'operator', ver: 0, jti: 'row-1' });
+    it('rejects a token past its sliding idle window', async () => {
       prisma.refreshToken.findUnique.mockResolvedValue({
         ...liveRow(),
         expiresAt: new Date(Date.now() - 1000),
       });
 
-      await expect(service.refreshTokens('expired-row')).rejects.toBeInstanceOf(
-        UnauthorizedException,
-      );
+      await expect(service.refreshTokens('idle')).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
-    it('rejects an invalid or expired JWT', async () => {
-      jwtService.verifyAsync.mockRejectedValue(new JsonWebTokenError('jwt expired'));
+    it('rejects a token past the absolute session cap', async () => {
+      prisma.refreshToken.findUnique.mockResolvedValue({
+        ...liveRow(),
+        sessionExpiresAt: new Date(Date.now() - 1000),
+      });
 
-      await expect(service.refreshTokens('expired')).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(service.refreshTokens('capped')).rejects.toBeInstanceOf(UnauthorizedException);
     });
   });
 
   describe('logout', () => {
-    it('revokes the presented row and bumps the token version for a valid, current token', async () => {
-      jwtService.verifyAsync.mockResolvedValue({ sub: 'operator', ver: 0, jti: 'row-1' });
+    it('revokes the presented row and bumps the token version', async () => {
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
 
-      await service.logout('valid-refresh');
+      await service.logout('raw-refresh');
 
       expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
-        where: { id: 'row-1', revokedAt: null },
+        where: { tokenHash: 'hashed', revokedAt: null },
         data: { revokedAt: expect.any(Date) },
       });
       expect(authState.bumpTokenVersion).toHaveBeenCalledTimes(1);
@@ -181,21 +165,12 @@ describe('AuthService', () => {
     it('does nothing without a refresh token', async () => {
       await service.logout(null);
 
-      expect(jwtService.verifyAsync).not.toHaveBeenCalled();
+      expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
       expect(authState.bumpTokenVersion).not.toHaveBeenCalled();
     });
 
-    it('does not bump on an invalid refresh token', async () => {
-      jwtService.verifyAsync.mockRejectedValue(new JsonWebTokenError('bad'));
-
-      await service.logout('garbage');
-
-      expect(authState.bumpTokenVersion).not.toHaveBeenCalled();
-    });
-
-    it('does not bump when the version is already stale', async () => {
-      jwtService.verifyAsync.mockResolvedValue({ sub: 'operator', ver: 0, jti: 'row-1' });
-      authState.getTokenVersion.mockResolvedValue(5);
+    it('does not bump when no live row matched (unknown / already revoked)', async () => {
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 0 });
 
       await service.logout('stale');
 

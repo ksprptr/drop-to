@@ -1,11 +1,12 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
-import { JsonWebTokenError, JwtService } from '@nestjs/jwt';
 import { timingSafeEqual } from 'node:crypto';
+import { Prisma } from 'prisma/generated/prisma/client';
 
-import { REFRESH_TOKEN_TTL_SECONDS } from '@/common/services/auth-tokens/auth-tokens.constants';
-import { RefreshJwtPayload } from '@/common/types/auth-user.types';
+import {
+  REFRESH_ABSOLUTE_TTL_SECONDS,
+  REFRESH_TOKEN_TTL_SECONDS,
+} from '@/common/services/auth-tokens/auth-tokens.constants';
 import { type AuthConfig, authConfig } from '@/config/auth.config';
-import { type JwtConfig, jwtConfig } from '@/config/jwt.config';
 import { PrismaService } from '@/prisma/prisma.service';
 
 import { AuthStateService } from './auth-state.service';
@@ -20,15 +21,14 @@ interface IssuedSession {
 }
 
 /**
- * Authenticates the single env-defined operator and issues revocable access/refresh tokens.
- * Refresh tokens are rotated on every use and backed by a DB row so reuse is detectable.
+ * Authenticates the single env-defined operator. Access is a short-lived JWT; the refresh token is
+ * an opaque secret stored (hashed) in `RefreshToken`, rotated on every use with reuse detection and
+ * an absolute session cap.
  **/
 @Injectable()
 export class AuthService {
   constructor(
     @Inject(authConfig.KEY) private readonly authCfg: AuthConfig,
-    @Inject(jwtConfig.KEY) private readonly jwtCfg: JwtConfig,
-    private readonly jwtService: JwtService,
     private readonly authHelpers: AuthHelpers,
     private readonly authStateService: AuthStateService,
     private readonly prismaService: PrismaService,
@@ -57,45 +57,34 @@ export class AuthService {
       throw new UnauthorizedException('Missing refresh token.');
     }
 
-    let payload: RefreshJwtPayload;
-    try {
-      payload = await this.jwtService.verifyAsync(rawRefreshToken, {
-        secret: this.jwtCfg.refreshSecret,
-        algorithms: ['HS256'],
-      });
-    } catch (error) {
-      if (error instanceof JsonWebTokenError) {
-        throw new UnauthorizedException('Invalid or expired refresh token.');
-      }
-      throw error;
-    }
+    const tokenHash = this.authHelpers.hashToken(rawRefreshToken);
+    const existing = await this.prismaService.refreshToken.findUnique({ where: { tokenHash } });
 
-    const currentVersion = await this.authStateService.getTokenVersion();
-    if (payload.sub !== this.authCfg.username || payload.ver !== currentVersion || !payload.jti) {
-      throw new UnauthorizedException('Invalid refresh token.');
-    }
-
-    const record = await this.prismaService.refreshToken.findUnique({ where: { id: payload.jti } });
-
-    // Unknown id → the token was never issued or has already been pruned after expiry.
-    if (!record) {
+    if (!existing) {
       throw new UnauthorizedException('Invalid refresh token.');
     }
 
     // A revoked row means this token was already rotated — replaying it signals theft.
-    if (record.revokedAt) {
-      await this.revokeAllForSubject(payload.sub);
+    if (existing.revokedAt) {
+      await this.revokeAllForSubject(existing.subject);
       throw new UnauthorizedException('Refresh token reuse detected; all sessions were revoked.');
     }
 
-    if (record.expiresAt.getTime() <= Date.now()) {
+    // Reject once the sliding idle window OR the absolute session cap has passed.
+    const now = Date.now();
+    if (existing.expiresAt.getTime() <= now || existing.sessionExpiresAt.getTime() <= now) {
       throw new UnauthorizedException('Invalid or expired refresh token.');
     }
 
-    const session = await this.issueSession(payload.sub);
-    await this.prismaService.refreshToken.update({
-      where: { id: record.id },
-      data: { revokedAt: new Date(), replacedByTokenId: session.refreshTokenId },
+    // Rotate atomically: the new row inherits the original absolute deadline, and the old row is
+    // revoked + linked to its replacement in the same transaction (no window where both are live).
+    const session = await this.prismaService.$transaction(async (tx) => {
+      const issued = await this.issueSession(existing.subject, existing.sessionExpiresAt, tx);
+      await tx.refreshToken.update({
+        where: { id: existing.id },
+        data: { revokedAt: new Date(), replacedByTokenId: issued.refreshTokenId },
+      });
+      return issued;
     });
 
     await this.pruneExpired();
@@ -105,7 +94,7 @@ export class AuthService {
 
   /**
    * Logs out by revoking the presented refresh token's row and bumping the token version (so the
-   * still-valid access token is invalidated too). Only acts on a valid, current refresh token, so
+   * still-valid access token is invalidated too). A no-op for an unknown/already-revoked token, so
    * an anonymous caller can't force a logout.
    **/
   async logout(rawRefreshToken: string | null): Promise<void> {
@@ -113,44 +102,51 @@ export class AuthService {
       return;
     }
 
-    try {
-      const payload: RefreshJwtPayload = await this.jwtService.verifyAsync(rawRefreshToken, {
-        secret: this.jwtCfg.refreshSecret,
-        algorithms: ['HS256'],
-      });
+    const tokenHash = this.authHelpers.hashToken(rawRefreshToken);
+    const { count } = await this.prismaService.refreshToken.updateMany({
+      where: { tokenHash, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
 
-      const currentVersion = await this.authStateService.getTokenVersion();
-
-      if (payload.sub === this.authCfg.username && payload.ver === currentVersion) {
-        if (payload.jti) {
-          await this.prismaService.refreshToken.updateMany({
-            where: { id: payload.jti, revokedAt: null },
-            data: { revokedAt: new Date() },
-          });
-        }
-        await this.authStateService.bumpTokenVersion();
-      }
-    } catch {
-      // An invalid/expired refresh token has nothing to revoke — clearing cookies is enough.
+    if (count > 0) {
+      await this.authStateService.bumpTokenVersion();
     }
   }
 
   /**
-   * Creates a refresh-token row and signs the matching access + refresh JWTs (the refresh JWT
-   * carries the row id as its `jti`).
+   * Mints a refresh secret + its row and signs the matching access JWT. On a fresh login the
+   * absolute session window starts now; on rotation the caller passes the original deadline so the
+   * session can't be extended past it.
    **/
-  private async issueSession(subject: string): Promise<IssuedSession> {
+  private async issueSession(
+    subject: string,
+    sessionExpiresAt?: Date,
+    tx?: Prisma.TransactionClient,
+  ): Promise<IssuedSession> {
+    const db = tx ?? this.prismaService;
+    const rawRefreshToken = this.authHelpers.generateRefreshSecret();
+
+    const now = Date.now();
+    const absoluteExpiry =
+      sessionExpiresAt ?? new Date(now + REFRESH_ABSOLUTE_TTL_SECONDS * 1000);
+    const idleExpiry = new Date(now + REFRESH_TOKEN_TTL_SECONDS * 1000);
+    // The idle window slides forward each rotation but never past the absolute deadline.
+    const expiresAt = idleExpiry < absoluteExpiry ? idleExpiry : absoluteExpiry;
+
     const ver = await this.authStateService.getTokenVersion();
-    const record = await this.prismaService.refreshToken.create({
-      data: { subject, expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000) },
+    const record = await db.refreshToken.create({
+      data: {
+        tokenHash: this.authHelpers.hashToken(rawRefreshToken),
+        subject,
+        expiresAt,
+        sessionExpiresAt: absoluteExpiry,
+      },
+      select: { id: true },
     });
 
-    const [accessToken, refreshToken] = await Promise.all([
-      this.authHelpers.signAccessToken({ sub: subject, ver }),
-      this.authHelpers.signRefreshToken({ sub: subject, ver, jti: record.id }),
-    ]);
+    const accessToken = await this.authHelpers.signAccessToken({ sub: subject, ver });
 
-    return { accessToken, refreshToken, refreshTokenId: record.id };
+    return { accessToken, refreshToken: rawRefreshToken, refreshTokenId: record.id };
   }
 
   /**
@@ -166,8 +162,8 @@ export class AuthService {
   }
 
   /**
-   * Prunes expired rows so the table stays bounded (revoked-but-unexpired rows are kept so reuse
-   * of a still-valid token is still detectable).
+   * Prunes rows past their idle window so the table stays bounded (revoked-but-unexpired rows are
+   * kept so reuse of a still-valid token is still detectable).
    **/
   private async pruneExpired(): Promise<void> {
     await this.prismaService.refreshToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });

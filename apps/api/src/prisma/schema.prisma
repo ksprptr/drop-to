@@ -64,16 +64,20 @@ model AllowedFolder {
   @@map("allowed_folders")
 }
 
-/// One row per issued refresh token, rotated on every refresh. The raw token is a signed JWT
-/// carrying this row's id as its `jti`; presenting a token whose row is already revoked signals
-/// reuse (theft) and triggers a full session revocation. `subject` keys rows per operator so the
-/// table is ready for multiple users. Expired rows are pruned on refresh to keep it small.
+/// One row per issued refresh token, rotated on every refresh. The token itself is an opaque random
+/// secret; only its SHA-256 hash (`tokenHash`) is stored, so a DB leak never exposes usable tokens.
+/// Presenting a token whose row is already revoked signals reuse (theft) → full session revocation.
+/// `expiresAt` is the sliding idle window; `sessionExpiresAt` is the absolute cap inherited across
+/// rotations so a session can't outlive `login + absolute TTL`. `subject` keys rows per operator so
+/// the table is ready for multiple users. Expired rows are pruned on refresh to keep it small.
 model RefreshToken {
   id                String    @id @default(uuid())
+  tokenHash         String    @unique @map("token_hash")
   subject           String
   revokedAt         DateTime? @map("revoked_at")
   replacedByTokenId String?   @map("replaced_by_token_id")
   expiresAt         DateTime  @map("expires_at")
+  sessionExpiresAt  DateTime  @map("session_expires_at")
   createdAt         DateTime  @default(now()) @map("created_at")
 
   @@index([subject], map: "idx_refresh_token_subject")

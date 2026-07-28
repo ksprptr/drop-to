@@ -52,8 +52,8 @@ import { PrismaModule } from './prisma/prisma.module';
           throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
         }
 
-        // Reject weak/placeholder JWT secrets — a guessable secret means forgeable tokens.
-        const weakSecrets = ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET'].filter((key) => {
+        // Reject a weak/placeholder access-JWT secret — a guessable secret means forgeable tokens.
+        const weakSecrets = ['JWT_ACCESS_SECRET'].filter((key) => {
           const value = String(config[key] ?? '');
           return value.length < 16 || /generate_me|change_me|your[_-]|example|secret_here/i.test(value);
         });

@@ -1,9 +1,9 @@
 import { registerAs } from '@nestjs/config';
 
-// JWT signing secrets; token lifetimes are fixed constants in the auth helpers.
+// Access-JWT signing secret; lifetime is a fixed constant in the auth helpers. Refresh tokens are
+// opaque secrets stored hashed in the DB, so they need no signing secret.
 export const jwtConfig = registerAs('jwt', () => ({
   accessSecret: process.env['JWT_ACCESS_SECRET']!,
-  refreshSecret: process.env['JWT_REFRESH_SECRET']!,
 }));
 
 export type JwtConfig = ReturnType<typeof jwtConfig>;
