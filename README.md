@@ -50,6 +50,11 @@
 
 Alternatively, you can run each project in a Docker container (recommended for production):
 
+> **Give the Docker VM enough memory.** The API image compiles TypeScript against the large
+> `googleapis` type surface and needs ~4 GiB of RAM for `tsc` — allocate **at least ~6 GiB** to your
+> Docker VM or the build can OOM and kill the daemon. With Colima:
+> `colima start --cpu 4 --memory 8`.
+
 1. Copy `.env.example` to `.env` in the monorepo root and in each app directory (`apps/web/`, `apps/api/`) and adjust the values accordingly.
 2. Build the images: `docker compose build`
    > Run all docker compose commands from the monorepo root.
