@@ -6,6 +6,11 @@ describe('sanitizeZipEntryPath', () => {
     expect(sanitizeZipEntryPath('../../etc/passwd')).toBe('etc/passwd');
   });
 
+  it('neutralizes backslash traversal (Windows extractors)', () => {
+    expect(sanitizeZipEntryPath('..\\..\\evil.exe')).toBe('evil.exe');
+    expect(sanitizeZipEntryPath('a\\b\\c.txt')).toBe('a/b/c.txt');
+  });
+
   it('keeps a normal nested path intact', () => {
     expect(sanitizeZipEntryPath('dir/sub/file.txt')).toBe('dir/sub/file.txt');
   });

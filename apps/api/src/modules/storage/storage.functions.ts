@@ -1,10 +1,11 @@
 /**
- * Sanitizes a ZIP entry path so a crafted stored name can't traverse out of the archive
- * root when extracted (zip-slip): drops leading slashes, `.`/`..` segments and empties.
+ * Sanitizes a ZIP entry path so a crafted stored name can't traverse out of the archive root when
+ * extracted (zip-slip): splits on both `/` and `\` (so a `..\..` name can't traverse on a Windows
+ * extractor) and drops `.`/`..` segments and empties.
  **/
 export const sanitizeZipEntryPath = (entryPath: string): string =>
   entryPath
-    .split('/')
+    .split(/[/\\]/)
     .filter((segment) => segment && segment !== '.' && segment !== '..')
     .join('/');
 
