@@ -23,8 +23,7 @@ export async function POST(
 
   const { backend, id } = await params;
 
-  // Refresh the (possibly expired) access token before the stream starts, so the API authenticates
-  // this long-running upload at its start; rotated cookies are written back to the browser below.
+  // Refresh the (possibly expired) access token before the stream starts; rotated cookies written back below.
   const session = await resolveSessionForPassthrough();
   const headers = await apiAuthHeaders(undefined, session.cookieHeader ?? undefined);
   const contentType = request.headers.get('content-type');

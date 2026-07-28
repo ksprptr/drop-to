@@ -11,8 +11,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ backend: string; id: string }> },
 ): Promise<Response> {
-  // CSRF defense-in-depth: reject cross-site loads (same-origin `<img>`/downloads report
-  // `same-origin`; direct navigations report `none` — both pass).
+  // CSRF defense-in-depth: reject cross-site loads (same-origin and direct navigations pass).
   if (isCrossSiteRequest(request)) {
     return NextResponse.json({ message: 'Cross-site request rejected.' }, { status: 403 });
   }

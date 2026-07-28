@@ -23,11 +23,7 @@ export interface PassthroughSession {
 }
 
 /**
- * Resolves the session for a streaming route handler. These bypass the proxy's proactive refresh
- * (its matcher skips `/api`), so with short-lived access tokens a long transfer could carry an
- * already-expired token. Refresh up front here so the API authenticates the request at its start;
- * `rotated` must be written back to the browser so the next proxy refresh doesn't replay the old
- * (now-rotated) refresh token.
+ * Resolves the session for a streaming route handler, refreshing up front since these bypass the proxy's proactive refresh.
  **/
 export const resolveSessionForPassthrough = async (): Promise<PassthroughSession> => {
   const cookieStore = await cookies();
@@ -43,8 +39,7 @@ export const resolveSessionForPassthrough = async (): Promise<PassthroughSession
         if (name === REFRESH_TOKEN_COOKIE) refreshValue = value;
       }
     } catch {
-      // Refresh failed — fall through with the stale token; the API returns 401 and the client
-      // re-authenticates on its next navigation.
+      // Refresh failed — fall through with the stale token; the API returns 401 and the client re-authenticates.
       rotated = [];
     }
   }
@@ -57,9 +52,7 @@ export const resolveSessionForPassthrough = async (): Promise<PassthroughSession
 };
 
 /**
- * Passthrough request headers to the API: forwards session cookies and the client IP. When
- * `cookieHeader` is given (from a pre-flight refresh) it is used verbatim; otherwise the current
- * request cookies are forwarded as-is.
+ * Passthrough request headers to the API: forwards session cookies and the client IP.
  **/
 export const apiAuthHeaders = async (base?: HeadersInit, cookieHeader?: string): Promise<Headers> => {
   const headersList = await headers();
@@ -92,8 +85,7 @@ export const apiAuthHeaders = async (base?: HeadersInit, cookieHeader?: string):
 const DOWNLOAD_HEADERS = ['content-type', 'content-disposition', 'content-length', 'accept-ranges'];
 
 /**
- * Streams a GET download from the API back to the browser, forwarding the key headers and any
- * cookies rotated by a pre-flight refresh.
+ * Streams a GET download from the API back to the browser, forwarding key headers and rotated cookies.
  **/
 export const proxyDownload = async (path: string, signal: AbortSignal): Promise<NextResponse> => {
   const session = await resolveSessionForPassthrough();

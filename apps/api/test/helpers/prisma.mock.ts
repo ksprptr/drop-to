@@ -1,8 +1,4 @@
-/**
- * A mock PrismaService for integration tests. The app is stateless from the tests'
- * perspective, so the database layer is fully faked; behavior is scripted per test via
- * the jest.fn returns. Infrastructure methods default to a "healthy" resolution.
- */
+/** A mock PrismaService for integration tests; behavior is scripted per test via jest.fn returns. */
 export interface PrismaMock {
   $runCommandRaw: jest.Mock;
   $queryRawUnsafe: jest.Mock;
@@ -43,15 +39,13 @@ const liveRefreshRow = () => ({
 
 /**
  * Creates a fresh Prisma mock with healthy infrastructure defaults.
- */
+ **/
 export const createPrismaMock = (): PrismaMock => {
   const mock: PrismaMock = {
-    // Terminus probes the Mongo command first; rejecting with this exact hint makes it
-    // fall through to the SQL `$queryRawUnsafe` path, which then reports the DB as up.
+    // Rejecting with this exact hint makes Terminus fall through to the SQL path (reports DB up).
     $runCommandRaw: jest.fn().mockRejectedValue(new Error('Use the mongodb provider')),
     $queryRawUnsafe: jest.fn().mockResolvedValue([{ ok: 1 }]),
-    // Interactive form invokes the callback with the mock itself as the tx client; array form
-    // resolves to an empty result set (callers read via a follow-up query).
+    // Interactive form invokes the callback with the mock as tx client; array form resolves empty.
     $transaction: jest.fn((arg: unknown) =>
       typeof arg === 'function' ? (arg as (tx: PrismaMock) => unknown)(mock) : Promise.resolve([]),
     ),
@@ -70,8 +64,7 @@ export const createPrismaMock = (): PrismaMock => {
       findMany: jest.fn(),
       upsert: jest.fn(),
     },
-    // Default: issuing a session creates a row; lookups find a live row so refresh/logout succeed
-    // unless a test scripts otherwise.
+    // Default: issuing a session creates a row; lookups find a live row unless a test scripts otherwise.
     refreshToken: {
       create: jest.fn().mockResolvedValue({ id: 'refresh-row-2' }),
       findUnique: jest.fn().mockResolvedValue(liveRefreshRow()),
@@ -87,7 +80,7 @@ export const createPrismaMock = (): PrismaMock => {
 
 /**
  * Resets all mocks on the given Prisma mock and restores the infrastructure defaults.
- */
+ **/
 export const resetPrismaMock = (mock: PrismaMock): void => {
   mock.$runCommandRaw.mockReset().mockRejectedValue(new Error('Use the mongodb provider'));
   mock.$queryRawUnsafe.mockReset().mockResolvedValue([{ ok: 1 }]);

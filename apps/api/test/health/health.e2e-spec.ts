@@ -35,8 +35,7 @@ describe('Health (integration)', () => {
 
     const res = await request(app.getHttpServer()).get('/health');
 
-    // The 503 is normalized by GlobalExceptionFilter into { status, message }, where
-    // `message` carries the Terminus health payload.
+    // GlobalExceptionFilter normalizes the 503 into { status, message }; `message` holds the payload.
     expect(res.status).toBe(503);
     expect(res.body.message.error.postgres.status).toBe('down');
   });

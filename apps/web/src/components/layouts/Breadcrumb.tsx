@@ -41,8 +41,7 @@ export default function Breadcrumb({
 
   const [isMobile, setIsMobile] = useState(false);
 
-  // The sidebar (with its storage switcher) is hidden below `md`; there the root crumb becomes the
-  // switcher. On desktop it's a plain home button back to the storage roots.
+  // Below `md` the sidebar is hidden, so the root crumb becomes the storage switcher.
   useEffect(() => {
     const query = window.matchMedia('(max-width: 767px)');
     const update = () => setIsMobile(query.matches);

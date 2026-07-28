@@ -7,8 +7,7 @@ import { AccessTokenPayload } from '@/common/types/auth-user.types';
 import { type JwtConfig, jwtConfig } from '@/config/jwt.config';
 
 /**
- * Token helpers: signs the short-lived access JWT and mints/hashes the opaque refresh secret.
- * The refresh token is never a JWT — only its SHA-256 hash is persisted (see `RefreshToken`).
+ * Signs the short-lived access JWT and mints/hashes the opaque refresh secret (never a JWT).
  **/
 @Injectable()
 export class AuthHelpers {
@@ -33,8 +32,7 @@ export class AuthHelpers {
   }
 
   /**
-   * Hashes a refresh-token secret for storage/lookup. Only the hash is ever persisted; the raw
-   * value lives only in the cookie.
+   * Hashes a refresh-token secret for storage/lookup; only the hash is ever persisted.
    **/
   hashToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');

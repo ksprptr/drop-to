@@ -39,9 +39,7 @@ export class GoogleAuthController {
   ) {}
 
   /**
-   * Starts the consent flow. Gated by the operator AuthGuard (reached as a top-level navigation from
-   * the logged-in web app, so the access-token cookie rides along) so only the operator can bind a
-   * Drive account. Mints a `state` nonce, stores it in a short-lived cookie, and echoes it to Google.
+   * Starts the consent flow (operator-gated); mints a `state` nonce into a short-lived cookie for CSRF defense.
    **/
   @ApiExcludeEndpoint()
   @Get('google')
@@ -60,9 +58,7 @@ export class GoogleAuthController {
   }
 
   /**
-   * OAuth callback. Public because Google redirects the operator's browser here, but the `state`
-   * query param must match the cookie set at initiation (which required the operator's session) —
-   * this ties the callback to an operator-started flow and blocks unauthenticated account binding.
+   * OAuth callback (public); the `state` query must match the cookie set at initiation, tying it to an operator-started flow.
    **/
   @Public()
   @ApiExcludeEndpoint()

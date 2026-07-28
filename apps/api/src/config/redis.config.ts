@@ -1,7 +1,6 @@
 import { registerAs } from '@nestjs/config';
 
-// Redis backs the rate limiter's shared store (so limits/lockouts hold across instances and survive
-// redeploys). Only host/port are required; auth is optional for a local/trusted Redis.
+// Redis backs the rate limiter's shared store so limits hold across instances; auth is optional.
 export const redisConfig = registerAs('redis', () => ({
   host: process.env['REDIS_HOST']!,
   port: parseInt(process.env['REDIS_PORT']!, 10),

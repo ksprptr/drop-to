@@ -21,9 +21,7 @@ import { REDIS_RATE_LIMIT } from './rate-limit.constants';
         const logger = new Logger('RateLimitRedis');
         let loggedError = false;
 
-        // lazyConnect: don't dial Redis at boot (so a Redis-less dev/test env still starts). The
-        // first rate-limited request connects; if Redis is unreachable the limiter's insurance
-        // fallback (in-memory) takes over, so requests never hard-fail on a Redis outage.
+        // lazyConnect: don't dial Redis at boot (Redis-less dev/test still starts); the insurance in-memory limiter covers a Redis outage.
         const client = new Redis({
           host: cfg.host,
           port: cfg.port,

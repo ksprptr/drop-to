@@ -4,8 +4,7 @@ import importPlugin from 'eslint-plugin-import';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import unusedImports from 'eslint-plugin-unused-imports';
 
-// Shared ESLint flat-config building blocks for every workspace project (api + web). Each app spreads
-// `plugins`/`rules` and adds only its own `files`/`ignores`/parser options.
+// Shared ESLint flat-config building blocks for every workspace project (api + web).
 export const parser = tsParser;
 
 export const plugins = {

@@ -24,9 +24,7 @@ export default async function WorkspaceBrowsePage({ params }: Props) {
   const user = await getCurrentUser();
   const { backend, ids } = await params;
 
-  // Unknown backend (typo / browser probe like /.well-known/…) is not a storage URL at all → a real
-  // full-page "Page not found" (no sidebar/detail). Rendered inline (not via notFound()), which
-  // avoids the next-themes script-tag warning.
+  // Unknown backend → full-page 404; rendered inline (not notFound()) to avoid the next-themes script-tag warning.
   if (backend !== 'drive' && backend !== 's3') {
     return <NotFoundContent />;
   }
@@ -63,8 +61,7 @@ export default async function WorkspaceBrowsePage({ params }: Props) {
     ];
   }
 
-  // A deep link with an unknown root slug or an unresolvable/unauthorized folder → a 404 shown in
-  // the file area (with the sidebar + detail), decided server-side so nothing flashes first.
+  // Deep link with an unknown root slug or unresolvable folder → 404 in the file area, decided server-side.
   const folderNotFound = Boolean(
     isConnected && ids && ids.length > 0 && (!root || initialPath.some((crumb) => !crumb.name)),
   );

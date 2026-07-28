@@ -8,10 +8,7 @@ import { createTestApp } from '../helpers/test-app.helper';
 
 jest.mock('googleapis', () => require('../helpers/googleapis.mock').createGoogleApisMock());
 
-/**
- * Guards the OAuth consent flow: initiation is operator-only and the callback is bound to a
- * cookie-stored `state` nonce, so an unauthenticated party cannot bind/swap the Drive account.
- */
+/** Guards the OAuth consent flow: operator-only initiation and cookie-bound `state` nonce. */
 describe('Google Auth OAuth flow (integration)', () => {
   let app: INestApplication;
   const prisma: PrismaMock = createPrismaMock();

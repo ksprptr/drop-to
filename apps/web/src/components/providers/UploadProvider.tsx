@@ -35,9 +35,7 @@ interface UploadActions {
   batchRuntime: React.RefObject<Map<string, BatchRuntime>>;
 }
 
-// Split contexts so upload-progress ticks (many per second) re-render only the dock, never the
-// workspace tree: state lives here and is consumed by UploadDock; the stable actions are consumed
-// by the workspace, which therefore doesn't re-render while an upload is running.
+// Split contexts so frequent upload-progress ticks re-render only the dock, never the workspace tree.
 const UploadStateContext = createContext<UploadState | null>(null);
 const UploadActionsContext = createContext<UploadActions | null>(null);
 

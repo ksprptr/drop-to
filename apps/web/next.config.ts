@@ -11,10 +11,7 @@ const GOOGLE_FRAME =
 const GOOGLE_CONNECT = 'https://apis.google.com https://*.googleapis.com';
 const GOOGLE_IMG = 'https://*.googleusercontent.com https://*.gstatic.com https://*.google.com';
 
-// CSP: Next injects inline bootstrap scripts and React inline styles, so `script-src`/`style-src`
-// keep 'unsafe-inline' (a nonce-based policy would need per-request middleware wiring and risks
-// breaking framer-motion/Next inline styles). `object-src 'none'`, `frame-ancestors 'none'` and
-// `base-uri 'self'` still block the main injection sinks; Google is allowed for Picker/OAuth/images.
+// CSP keeps 'unsafe-inline' for script/style (Next bootstrap + React inline styles); object-src/frame-ancestors/base-uri still block the main injection sinks.
 // FUTURE: (hardening) drop 'unsafe-inline' from `script-src` in favour of a per-request nonce
 // (generate it in proxy.ts and thread it through). Low priority while there are zero XSS sinks
 // (no dangerouslySetInnerHTML / untrusted-HTML render); it matters if such a sink is ever added.

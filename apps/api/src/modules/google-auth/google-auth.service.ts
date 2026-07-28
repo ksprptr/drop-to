@@ -31,8 +31,7 @@ export class GoogleAuthService {
   }
 
   /**
-   * Consent URL; `offline` + `prompt: consent` guarantee a refresh token every time. The `state`
-   * nonce is echoed back to the callback and verified against a cookie to defeat OAuth CSRF.
+   * Consent URL; `offline` + `prompt: consent` force a refresh token, `state` nonce defeats OAuth CSRF.
    **/
   getAuthUrl(state: string): string {
     return this.createOAuthClient().generateAuthUrl({

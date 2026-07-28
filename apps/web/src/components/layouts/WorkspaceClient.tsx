@@ -153,8 +153,7 @@ function WorkspaceInner({
   const currentFolderId = path.length > 0 ? path[path.length - 1].id : null;
   const atRoots = path.length === 0;
 
-  // Server-detected 404 (bad folder URL): show it in the file area while still on that URL; it
-  // clears as soon as the operator navigates elsewhere.
+  // Server-detected 404 (bad folder URL): shown in the file area until the operator navigates away.
   const notFoundPathname = useRef(initialNotFound ? pathname : null);
   const notFound = notFoundPathname.current !== null && notFoundPathname.current === pathname;
 
@@ -203,8 +202,7 @@ function WorkspaceInner({
   // The second (split) pane: an independent browser over the same backend.
   const paneB = useBrowsePane(activeBackend, roots, onPaneError);
 
-  // Derive the browse location from the URL (/<backend>/<rootSlug>/<id…>). Navigation updates the URL
-  // via window.history (client-only, no server round-trip), so this stays fast — like a real Drive.
+  // Derive the browse location from the URL; navigation updates it via window.history (no server round-trip).
   useEffect(() => {
     const segments = pathname.split('/').filter(Boolean).map(decodeURIComponent);
     const paramBackend = segments[0] === 'drive' || segments[0] === 's3' ? segments[0] : null;
@@ -244,8 +242,7 @@ function WorkspaceInner({
       return;
     }
 
-    // Names come from the cache (populated by clicks and the server-resolved initial path), so the
-    // breadcrumb paints instantly. Any gap (rare) is filled once, with no placeholder shown.
+    // Names come from the cache so the breadcrumb paints instantly; any gap is filled once below.
     const restIds = folderSegs.slice(1);
     setActiveBackend(backend);
     setPath([
@@ -1004,8 +1001,7 @@ function WorkspaceInner({
       />
 
       <main className='flex min-w-0 flex-1 gap-3'>
-        {/* Both panes live in a grid whose second column animates 1fr↔0fr, so the
-            left pane resizes smoothly in sync with the right one appearing/leaving. */}
+        {/* Both panes share a grid whose second column animates 1fr↔0fr for a smooth resize. */}
         <div
           className='grid min-w-0 flex-1 grid-rows-1 transition-all duration-200 ease-out'
           style={{

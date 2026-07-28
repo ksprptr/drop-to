@@ -1,7 +1,5 @@
 /**
- * Sanitizes a ZIP entry path so a crafted stored name can't traverse out of the archive root when
- * extracted (zip-slip): splits on both `/` and `\` (so a `..\..` name can't traverse on a Windows
- * extractor) and drops `.`/`..` segments and empties.
+ * Sanitizes a ZIP entry path to prevent zip-slip traversal (drops `.`/`..` and splits on `/` and `\`).
  **/
 export const sanitizeZipEntryPath = (entryPath: string): string =>
   entryPath
@@ -10,8 +8,7 @@ export const sanitizeZipEntryPath = (entryPath: string): string =>
     .join('/');
 
 /**
- * Reduces an uploaded filename to a single safe path segment: strips any directory components
- * (`/` or `\`) and control chars so it can't write to an unintended key prefix / Drive name.
+ * Reduces an uploaded filename to a single safe path segment (strips directory components and control chars).
  **/
 export const sanitizeUploadFilename = (name: string): string => {
   const base = (name.split(/[/\\]/).pop() ?? '').replace(/\p{Cc}/gu, '').trim();

@@ -12,7 +12,7 @@ const CREDENTIALS = { username: 'test-admin', password: 'test-password' };
 
 /**
  * Asserts a Set-Cookie header array contains a cookie of the given name.
- */
+ **/
 const hasCookie = (setCookie: string[] | undefined, name: string): boolean =>
   Array.isArray(setCookie) && setCookie.some((c) => c.startsWith(`${name}=`));
 

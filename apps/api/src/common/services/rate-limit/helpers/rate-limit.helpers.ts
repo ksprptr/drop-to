@@ -43,8 +43,7 @@ export class RateLimitHelpers {
   }
 
   /**
-   * Gets or creates the limiter for a (method, path, rule) combination. Redis-backed so limits are
-   * shared across instances; an in-memory insurance limiter keeps it working if Redis is down.
+   * Gets or creates the (method, path, rule) limiter; Redis-backed with an in-memory insurance fallback.
    **/
   getLimiter({ method, path, rule }: GetLimiterParams): RateLimiterRedis {
     const blockDuration = rule.blockDuration ?? rule.duration;

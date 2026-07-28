@@ -94,8 +94,7 @@ export class GoogleDriveProvider implements StorageProvider {
       if (isInvalidGrant(error)) {
         throw new StorageDisconnectedException(DRIVE_DISCONNECTED_MESSAGE);
       }
-      // Transient network error reaching Google — clean 503, and never let the raw gaxios error
-      // (which carries the refresh token) reach the logger.
+      // Transient network error — clean 503; never let the raw gaxios error (carries the refresh token) reach the logger.
       this.logger.warn(`Google Drive token refresh failed: ${(error as Error).message}`);
       throw new ServiceUnavailableException('Google Drive is temporarily unreachable. Try again.');
     }
@@ -202,9 +201,7 @@ export class GoogleDriveProvider implements StorageProvider {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
     const drive = await this.getDrive(driveAccountId);
 
-    // Names for a breadcrumb only — one parallel files.get per id (no ancestor walk, which would be
-    // several sequential round-trips each). drive.file scope already limits what's visible; real data
-    // access (listContents/download) keeps the full allowed-tree validation.
+    // Breadcrumb names only — one parallel files.get per id, no ancestor walk (data access still validates the full tree).
     return Promise.all(
       ids.map(async (id) => {
         try {

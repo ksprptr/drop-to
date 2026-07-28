@@ -17,7 +17,7 @@ describe('Drive (integration)', () => {
 
   /**
    * Scripts a connected account with the given authorized root folder ids.
-   */
+   **/
   const connectAccountWithRoots = (...folderIds: string[]) => {
     prisma.driveAccount.findFirst.mockResolvedValue({ id: 'acc-1' });
     prisma.driveAccount.findUnique.mockResolvedValue({

@@ -21,9 +21,7 @@ interface IssuedSession {
 }
 
 /**
- * Authenticates the single env-defined operator. Access is a short-lived JWT; the refresh token is
- * an opaque secret stored (hashed) in `RefreshToken`, rotated on every use with reuse detection and
- * an absolute session cap.
+ * Authenticates the single env-defined operator with rotating, reuse-detected refresh tokens.
  **/
 @Injectable()
 export class AuthService {
@@ -49,8 +47,7 @@ export class AuthService {
   }
 
   /**
-   * Rotates the token pair from a valid, non-revoked refresh token. Presenting an already-revoked
-   * token (i.e. one that was already rotated) is treated as theft: every session is revoked.
+   * Rotates the token pair from a valid refresh token; replaying a revoked one is treated as theft.
    **/
   async refreshTokens(rawRefreshToken: string | null): Promise<AuthResponseEntity> {
     if (!rawRefreshToken) {
@@ -76,8 +73,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token.');
     }
 
-    // Rotate atomically: the new row inherits the original absolute deadline, and the old row is
-    // revoked + linked to its replacement in the same transaction (no window where both are live).
+    // Rotate atomically: new row inherits the absolute deadline, old row revoked + linked, no overlap.
     const session = await this.prismaService.$transaction(async (tx) => {
       const issued = await this.issueSession(existing.subject, existing.sessionExpiresAt, tx);
       await tx.refreshToken.update({
@@ -93,9 +89,7 @@ export class AuthService {
   }
 
   /**
-   * Logs out by revoking the presented refresh token's row and bumping the token version (so the
-   * still-valid access token is invalidated too). A no-op for an unknown/already-revoked token, so
-   * an anonymous caller can't force a logout.
+   * Revokes the presented refresh token's row and bumps the token version; a no-op for unknown tokens.
    **/
   async logout(rawRefreshToken: string | null): Promise<void> {
     if (!rawRefreshToken) {
@@ -114,9 +108,7 @@ export class AuthService {
   }
 
   /**
-   * Mints a refresh secret + its row and signs the matching access JWT. On a fresh login the
-   * absolute session window starts now; on rotation the caller passes the original deadline so the
-   * session can't be extended past it.
+   * Mints a refresh secret + its row and signs the access JWT; on rotation inherits the original deadline.
    **/
   private async issueSession(
     subject: string,
@@ -150,8 +142,7 @@ export class AuthService {
   }
 
   /**
-   * Theft response: revoke every live session for the subject and bump the token version so all
-   * outstanding access tokens die immediately.
+   * Theft response: revoke every live session for the subject and bump the token version.
    **/
   private async revokeAllForSubject(subject: string): Promise<void> {
     await this.prismaService.refreshToken.updateMany({
@@ -165,8 +156,7 @@ export class AuthService {
   }
 
   /**
-   * Prunes rows past their idle window so the table stays bounded (revoked-but-unexpired rows are
-   * kept so reuse of a still-valid token is still detectable).
+   * Prunes rows past their idle window (revoked-but-unexpired rows are kept for reuse detection).
    **/
   private async pruneExpired(): Promise<void> {
     // FUTURE: (multi-user scale) pruning opportunistically on every refresh is fine for one

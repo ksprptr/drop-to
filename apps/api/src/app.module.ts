@@ -63,8 +63,7 @@ import { PrismaModule } from './prisma/prisma.module';
           );
         }
 
-        // The operator password is the entire authn boundary (single shared account) — reject
-        // short or placeholder values so a deployment can't ship with `password`/`admin`.
+        // The operator password is the entire authn boundary — reject short/placeholder values.
         const authPassword = String(config['AUTH_PASSWORD'] ?? '');
         if (
           authPassword.length < 12 ||

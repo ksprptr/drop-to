@@ -1,7 +1,6 @@
 import { registerAs } from '@nestjs/config';
 
-// S3 backend (second storage next to Drive). `enabled` is a kill-switch; the rest
-// is validated only when enabled. `endpoint`/`forcePathStyle` support S3-compatible stores.
+// S3 backend. `enabled` is a kill-switch; the rest is validated only when enabled.
 export const s3Config = registerAs('s3', () => {
   const enabled = process.env['S3_ENABLED'] === 'true';
 

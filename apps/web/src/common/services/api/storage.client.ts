@@ -1,8 +1,7 @@
 import type { StorageBackend, UploadResult } from '@dropto/types';
 import axios, { type AxiosProgressEvent } from 'axios';
 
-// Client-side storage: streamed uploads (progress + abort) and download/preview URLs,
-// all via same-origin route handlers. The rest is Server Actions.
+// Client-side storage: streamed uploads and download/preview URLs, all via same-origin route handlers.
 
 export interface UploadProgress {
   percent: number;

@@ -6,8 +6,7 @@ import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/common/constants/au
 import { ApiUnavailableError } from '@/common/services/axios/axios.errors';
 import { appServerConfig } from '@/configs/app/app.server-config';
 
-// Server-side axios for the API, scoped to the request's cookies. Server-only —
-// tokens never reach the browser; the API is reached server-to-server.
+// Server-only axios for the API, scoped to the request's cookies; tokens never reach the browser.
 export const getHttp = async (): Promise<AxiosInstance> => {
   const cookieStore = await cookies();
   const headersList = await headers();

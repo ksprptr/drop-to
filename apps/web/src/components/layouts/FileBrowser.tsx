@@ -573,8 +573,7 @@ export default function FileBrowser({
                           : 'hover:bg-zinc-200 dark:hover:bg-zinc-800'
                       }`}>
                       {canModify && (
-                        // Wrapper keeps the grid cell on desktop (so columns stay aligned); the
-                        // checkbox itself shows only on mobile — desktop multi-select is Shift/Cmd-click.
+                        // Wrapper keeps the grid cell aligned on desktop; the checkbox shows only on mobile.
                         <span className='flex h-4 w-4 items-center justify-center'>
                           <input
                             type='checkbox'

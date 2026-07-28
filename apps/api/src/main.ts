@@ -13,16 +13,14 @@ async function bootstrap() {
 
   const appCfg = app.get<AppConfig>(appConfig.KEY);
 
-  // Behind Coolify / reverse proxy — hop count is configurable so `req.ip` (rate-limit key) resolves
-  // to the real client across different topologies (e.g. Cloudflare Tunnel + Coolify).
+  // Behind a reverse proxy — hop count is configurable so `req.ip` (rate-limit key) resolves to the real client.
   app.set('trust proxy', appCfg.trustProxyHops);
 
   app.setGlobalPrefix(appCfg.apiPrefix, {
     exclude: [{ path: 'health', method: RequestMethod.GET }],
   });
 
-  // Security headers. CSP is disabled: this is a JSON API (no first-party HTML to protect) and a
-  // default CSP would break the dev-only Swagger UI. HSTS, nosniff, frameguard, etc. still apply.
+  // CSP disabled: JSON API with no first-party HTML, and a default CSP would break dev Swagger UI.
   app.use(helmet({ contentSecurityPolicy: false }));
 
   app.use(cookieParser());
@@ -43,7 +41,6 @@ async function bootstrap() {
     SwaggerModule.setup('swagger', app, documentFactory, { jsonDocumentUrl: 'swagger/json' });
   }
 
-  // Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

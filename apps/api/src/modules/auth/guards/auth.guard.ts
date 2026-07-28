@@ -46,8 +46,7 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException();
     }
 
-    // Revocation check: reject a signature-valid token whose version is stale (a logout since
-    // it was issued bumped the version).
+    // Revocation check: reject a signature-valid token whose version is stale (logout bumped it).
     const currentVersion = await this.authStateService.getTokenVersion();
     if (payload.ver !== currentVersion) {
       throw new UnauthorizedException();

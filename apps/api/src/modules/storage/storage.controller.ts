@@ -195,8 +195,7 @@ export class StorageController {
 
         bb.on('file', (_field, stream, info) => {
           handledFile = true;
-          // Busboy decodes the filename as latin1; re-decode to UTF-8, then reduce to a single safe
-          // path segment so it can't write to an unintended key prefix / Drive name.
+          // Re-decode busboy's latin1 filename to UTF-8, then reduce to a single safe path segment.
           const fileName = sanitizeUploadFilename(
             Buffer.from(info.filename ?? 'file', 'latin1').toString('utf8'),
           );

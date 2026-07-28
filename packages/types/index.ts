@@ -1,9 +1,4 @@
-/**
- * Shared API contract types between the NestJS API (`apps/api`) and the
- * Next.js web app (`apps/web`). These mirror the response entities returned
- * by the Drive/GoogleAuth controllers so the frontend can stay strongly typed
- * without importing NestJS server code.
- */
+/** Shared API contract types between the NestJS API (`apps/api`) and the Next.js web app (`apps/web`). */
 
 /** A folder that has been explicitly authorized via the Google Picker setup flow. */
 export interface AllowedFolder {
@@ -46,31 +41,19 @@ export interface AuthUser {
 /** A storage backend the workspace can browse. */
 export type StorageBackend = 'drive' | 's3';
 
-/**
- * A browse root within a storage backend: an authorized folder for Google Drive,
- * or a configured bucket for S3. `id` is the opaque id used to browse into it.
- */
+/** A browse root within a storage backend (Drive authorized folder or S3 bucket); `id` browses into it. */
 export interface StorageRoot {
   id: string;
   name: string;
 }
 
-/**
- * Connection status of a storage backend, used to render the sidebar and the
- * storage switcher. `connected` means the backend is usable (Drive: an account is
- * linked; S3: enabled in the API env). `email` is Drive-only.
- */
+/** Connection status of a storage backend for the sidebar and switcher; `connected` means usable, `email` is Drive-only. */
 export interface StorageStatus {
   backend: StorageBackend;
   label: string;
   connected: boolean;
   roots: StorageRoot[];
   email?: string | null;
-  /**
-   * A human-readable reason the backend is not usable despite being configured
-   * (a revoked Drive token, an unreachable/misconfigured S3 bucket). Present only
-   * when `connected` is false because the connection broke, not because it was
-   * never set up.
-   */
+  /** Human-readable reason the configured backend broke (revoked Drive token, unreachable S3 bucket). */
   error?: string | null;
 }
