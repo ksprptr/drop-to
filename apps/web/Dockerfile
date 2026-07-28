@@ -18,6 +18,8 @@ RUN pnpm install --frozen-lockfile
 
 COPY apps/web ./apps/web
 COPY packages/types ./packages/types
+# Root tsconfig that apps/web/tsconfig.json extends.
+COPY tsconfig.base.json ./
 
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_GOOGLE_API_KEY

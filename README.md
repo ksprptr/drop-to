@@ -62,7 +62,7 @@ Alternatively, you can run each project in a Docker container (recommended for p
 
 ```bash
    docker compose up -d dropto-pg
-   docker compose run --rm --no-deps dropto-api pnpm prisma:migrate:deploy
+   docker compose run --rm --no-deps dropto-api node_modules/.bin/prisma migrate deploy
    docker compose up -d
 ```
 

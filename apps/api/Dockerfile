@@ -22,6 +22,8 @@ RUN pnpm install --frozen-lockfile
 
 COPY apps/api ./apps/api
 COPY packages/types ./packages/types
+# Root tsconfig the app tsconfigs extend (needed by tsc and by loading prisma.config.ts).
+COPY tsconfig.base.json ./
 
 WORKDIR /app/apps/api
 

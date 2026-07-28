@@ -42,6 +42,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Self-contained server bundle (apps/web/server.js + minimal node_modules) for the Docker runner.
+  output: 'standalone',
   outputFileTracingRoot: monorepoRoot,
   transpilePackages: ['@dropto/types'],
   turbopack: {
