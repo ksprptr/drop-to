@@ -5,7 +5,10 @@ import type { Response } from 'express';
 import { type AppConfig, appConfig } from '@/config/app.config';
 import { type AuthConfig, authConfig } from '@/config/auth.config';
 
-import { ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS } from './auth-tokens.constants';
+import {
+  ACCESS_COOKIE_MAX_AGE_SECONDS,
+  REFRESH_TOKEN_TTL_SECONDS,
+} from './auth-tokens.constants';
 
 type AuthTokenType = 'accessToken' | 'refreshToken';
 
@@ -36,7 +39,7 @@ export class AuthTokensHelper {
    **/
   addToResponse({ response, type, value }: AddTokenToResponseParams): void {
     const maxAge =
-      type === 'accessToken' ? ACCESS_TOKEN_TTL_SECONDS : REFRESH_TOKEN_TTL_SECONDS;
+      type === 'accessToken' ? ACCESS_COOKIE_MAX_AGE_SECONDS : REFRESH_TOKEN_TTL_SECONDS;
 
     const serialized = stringifySetCookie({
       name: type,

@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 
-import { apiAuthHeaders, apiUrl } from '@/common/services/api/passthrough.server';
+import {
+  apiAuthHeaders,
+  apiUrl,
+  resolveSessionForPassthrough,
+} from '@/common/services/api/passthrough.server';
+import { applyAuthCookies } from '@/common/services/auth/tokens.server';
 import { isCrossSiteRequest } from '@/common/utils/request-origin';
 import { assertBackend, seg } from '@/common/utils/storage-path';
 
@@ -18,7 +23,10 @@ export async function POST(
 
   const { backend, id } = await params;
 
-  const headers = await apiAuthHeaders();
+  // Refresh the (possibly expired) access token before the stream starts, so the API authenticates
+  // this long-running upload at its start; rotated cookies are written back to the browser below.
+  const session = await resolveSessionForPassthrough();
+  const headers = await apiAuthHeaders(undefined, session.cookieHeader ?? undefined);
   const contentType = request.headers.get('content-type');
   if (contentType) {
     headers.set('content-type', contentType);
@@ -35,10 +43,13 @@ export async function POST(
 
     const body = await apiResponse.text();
 
-    return new NextResponse(body, {
+    const response = new NextResponse(body, {
       status: apiResponse.status,
       headers: { 'content-type': apiResponse.headers.get('content-type') ?? 'application/json' },
     });
+    applyAuthCookies(response.cookies, session.rotated);
+
+    return response;
   } catch {
     return NextResponse.json({ message: 'Upload failed.' }, { status: 502 });
   }

@@ -3,7 +3,10 @@ import type { Response } from 'express';
 import type { AppConfig } from '@/config/app.config';
 import type { AuthConfig } from '@/config/auth.config';
 
-import { ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS } from './auth-tokens.constants';
+import {
+  ACCESS_COOKIE_MAX_AGE_SECONDS,
+  REFRESH_TOKEN_TTL_SECONDS,
+} from './auth-tokens.constants';
 import { AuthTokensHelper } from './auth-tokens.helper';
 
 const makeResponse = () => {
@@ -19,14 +22,15 @@ const helper = (isDevelopment: boolean, cookieDomain?: string) =>
   new AuthTokensHelper({ isDevelopment } as AppConfig, { cookieDomain } as AuthConfig);
 
 describe('AuthTokensHelper', () => {
-  it('writes an httpOnly, lax, secure (non-dev) cookie with the access TTL and domain', () => {
+  it('writes an httpOnly, lax, secure (non-dev) cookie with the access cookie max-age and domain', () => {
     const { response, headers } = makeResponse();
 
     helper(false, '.example.com').addToResponse({ response, type: 'accessToken', value: 'tok' });
 
     const cookie = (headers.get('Set-Cookie') as string).toLowerCase();
     expect(cookie).toContain('accesstoken=tok');
-    expect(cookie).toContain(`max-age=${ACCESS_TOKEN_TTL_SECONDS}`);
+    // The cookie is a long-lived container; the JWT inside is short-lived (15 min) and refreshed.
+    expect(cookie).toContain(`max-age=${ACCESS_COOKIE_MAX_AGE_SECONDS}`);
     expect(cookie).toContain('httponly');
     expect(cookie).toContain('samesite=lax');
     expect(cookie).toContain('secure');
