@@ -13,8 +13,9 @@ async function bootstrap() {
 
   const appCfg = app.get<AppConfig>(appConfig.KEY);
 
-  // Behind Coolify / reverse proxy.
-  app.set('trust proxy', 1);
+  // Behind Coolify / reverse proxy — hop count is configurable so `req.ip` (rate-limit key) resolves
+  // to the real client across different topologies (e.g. Cloudflare Tunnel + Coolify).
+  app.set('trust proxy', appCfg.trustProxyHops);
 
   app.setGlobalPrefix(appCfg.apiPrefix, {
     exclude: [{ path: 'health', method: RequestMethod.GET }],
