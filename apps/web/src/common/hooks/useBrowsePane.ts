@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { listContentsAction } from '@/actions/storage/storage.actions';
 import type { Crumb, ViewEntry } from '@/common/types/workspace.types';
+import { toViewEntries } from '@/common/utils/view-entry.functions';
 
 /** A failed read, surfaced to the pane's error handler. */
 export interface PaneError {
@@ -65,17 +66,7 @@ export function useBrowsePane(
     setLoading(true);
     const result = await listContentsAction(backend, currentFolderId);
     if (result.ok) {
-      setEntries(
-        (result.data ?? []).map((entry) => ({
-          id: entry.id,
-          name: entry.name,
-          isFolder: entry.isFolder,
-          size: entry.size,
-          mimeType: entry.mimeType,
-          modifiedTime: entry.modifiedTime,
-          webViewLink: entry.webViewLink,
-        })),
-      );
+      setEntries(toViewEntries(result.data ?? []));
     } else {
       onError({ error: result.error, status: result.status });
     }

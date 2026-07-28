@@ -35,6 +35,13 @@ const MENU_MOTION = {
   transition: { duration: 0.08, ease: 'easeOut' },
 } as const;
 
+// Popup-menu geometry (px): fixed widths, an estimated row-menu height for the flip-up decision,
+// and the gap between the anchor and the menu.
+const TOOLBAR_MENU_WIDTH = 176;
+const ROW_MENU_WIDTH = 200;
+const ROW_MENU_EST_HEIGHT = 200;
+const MENU_GAP = 4;
+
 interface Props {
   path: Crumb[];
   rootLabel: string;
@@ -369,24 +376,6 @@ export default function FileBrowser({
     event.target.value = '';
   };
 
-  const SortHeader = ({ label, column }: { label: string; column: SortKey }) => {
-    const active = sortKey === column;
-    return (
-      <button
-        type='button'
-        onClick={() => toggleSort(column)}
-        className={`flex items-center gap-x-1 text-[11px] font-semibold tracking-wide uppercase hover:text-green-600 ${
-          active ? 'text-zinc-950 dark:text-zinc-50' : 'text-zinc-600 dark:text-zinc-400'
-        }`}>
-        {label}
-        <Icon
-          icon={active ? (sortDir === 'asc' ? 'ChevronUp' : 'ChevronDown') : 'ChevronUpDown'}
-          className={`h-3 w-3 ${active ? '' : 'opacity-40'}`}
-        />
-      </button>
-    );
-  };
-
   return (
     <section className='flex min-h-0 flex-1 flex-col'>
       {/* Toolbar */}
@@ -502,12 +491,30 @@ export default function FileBrowser({
                   className='h-4 w-4 cursor-pointer accent-green-600'
                 />
               )}
-              <SortHeader label='Name' column='name' />
+              <SortHeader
+                label='Name'
+                column='name'
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onToggle={toggleSort}
+              />
               <div className='hidden sm:block'>
-                <SortHeader label='Modified' column='modified' />
+                <SortHeader
+                  label='Modified'
+                  column='modified'
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onToggle={toggleSort}
+                />
               </div>
               <div className='flex justify-end'>
-                <SortHeader label='Size' column='size' />
+                <SortHeader
+                  label='Size'
+                  column='size'
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onToggle={toggleSort}
+                />
               </div>
               {canModify && <span />}
             </div>
@@ -673,9 +680,9 @@ export default function FileBrowser({
             role='menu'
             onClick={(event) => event.stopPropagation()}
             style={{
-              left: Math.max(8, toolbarMenu.right - 176),
-              top: toolbarMenu.bottom + 4,
-              width: 176,
+              left: Math.max(8, toolbarMenu.right - TOOLBAR_MENU_WIDTH),
+              top: toolbarMenu.bottom + MENU_GAP,
+              width: TOOLBAR_MENU_WIDTH,
               transformOrigin: 'top right',
             }}
             initial={MENU_MOTION.initial}
@@ -732,14 +739,15 @@ export default function FileBrowser({
             role='menu'
             onClick={(event) => event.stopPropagation()}
             style={(() => {
-              const width = 200;
+              const width = ROW_MENU_WIDTH;
               const left = Math.max(8, menu.rect.right - width);
               const flipUp =
-                typeof window !== 'undefined' && menu.rect.bottom + 200 > window.innerHeight;
+                typeof window !== 'undefined' &&
+                menu.rect.bottom + ROW_MENU_EST_HEIGHT > window.innerHeight;
               const transformOrigin = flipUp ? 'bottom right' : 'top right';
               return flipUp
-                ? { left, bottom: window.innerHeight - menu.rect.top + 4, width, transformOrigin }
-                : { left, top: menu.rect.bottom + 4, width, transformOrigin };
+                ? { left, bottom: window.innerHeight - menu.rect.top + MENU_GAP, width, transformOrigin }
+                : { left, top: menu.rect.bottom + MENU_GAP, width, transformOrigin };
             })()}
             initial={MENU_MOTION.initial}
             animate={MENU_MOTION.animate}
@@ -777,6 +785,39 @@ export default function FileBrowser({
         )}
       </AnimatePresence>
     </section>
+  );
+}
+
+/**
+ * A sortable column header button showing the active sort direction.
+ **/
+function SortHeader({
+  label,
+  column,
+  sortKey,
+  sortDir,
+  onToggle,
+}: {
+  label: string;
+  column: SortKey;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onToggle: (column: SortKey) => void;
+}) {
+  const active = sortKey === column;
+  return (
+    <button
+      type='button'
+      onClick={() => onToggle(column)}
+      className={`flex items-center gap-x-1 text-[11px] font-semibold tracking-wide uppercase hover:text-green-600 ${
+        active ? 'text-zinc-950 dark:text-zinc-50' : 'text-zinc-600 dark:text-zinc-400'
+      }`}>
+      {label}
+      <Icon
+        icon={active ? (sortDir === 'asc' ? 'ChevronUp' : 'ChevronDown') : 'ChevronUpDown'}
+        className={`h-3 w-3 ${active ? '' : 'opacity-40'}`}
+      />
+    </button>
   );
 }
 

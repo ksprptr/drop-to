@@ -27,6 +27,7 @@ import { AllowedFolderEntity } from '@/modules/google-auth/entities/allowed-fold
 import { PrismaService } from '@/prisma/prisma.service';
 
 import { DriveEntryEntity } from '../entities/drive-entry.entity';
+import { ResolvedNameEntity } from '../entities/resolved-name.entity';
 import { StorageStatusEntity } from '../entities/storage-status.entity';
 import { UploadResultEntity } from '../entities/upload-result.entity';
 import {
@@ -41,10 +42,12 @@ import {
   S3_UNAVAILABLE_MESSAGE,
   StorageDisconnectedException,
 } from '../storage.errors';
-import { sanitizeZipEntryPath } from '../storage.functions';
+import { finalizeArchiveInBackground, sanitizeZipEntryPath } from '../storage.functions';
+import { logUploadFailure, logUploadSuccess } from '../upload-log.functions';
 
 /** Marker used for zero-byte "folder" objects (a prefix ending in a slash). */
 const FOLDER_SUFFIX = '/';
+const LABEL = 'S3 Storage';
 
 // Cache the probed status; the sidebar polls often and we don't want to re-probe/re-log every request.
 const STATUS_CACHE_TTL_MS = 30_000;
@@ -146,7 +149,7 @@ export class S3StorageProvider implements StorageProvider {
    **/
   async status(): Promise<StorageStatusEntity> {
     if (!this.cfg.enabled) {
-      return { backend: this.backend, label: 'S3 Storage', connected: false, email: null, roots: [] };
+      return { backend: this.backend, label: LABEL, connected: false, email: null, roots: [] };
     }
 
     const now = Date.now();
@@ -158,13 +161,16 @@ export class S3StorageProvider implements StorageProvider {
 
     try {
       const client = this.getClient();
-      for (const bucket of this.cfg.buckets) {
-        await client.send(new ListObjectsV2Command({ Bucket: bucket, MaxKeys: 1 }));
-      }
+      // Buckets are independent — probe them in parallel.
+      await Promise.all(
+        this.cfg.buckets.map((bucket) =>
+          client.send(new ListObjectsV2Command({ Bucket: bucket, MaxKeys: 1 })),
+        ),
+      );
 
       entity = {
         backend: this.backend,
-        label: 'S3 Storage',
+        label: LABEL,
         connected: true,
         email: null,
         roots: this.cfg.buckets.map((bucket) => ({
@@ -182,7 +188,7 @@ export class S3StorageProvider implements StorageProvider {
 
       entity = {
         backend: this.backend,
-        label: 'S3 Storage',
+        label: LABEL,
         connected: false,
         email: null,
         error: S3_UNAVAILABLE_MESSAGE,
@@ -254,7 +260,7 @@ export class S3StorageProvider implements StorageProvider {
     return [...folders, ...files];
   }
 
-  resolveNames(ids: string[]): Promise<Array<{ id: string; name: string }>> {
+  resolveNames(ids: string[]): Promise<ResolvedNameEntity[]> {
     return Promise.resolve(
       ids.map((id) => {
         const ref = this.resolve(id);
@@ -296,15 +302,7 @@ export class S3StorageProvider implements StorageProvider {
 
       const size = await this.headSize(ref.bucket, key);
 
-      await this.prismaService.uploadLog.create({
-        data: {
-          fileName,
-          folderId,
-          fileId: key,
-          size: size === null ? null : BigInt(size),
-          status: 'SUCCESS',
-        },
-      });
+      await logUploadSuccess(this.prismaService, { fileName, folderId, fileId: key, size });
 
       this.logger.log(`Uploaded "${fileName}" into ${ref.bucket}/${key}.`);
 
@@ -315,20 +313,7 @@ export class S3StorageProvider implements StorageProvider {
         webViewLink: null,
       };
     } catch (error) {
-      // A client-cancelled upload isn't a real failure — don't log it.
-      if (signal?.aborted) {
-        throw error;
-      }
-
-      await this.prismaService.uploadLog.create({
-        data: {
-          fileName,
-          folderId,
-          status: 'FAILED',
-          error: error instanceof Error ? error.message : String(error),
-        },
-      });
-
+      await logUploadFailure(this.prismaService, { fileName, folderId, error, signal });
       throw error;
     } finally {
       signal?.removeEventListener('abort', onAbort);
@@ -476,11 +461,7 @@ export class S3StorageProvider implements StorageProvider {
     const name = baseName(ref.key);
     const archive = new ZipArchive({ zlib: { level: 9 } });
 
-    void this.appendPrefixToArchive(ref.bucket, ref.key, archive).then(
-      () => archive.finalize(),
-      (error: unknown) =>
-        archive.destroy(error instanceof Error ? error : new Error(String(error))),
-    );
+    finalizeArchiveInBackground(archive, this.appendPrefixToArchive(ref.bucket, ref.key, archive));
 
     return { archive, name };
   }

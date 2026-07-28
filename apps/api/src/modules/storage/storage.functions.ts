@@ -1,3 +1,18 @@
+import { Archiver } from 'archiver';
+
+/**
+ * Finalizes the archive once population resolves, or destroys it with the error (fire-and-forget).
+ **/
+export const finalizeArchiveInBackground = (
+  archive: Archiver,
+  population: Promise<unknown>,
+): void => {
+  void population.then(
+    () => archive.finalize(),
+    (error: unknown) => archive.destroy(error instanceof Error ? error : new Error(String(error))),
+  );
+};
+
 /**
  * Sanitizes a ZIP entry path to prevent zip-slip traversal (drops `.`/`..` and splits on `/` and `\`).
  **/

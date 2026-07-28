@@ -80,7 +80,6 @@ services:
       args:
         NEXT_PUBLIC_API_URL: '${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}'
         NEXT_PUBLIC_GOOGLE_API_KEY: '${NEXT_PUBLIC_GOOGLE_API_KEY:-}'
-        NEXT_PUBLIC_GOOGLE_CLIENT_ID: '${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}'
         NEXT_PUBLIC_GOOGLE_APP_ID: '${NEXT_PUBLIC_GOOGLE_APP_ID:-}'
         APP_URL: '${APP_URL:-http://localhost:3000}'
     container_name: dropto-web

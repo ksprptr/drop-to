@@ -1,9 +1,12 @@
 import 'dotenv/config';
+import { Logger } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 import { databaseConfig } from '@/config/database.config';
 
 import { PrismaClient } from './generated/prisma/client';
+
+const logger = new Logger('Seed');
 
 const adapter = new PrismaPg({
   connectionString: databaseConfig().url,
@@ -18,7 +21,7 @@ async function main() {
 main()
   .then(async () => await prisma.$disconnect())
   .catch(async (error) => {
-    console.error(`Error during seeding: ${error}`);
+    logger.error(`Error during seeding: ${error}`);
 
     await prisma.$disconnect();
 

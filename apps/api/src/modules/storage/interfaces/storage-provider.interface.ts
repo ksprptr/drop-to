@@ -4,6 +4,7 @@ import { Readable } from 'node:stream';
 import { AllowedFolderEntity } from '@/modules/google-auth/entities/allowed-folder.entity';
 
 import { DriveEntryEntity } from '../entities/drive-entry.entity';
+import { ResolvedNameEntity } from '../entities/resolved-name.entity';
 import { StorageStatusEntity } from '../entities/storage-status.entity';
 import { UploadResultEntity } from '../entities/upload-result.entity';
 
@@ -50,7 +51,7 @@ export interface StorageProvider {
   listContents(folderId: string): Promise<DriveEntryEntity[]>;
 
   /** Resolves the display names of ids (for rebuilding a breadcrumb from a deep link). */
-  resolveNames(ids: string[]): Promise<Array<{ id: string; name: string }>>;
+  resolveNames(ids: string[]): Promise<ResolvedNameEntity[]>;
 
   /** Creates a subfolder inside an authorized folder. */
   createFolder(parentId: string, name: string): Promise<DriveEntryEntity>;

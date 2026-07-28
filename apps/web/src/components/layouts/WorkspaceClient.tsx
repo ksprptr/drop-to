@@ -33,6 +33,7 @@ import type {
 import { extractApiErrorMessage, isCanceledError } from '@/common/utils/error.functions';
 import { buildWorkspaceUrl, slugify } from '@/common/utils/storage-url';
 import { isTopLevelFolder, topLevelName, uniqueName } from '@/common/utils/upload.functions';
+import { toViewEntries } from '@/common/utils/view-entry.functions';
 import Button from '@/components/common/Button';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Icon from '@/components/common/Icon';
@@ -307,17 +308,7 @@ function WorkspaceInner({
     setLoadingEntries(true);
     const result = await listContentsAction(activeBackend, currentFolderId);
     if (result.ok) {
-      setEntries(
-        (result.data ?? []).map((entry) => ({
-          id: entry.id,
-          name: entry.name,
-          isFolder: entry.isFolder,
-          size: entry.size,
-          mimeType: entry.mimeType,
-          modifiedTime: entry.modifiedTime,
-          webViewLink: entry.webViewLink,
-        })),
-      );
+      setEntries(toViewEntries(result.data ?? []));
     } else {
       toast.error(result.error ?? 'Failed to open the folder.');
       // Storage disconnected mid-session — refresh so the sidebar reflects it.
@@ -765,6 +756,25 @@ function WorkspaceInner({
     ],
   );
 
+  /**
+   * Drops an id from the preview and both panes' selection (after it's deleted or its id changed).
+   **/
+  const forgetEntry = useCallback(
+    (id: string) => {
+      setSelected((current) => (current?.id === id ? null : current));
+      setSelectedIds((current) => {
+        if (!current.has(id)) {
+          return current;
+        }
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+      paneB.pruneSelection(id);
+    },
+    [paneB],
+  );
+
   const confirmDelete = useCallback(async () => {
     if (!confirmTarget || activeBackend === null) {
       return;
@@ -779,18 +789,7 @@ function WorkspaceInner({
         return;
       }
       await reloadPanes();
-      if (selected?.id === entry.id) {
-        setSelected(null);
-      }
-      setSelectedIds((current) => {
-        if (!current.has(entry.id)) {
-          return current;
-        }
-        const next = new Set(current);
-        next.delete(entry.id);
-        return next;
-      });
-      paneB.pruneSelection(entry.id);
+      forgetEntry(entry.id);
       toast.success(`${entry.isFolder ? 'Folder' : 'File'} "${entry.name}" deleted.`);
       setConfirmTarget(null);
     } catch (error) {
@@ -882,18 +881,7 @@ function WorkspaceInner({
         }
         await reloadPanes();
         // The id can change on rename (S3 keys), so drop the old id from selection/preview.
-        if (selected?.id === renameTarget.id) {
-          setSelected(null);
-        }
-        setSelectedIds((current) => {
-          if (!current.has(renameTarget.id)) {
-            return current;
-          }
-          const next = new Set(current);
-          next.delete(renameTarget.id);
-          return next;
-        });
-        paneB.pruneSelection(renameTarget.id);
+        forgetEntry(renameTarget.id);
         toast.success(`Renamed to "${name}".`);
         setRenameTarget(null);
         setExtWarning(null);

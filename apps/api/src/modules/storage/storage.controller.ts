@@ -37,6 +37,7 @@ import { CreateSubfolderDto } from './dto/create-subfolder.dto';
 import { MoveItemDto } from './dto/move-item.dto';
 import { RenameItemDto } from './dto/rename-item.dto';
 import { DriveEntryEntity } from './entities/drive-entry.entity';
+import { ResolvedNameEntity } from './entities/resolved-name.entity';
 import { StorageStatusEntity } from './entities/storage-status.entity';
 import { UploadResultEntity } from './entities/upload-result.entity';
 import { sanitizeUploadFilename } from './storage.functions';
@@ -46,12 +47,17 @@ import { StorageRegistry } from './storage.registry';
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 * 1024;
 
 /**
+ * Documents the `:backend` path param (drive | s3) on the routes that carry it.
+ **/
+const BackendParam = () =>
+  ApiParam({ name: 'backend', enum: ['drive', 's3'], description: 'Storage backend key' });
+
+/**
  * Backend-agnostic: each route resolves the `:backend` provider from the StorageRegistry.
  **/
 @ApiTags('Storage')
 @ApiCookieAuth('accessToken')
 @ApiUnauthorizedResponse({ type: ResponseEntity, description: 'Unauthorized' })
-@ApiParam({ name: 'backend', enum: ['drive', 's3'], description: 'Storage backend key' })
 @Controller('storage')
 export class StorageController {
   constructor(private readonly registry: StorageRegistry) {}
@@ -65,6 +71,7 @@ export class StorageController {
 
   @ApiOperation({ summary: 'List the browse roots of a backend' })
   @ApiOkResponse({ type: [AllowedFolderEntity], description: 'Successful' })
+  @BackendParam()
   @Get(':backend/folders')
   async getFolders(@Param('backend') backend: string): Promise<AllowedFolderEntity[]> {
     return this.registry.resolve(backend).listRoots();
@@ -73,6 +80,7 @@ export class StorageController {
   @ApiOperation({ summary: 'List the contents of a folder' })
   @ApiOkResponse({ type: [DriveEntryEntity], description: 'Successful' })
   @ApiForbiddenResponse({ type: ResponseEntity, description: 'Folder outside authorized tree' })
+  @BackendParam()
   @Get(':backend/folders/:id/contents')
   async getContents(
     @Param('backend') backend: string,
@@ -82,12 +90,13 @@ export class StorageController {
   }
 
   @ApiOperation({ summary: 'Resolve display names for a set of ids (breadcrumb rebuild)' })
-  @ApiOkResponse({ description: 'Id → name pairs' })
+  @ApiOkResponse({ type: [ResolvedNameEntity], description: 'Id → name pairs' })
+  @BackendParam()
   @Get(':backend/names')
   async resolveNames(
     @Param('backend') backend: string,
     @Query('ids') ids?: string,
-  ): Promise<Array<{ id: string; name: string }>> {
+  ): Promise<ResolvedNameEntity[]> {
     const list = (ids ?? '')
       .split(',')
       .map((id) => id.trim())
@@ -99,6 +108,7 @@ export class StorageController {
   @ApiOperation({ summary: 'Download a file' })
   @ApiOkResponse({ description: 'File stream' })
   @ApiForbiddenResponse({ type: ResponseEntity, description: 'File outside authorized tree' })
+  @BackendParam()
   @Get(':backend/files/:id/download')
   async downloadFile(
     @Param('backend') backend: string,
@@ -121,6 +131,7 @@ export class StorageController {
   @ApiOperation({ summary: 'Download a folder as a ZIP archive' })
   @ApiOkResponse({ description: 'ZIP stream' })
   @ApiForbiddenResponse({ type: ResponseEntity, description: 'Folder outside authorized tree' })
+  @BackendParam()
   @Get(':backend/folders/:id/download')
   async downloadFolder(
     @Param('backend') backend: string,
@@ -150,6 +161,7 @@ export class StorageController {
   @ApiCreatedResponse({ type: DriveEntryEntity, description: 'Folder created' })
   @ApiBadRequestResponse({ type: ResponseEntity, description: 'Validation failed' })
   @ApiForbiddenResponse({ type: ResponseEntity, description: 'Folder outside authorized tree' })
+  @BackendParam()
   @Post(':backend/folders/:id/subfolder')
   async createSubfolder(
     @Param('backend') backend: string,
@@ -164,6 +176,7 @@ export class StorageController {
   @ApiCreatedResponse({ type: UploadResultEntity, description: 'File uploaded' })
   @ApiBadRequestResponse({ type: ResponseEntity, description: 'No file provided' })
   @ApiForbiddenResponse({ type: ResponseEntity, description: 'Folder outside authorized tree' })
+  @BackendParam()
   @Post(':backend/folders/:id/upload')
   async uploadFile(
     @Param('backend') backend: string,
@@ -240,6 +253,7 @@ export class StorageController {
   @ApiBadRequestResponse({ type: ResponseEntity, description: 'Validation failed' })
   @ApiForbiddenResponse({ type: ResponseEntity, description: 'Item outside authorized tree' })
   @ApiConflictResponse({ type: ResponseEntity, description: 'Root folders cannot be renamed' })
+  @BackendParam()
   @Patch(':backend/files/:id/rename')
   async renameFile(
     @Param('backend') backend: string,
@@ -254,6 +268,7 @@ export class StorageController {
   @ApiBadRequestResponse({ type: ResponseEntity, description: 'Invalid move target' })
   @ApiForbiddenResponse({ type: ResponseEntity, description: 'Item or target outside authorized tree' })
   @ApiConflictResponse({ type: ResponseEntity, description: 'Root folders cannot be moved' })
+  @BackendParam()
   @Patch(':backend/files/:id/move')
   async moveFile(
     @Param('backend') backend: string,
@@ -268,6 +283,7 @@ export class StorageController {
   @ApiForbiddenResponse({ type: ResponseEntity, description: 'Item outside authorized tree' })
   @ApiConflictResponse({ type: ResponseEntity, description: 'Root folders cannot be deleted' })
   @HttpCode(204)
+  @BackendParam()
   @Delete(':backend/files/:id')
   async deleteFile(@Param('backend') backend: string, @Param('id') id: string): Promise<void> {
     await this.registry.resolve(backend).deleteItem(id);

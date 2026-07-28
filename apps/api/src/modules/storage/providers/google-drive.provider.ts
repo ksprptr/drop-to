@@ -16,6 +16,7 @@ import { GoogleAuthService } from '@/modules/google-auth/google-auth.service';
 import { PrismaService } from '@/prisma/prisma.service';
 
 import { DriveEntryEntity } from '../entities/drive-entry.entity';
+import { ResolvedNameEntity } from '../entities/resolved-name.entity';
 import { StorageStatusEntity } from '../entities/storage-status.entity';
 import { UploadResultEntity } from '../entities/upload-result.entity';
 import {
@@ -30,10 +31,12 @@ import {
   isInvalidGrant,
   StorageDisconnectedException,
 } from '../storage.errors';
-import { sanitizeZipEntryPath } from '../storage.functions';
+import { finalizeArchiveInBackground, sanitizeZipEntryPath } from '../storage.functions';
+import { logUploadFailure, logUploadSuccess } from '../upload-log.functions';
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const MAX_ANCESTOR_DEPTH = 50;
+const LABEL = 'Google Drive';
 
 /**
  * StorageProvider over the Drive API; every op is validated to stay inside the authorized folder tree.
@@ -53,7 +56,7 @@ export class GoogleDriveProvider implements StorageProvider {
     const status = await this.googleAuthService.getStatus();
 
     if (!status.connected) {
-      return { backend: this.backend, label: 'Google Drive', connected: false, email: null, roots: [] };
+      return { backend: this.backend, label: LABEL, connected: false, email: null, roots: [] };
     }
 
     // Probe the token so a dead one shows "reconnect" instead of a false "connected".
@@ -65,7 +68,7 @@ export class GoogleDriveProvider implements StorageProvider {
       if (isInvalidGrant(error)) {
         return {
           backend: this.backend,
-          label: 'Google Drive',
+          label: LABEL,
           connected: false,
           email: status.email,
           error: DRIVE_DISCONNECTED_MESSAGE,
@@ -77,7 +80,7 @@ export class GoogleDriveProvider implements StorageProvider {
 
     return {
       backend: this.backend,
-      label: 'Google Drive',
+      label: LABEL,
       connected: true,
       email: status.email,
       roots: status.allowedFolders.map((folder) => ({ id: folder.folderId, name: folder.name })),
@@ -197,7 +200,7 @@ export class GoogleDriveProvider implements StorageProvider {
     return files.map((file) => this.toDriveEntry(file));
   }
 
-  async resolveNames(ids: string[]): Promise<Array<{ id: string; name: string }>> {
+  async resolveNames(ids: string[]): Promise<ResolvedNameEntity[]> {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
     const drive = await this.getDrive(driveAccountId);
 
@@ -249,15 +252,7 @@ export class GoogleDriveProvider implements StorageProvider {
 
       const size = this.parseSize(res.data.size);
 
-      await this.prismaService.uploadLog.create({
-        data: {
-          fileName,
-          folderId,
-          fileId: res.data.id,
-          size: size === null ? null : BigInt(size),
-          status: 'SUCCESS',
-        },
-      });
+      await logUploadSuccess(this.prismaService, { fileName, folderId, fileId: res.data.id, size });
 
       this.logger.log(`Uploaded "${fileName}" (${res.data.id}) into ${folderId}.`);
 
@@ -268,20 +263,7 @@ export class GoogleDriveProvider implements StorageProvider {
         webViewLink: res.data.webViewLink ?? null,
       };
     } catch (error) {
-      // A client-cancelled upload isn't a real failure — don't log it.
-      if (signal?.aborted) {
-        throw error;
-      }
-
-      await this.prismaService.uploadLog.create({
-        data: {
-          fileName,
-          folderId,
-          status: 'FAILED',
-          error: error instanceof Error ? error.message : String(error),
-        },
-      });
-
+      await logUploadFailure(this.prismaService, { fileName, folderId, error, signal });
       throw error;
     }
   }
@@ -412,11 +394,7 @@ export class GoogleDriveProvider implements StorageProvider {
     const name = meta.data.name ?? 'folder';
     const archive = new ZipArchive({ zlib: { level: 9 } });
 
-    void this.appendFolderToArchive(drive, folderId, '', archive).then(
-      () => archive.finalize(),
-      (error: unknown) =>
-        archive.destroy(error instanceof Error ? error : new Error(String(error))),
-    );
+    finalizeArchiveInBackground(archive, this.appendFolderToArchive(drive, folderId, '', archive));
 
     return { archive, name };
   }
