@@ -63,6 +63,18 @@ import { PrismaModule } from './prisma/prisma.module';
           );
         }
 
+        // The operator password is the entire authn boundary (single shared account) — reject
+        // short or placeholder values so a deployment can't ship with `password`/`admin`.
+        const authPassword = String(config['AUTH_PASSWORD'] ?? '');
+        if (
+          authPassword.length < 12 ||
+          /^(password|admin|change_me|changeme|your[_-]|example)$/i.test(authPassword)
+        ) {
+          throw new Error(
+            'Weak AUTH_PASSWORD: use a strong value (>= 12 chars, not a common placeholder).',
+          );
+        }
+
         return config;
       },
     }),

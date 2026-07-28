@@ -39,6 +39,7 @@ import { RenameItemDto } from './dto/rename-item.dto';
 import { DriveEntryEntity } from './entities/drive-entry.entity';
 import { StorageStatusEntity } from './entities/storage-status.entity';
 import { UploadResultEntity } from './entities/upload-result.entity';
+import { sanitizeUploadFilename } from './storage.functions';
 import { StorageRegistry } from './storage.registry';
 
 // 10 GiB ceiling; the file is streamed straight through to storage (never buffered).
@@ -194,8 +195,11 @@ export class StorageController {
 
         bb.on('file', (_field, stream, info) => {
           handledFile = true;
-          // Busboy decodes the filename as latin1; re-decode to UTF-8.
-          const fileName = Buffer.from(info.filename ?? 'file', 'latin1').toString('utf8');
+          // Busboy decodes the filename as latin1; re-decode to UTF-8, then reduce to a single safe
+          // path segment so it can't write to an unintended key prefix / Drive name.
+          const fileName = sanitizeUploadFilename(
+            Buffer.from(info.filename ?? 'file', 'latin1').toString('utf8'),
+          );
           const mimeType = info.mimeType || 'application/octet-stream';
 
           stream.on('limit', () => {
