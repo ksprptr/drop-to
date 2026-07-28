@@ -93,10 +93,9 @@ Alternatively, you can run each project in a Docker container (recommended for p
 
 ## Deployment
 
-| Project | URL                            |
-| ------- | ------------------------------ |
-| **Web** | https://dropto.ksprptr.dev     |
-| **API** | https://api.dropto.ksprptr.dev |
+DropTo is **self-hosted** — you run it on your own infrastructure, at whatever domain(s) or host/port you choose, routing uploads to whatever storage you want (connect any Google Drive via the setup flow and/or configure your own S3 buckets in the API env). There is **no fixed or official URL**.
+
+Deploy the full stack (web + api + Postgres + Redis) with the bundled compose file (`docker compose up -d`, see [Docker](#Docker)) behind a reverse proxy / TLS of your choice (Caddy, Traefik, nginx, Coolify, Cloudflare Tunnel, …). Everything URL-related is driven by env vars, so point them at wherever you host:
 
 ## License
 
