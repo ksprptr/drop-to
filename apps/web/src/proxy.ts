@@ -13,6 +13,7 @@ import {
 import { peekRefresh, refreshSession } from '@/common/services/auth/refresh.server';
 import { applyAuthCookies, clearAuthCookies, type ParsedSetCookie } from '@/common/services/auth/tokens.server';
 import { isAccessTokenFresh } from '@/common/utils/jwt.functions';
+import { appServerConfig } from '@/configs/app/app.server-config';
 
 /** Routes reachable without a valid session. */
 const PUBLIC_PATHS = ['/login'];
@@ -117,6 +118,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   cookieStore.set(REFRESH_LOCK_COOKIE, '1', {
     httpOnly: true,
+    secure: appServerConfig.nodeEnv.isProduction,
     sameSite: 'lax',
     path: '/',
     maxAge: REFRESH_LOCK_MAX_AGE_S,
