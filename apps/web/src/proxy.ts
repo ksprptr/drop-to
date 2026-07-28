@@ -64,6 +64,7 @@ const waitForRefresh = async (refreshToken: string): Promise<ParsedSetCookie[] |
     }
 
      
+    // eslint-disable-next-line no-await-in-loop -- deliberate delay between poll attempts
     await new Promise((resolve) => setTimeout(resolve, REFRESH_WAIT_INTERVAL_MS));
   }
 

@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { isAxiosError, isCancel } from 'axios';
 
 import { ApiUnavailableError } from '@/common/services/axios/axios.errors';
 
@@ -10,7 +10,7 @@ export const extractApiErrorMessage = (error: unknown): string => {
     return error.message;
   }
 
-  if (axios.isAxiosError(error)) {
+  if (isAxiosError(error)) {
     const data = error.response?.data as { message?: string | string[] } | undefined;
 
     if (data?.message) {
@@ -26,4 +26,4 @@ export const extractApiErrorMessage = (error: unknown): string => {
 /**
  * True when the request was cancelled (e.g. an aborted upload).
  **/
-export const isCanceledError = (error: unknown): boolean => axios.isCancel(error);
+export const isCanceledError = (error: unknown): boolean => isCancel(error);

@@ -1,5 +1,5 @@
 import 'server-only';
-import axios, { type AxiosInstance } from 'axios';
+import { type AxiosInstance, create } from 'axios';
 import { cookies, headers } from 'next/headers';
 
 import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/common/constants/auth.constants';
@@ -12,7 +12,7 @@ export const getHttp = async (): Promise<AxiosInstance> => {
   const cookieStore = await cookies();
   const headersList = await headers();
 
-  const http = axios.create({
+  const http = create({
     baseURL: appServerConfig.urls.apiUrl,
     headers: { 'Content-Type': 'application/json' },
     withCredentials: true,

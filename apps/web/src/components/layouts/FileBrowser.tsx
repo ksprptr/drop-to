@@ -130,8 +130,10 @@ const walkEntry = async (
   let batch = await readAllEntries(reader);
   while (batch.length > 0) {
     for (const child of batch) {
+      // eslint-disable-next-line no-await-in-loop -- sequential walk into a shared, ordered list
       await walkEntry(child, `${prefix}${entry.name}/`, out);
     }
+    // eslint-disable-next-line no-await-in-loop -- the directory reader is stateful; read in sequence
     batch = await readAllEntries(reader);
   }
 };
@@ -149,6 +151,7 @@ const resolveDropItems = async (
 
   const out: UploadItem[] = [];
   for (const entry of entries) {
+    // eslint-disable-next-line no-await-in-loop -- entries walked sequentially into an ordered list
     await walkEntry(entry, '', out);
   }
   return out;

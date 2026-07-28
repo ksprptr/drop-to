@@ -646,7 +646,9 @@ function WorkspaceInner({
         }
         updateTask(batchId, taskId, { status: 'uploading' });
         try {
+          // eslint-disable-next-line no-await-in-loop -- uploads run one at a time (progress + folder dedup)
           const uploadFolderId = await ensureFolder(dirPath);
+          // eslint-disable-next-line no-await-in-loop -- sequential upload queue
           const result = await uploadFile(
             backend,
             uploadFolderId,
