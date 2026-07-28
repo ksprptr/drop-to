@@ -212,7 +212,7 @@ export default function UploadDock() {
             exit={{ opacity: 0, scale: 0.9 }}
             transition={{ type: 'spring', stiffness: 380, damping: 30 }}
             className='pointer-events-auto flex items-start gap-x-2 rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-amber-800 shadow-lg dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200'>
-            <Icon icon='ExclamationTriangle' type='solid' className='mt-px h-4 w-4 shrink-0' />
+            <Icon icon='ExclamationTriangle' className='mt-px h-4 w-4 shrink-0' />
             <span className='text-[11px] leading-snug font-medium'>
               Upload in progress — don&apos;t refresh or close the page, it will cancel the upload.
             </span>

@@ -9,10 +9,10 @@ export interface ViewEntry {
   webViewLink: string | null;
 }
 
-/** A single hop in the folder navigation path. */
 export type SortKey = 'name' | 'modified' | 'size';
 export type SortDir = 'asc' | 'desc';
 
+/** A single hop in the folder navigation path. */
 export interface Crumb {
   id: string;
   name: string;

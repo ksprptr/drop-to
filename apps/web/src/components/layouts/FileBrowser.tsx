@@ -592,7 +592,6 @@ export default function FileBrowser({
                         {entry.isFolder ? (
                           <Icon
                             icon='Folder'
-                            type='solid'
                             className='h-5 w-5 shrink-0 text-green-600'
                           />
                         ) : (

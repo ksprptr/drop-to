@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": ["node", "jest", "multer"],
+    "types": ["node", "jest"],
     "isolatedModules": true,
     "esModuleInterop": true,
     // ts-jest runs in a CommonJS Jest runtime: emit CJS (transpile-only, so the

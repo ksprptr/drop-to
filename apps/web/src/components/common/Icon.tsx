@@ -43,8 +43,6 @@ import type { ExtendedProps } from '@/common/types/global.types';
 
 interface Props extends ExtendedProps {
   icon: string;
-  /** Ignored — lucide has a single style. */
-  type?: 'solid' | 'outlined';
   onClick?: () => void;
 }
 

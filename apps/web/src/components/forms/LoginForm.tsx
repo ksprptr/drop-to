@@ -57,7 +57,7 @@ export default function LoginForm() {
         className='w-full max-w-sm rounded-2xl border border-zinc-300 bg-zinc-50 p-8 shadow-xl dark:border-zinc-700 dark:bg-zinc-800'>
         <div className='mb-6 flex flex-col items-center text-center'>
           <div className='mb-3 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-green-600 text-white shadow-sm'>
-            <Icon icon='CloudArrowUp' className='h-6 w-6' type='solid' />
+            <Icon icon='CloudArrowUp' className='h-6 w-6' />
           </div>
           <h1 className='text-lg font-semibold'>DropTo</h1>
           <p className='mt-1 text-sm text-zinc-600 dark:text-zinc-400'>Sign in to continue</p>

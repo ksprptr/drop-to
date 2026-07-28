@@ -57,7 +57,7 @@ export default function AccountSidebar({
       {/* Brand */}
       <div className='flex h-16 shrink-0 items-center gap-x-2.5 border-b border-zinc-300 px-5 dark:border-zinc-700'>
         <div className='inline-flex h-8 w-8 items-center justify-center rounded-lg bg-green-600 text-white'>
-          <Icon icon='CloudArrowUp' type='solid' className='h-5 w-5' />
+          <Icon icon='CloudArrowUp' className='h-5 w-5' />
         </div>
         <div className='leading-tight'>
           <p className='text-sm font-semibold'>DropTo</p>
@@ -100,7 +100,7 @@ export default function AccountSidebar({
             <div className='flex flex-col gap-y-3'>
               <div className='flex items-center gap-x-2 rounded-xl bg-zinc-100 p-2.5 dark:bg-zinc-900'>
                 <div className='inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-600/15 text-green-600'>
-                  <Icon icon='CheckBadge' type='solid' className='h-5 w-5' />
+                  <Icon icon='CheckBadge' className='h-5 w-5' />
                 </div>
                 <div className='min-w-0 leading-tight'>
                   <p className='truncate text-xs font-medium'>{driveStatus.email}</p>
@@ -149,7 +149,7 @@ export default function AccountSidebar({
           ) : (
             <div className='flex items-center gap-x-2 rounded-xl bg-zinc-100 p-2.5 dark:bg-zinc-900'>
               <div className='inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-600/15 text-green-600'>
-                <Icon icon='CircleStack' type='solid' className='h-5 w-5' />
+                <Icon icon='CircleStack' className='h-5 w-5' />
               </div>
               <div className='min-w-0 leading-tight'>
                 <p className='truncate text-xs font-medium'>

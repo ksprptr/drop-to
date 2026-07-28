@@ -5,7 +5,7 @@
     "moduleResolution": "NodeNext",
     "ignoreDeprecations": "6.0",
     "target": "ES2025",
-    "types": ["node", "jest", "multer"],
+    "types": ["node", "jest"],
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,

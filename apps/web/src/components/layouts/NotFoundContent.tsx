@@ -16,7 +16,7 @@ export default function NotFoundContent() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 260, damping: 24 }}
         className='flex w-full max-w-sm flex-col items-center text-center'>
-        <Icon icon='ExclamationTriangle' type='solid' className='mb-4 h-8 w-8 text-green-600' />
+        <Icon icon='ExclamationTriangle' className='mb-4 h-8 w-8 text-green-600' />
         <h1 className='text-lg font-semibold'>Page not found</h1>
         <p className='mt-1 text-sm text-zinc-600 dark:text-zinc-400'>
           The page you are looking for doesn&apos;t exist or has been moved.
