@@ -77,15 +77,16 @@ describe('GoogleAuthService', () => {
   });
 
   describe('getAuthUrl', () => {
-    it('requests an offline consent URL with the configured scopes', () => {
+    it('requests an offline consent URL with the configured scopes and the CSRF state nonce', () => {
       oauthClient.generateAuthUrl.mockReturnValue('https://accounts.google.com/consent');
 
-      expect(service.getAuthUrl()).toBe('https://accounts.google.com/consent');
+      expect(service.getAuthUrl('nonce-123')).toBe('https://accounts.google.com/consent');
       expect(oauthClient.generateAuthUrl).toHaveBeenCalledWith(
         expect.objectContaining({
           access_type: 'offline',
           prompt: 'consent',
           scope: googleCfg.scopes,
+          state: 'nonce-123',
         }),
       );
     });

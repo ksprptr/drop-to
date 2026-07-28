@@ -31,14 +31,16 @@ export class GoogleAuthService {
   }
 
   /**
-   * Consent URL; `offline` + `prompt: consent` guarantee a refresh token every time.
+   * Consent URL; `offline` + `prompt: consent` guarantee a refresh token every time. The `state`
+   * nonce is echoed back to the callback and verified against a cookie to defeat OAuth CSRF.
    **/
-  getAuthUrl(): string {
+  getAuthUrl(state: string): string {
     return this.createOAuthClient().generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
       include_granted_scopes: true,
       scope: [...this.googleCfg.scopes],
+      state,
     });
   }
 

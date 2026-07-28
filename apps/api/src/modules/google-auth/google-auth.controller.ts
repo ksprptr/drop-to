@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Post, Query, Req, Res } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiCookieAuth,
@@ -10,7 +10,8 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 
 import { Public } from '@/common/decorators/public.decorator';
 import { ResponseEntity } from '@/common/entities/response.entity';
@@ -20,6 +21,12 @@ import { SaveFoldersDto } from './dto/save-folders.dto';
 import { AllowedFolderEntity } from './entities/allowed-folder.entity';
 import { DriveAccountStatusEntity } from './entities/drive-account-status.entity';
 import { GoogleAuthService } from './google-auth.service';
+
+/** Name of the short-lived cookie holding the OAuth `state` nonce (CSRF defense). */
+const OAUTH_STATE_COOKIE = 'oauthState';
+
+/** Lifetime of the OAuth `state` cookie — long enough to complete consent, short enough to expire. */
+const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
 @ApiTags('Google Auth')
 @ApiCookieAuth('accessToken')
@@ -31,22 +38,53 @@ export class GoogleAuthController {
     private readonly googleAuthService: GoogleAuthService,
   ) {}
 
-  @Public()
+  /**
+   * Starts the consent flow. Gated by the operator AuthGuard (reached as a top-level navigation from
+   * the logged-in web app, so the access-token cookie rides along) so only the operator can bind a
+   * Drive account. Mints a `state` nonce, stores it in a short-lived cookie, and echoes it to Google.
+   **/
   @ApiExcludeEndpoint()
   @Get('google')
   redirectToGoogle(@Res() res: Response): void {
-    res.redirect(this.googleAuthService.getAuthUrl());
+    const state = randomBytes(32).toString('hex');
+
+    res.cookie(OAUTH_STATE_COOKIE, state, {
+      httpOnly: true,
+      secure: !this.appCfg.isDevelopment,
+      sameSite: 'lax',
+      maxAge: OAUTH_STATE_MAX_AGE_MS,
+      path: '/',
+    });
+
+    res.redirect(this.googleAuthService.getAuthUrl(state));
   }
 
+  /**
+   * OAuth callback. Public because Google redirects the operator's browser here, but the `state`
+   * query param must match the cookie set at initiation (which required the operator's session) —
+   * this ties the callback to an operator-started flow and blocks unauthenticated account binding.
+   **/
   @Public()
   @ApiExcludeEndpoint()
   @Get('google/callback')
   async handleGoogleCallback(
     @Query('code') code: string | undefined,
     @Query('error') error: string | undefined,
+    @Query('state') state: string | undefined,
+    @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
     const redirectUrl = new URL('/', this.appCfg.webAppUrl);
+    const expectedState = (req.cookies as Record<string, string> | undefined)?.[OAUTH_STATE_COOKIE];
+
+    // Single-use nonce: always clear it, even on the error paths below.
+    res.clearCookie(OAUTH_STATE_COOKIE, { path: '/' });
+
+    if (!this.stateMatches(state, expectedState)) {
+      redirectUrl.searchParams.set('error', 'invalid_state');
+      res.redirect(redirectUrl.toString());
+      return;
+    }
 
     if (error || !code) {
       redirectUrl.searchParams.set('error', error ?? 'missing_code');
@@ -63,6 +101,17 @@ export class GoogleAuthController {
     }
 
     res.redirect(redirectUrl.toString());
+  }
+
+  /**
+   * Constant-time comparison of the callback `state` against the cookie nonce (both must be present).
+   **/
+  private stateMatches(received: string | undefined, expected: string | undefined): boolean {
+    if (!received || !expected || received.length !== expected.length) {
+      return false;
+    }
+
+    return timingSafeEqual(Buffer.from(received), Buffer.from(expected));
   }
 
   @ApiOperation({ summary: 'Save the Picker-selected allowed folders' })
