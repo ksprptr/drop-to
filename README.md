@@ -70,31 +70,18 @@ Alternatively, you can run each project in a Docker container (recommended for p
 
 ## Configuration
 
-> Web
+| App       | Port | Technologies   | URL                                                                  |
+| --------- | ---- | -------------- | -------------------------------------------------------------------- |
+| **api**   | 4000 | NestJS, Prisma | http://localhost:4000 · Swagger (dev): http://localhost:4000/swagger |
+| **admin** | 3000 | Next.js        | http://localhost:3000                                                |
 
-| Description       | Values                |
-| ----------------- | --------------------- |
-| **Port:**         | 3000                  |
-| **Technologies:** | Next.js               |
-| **URL:**          | http://localhost:3000 |
+> Database & Cache
 
-> API
-
-| Description       | Values                        |
-| ----------------- | ----------------------------- |
-| **Port:**         | 4000                          |
-| **Technologies:** | NestJS, Google Drive API      |
-| **URL:**          | http://localhost:4000         |
-| **Swagger:**      | http://localhost:4000/swagger |
-
-> Database
-
-| Description       | Values          |
-| ----------------- | --------------- |
-| **Ports:**        | 5432            |
-| **Technologies:** | Postgres        |
-| **Databases:**    | postgres        |
-| **Credentials:**  | `root:password` |
+| Description       | Values                              |
+| ----------------- | ----------------------------------- |
+| **Ports:**        | 5432, 6379                          |
+| **Technologies:** | PostgreSQL 17, Redis                |
+| **Credentials:**  | `root:password`, `default:password` |
 
 ## Deployment
 
