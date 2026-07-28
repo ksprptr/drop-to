@@ -158,6 +158,9 @@ export class AuthService {
       where: { subject, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    // FUTURE: (multi-user) `bumpTokenVersion` is global (single-row AuthState), so it revokes access
+    // tokens for EVERY user. When there are multiple operators, make the token version per-user
+    // (e.g. a `tokenVersion` column on a User row) and bump only this subject's.
     await this.authStateService.bumpTokenVersion();
   }
 
@@ -166,6 +169,9 @@ export class AuthService {
    * kept so reuse of a still-valid token is still detectable).
    **/
   private async pruneExpired(): Promise<void> {
+    // FUTURE: (multi-user scale) pruning opportunistically on every refresh is fine for one
+    // operator; with many users move this to a scheduled job (e.g. @nestjs/schedule) so the table
+    // is swept independently of request traffic and abandoned sessions are cleaned up too.
     await this.prismaService.refreshToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
   }
 

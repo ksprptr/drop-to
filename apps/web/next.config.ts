@@ -15,6 +15,9 @@ const GOOGLE_IMG = 'https://*.googleusercontent.com https://*.gstatic.com https:
 // keep 'unsafe-inline' (a nonce-based policy would need per-request middleware wiring and risks
 // breaking framer-motion/Next inline styles). `object-src 'none'`, `frame-ancestors 'none'` and
 // `base-uri 'self'` still block the main injection sinks; Google is allowed for Picker/OAuth/images.
+// FUTURE: (hardening) drop 'unsafe-inline' from `script-src` in favour of a per-request nonce
+// (generate it in proxy.ts and thread it through). Low priority while there are zero XSS sinks
+// (no dangerouslySetInnerHTML / untrusted-HTML render); it matters if such a sink is ever added.
 const contentSecurityPolicy = [
   `default-src 'self'`,
   `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ''} ${GOOGLE_SCRIPT}`,

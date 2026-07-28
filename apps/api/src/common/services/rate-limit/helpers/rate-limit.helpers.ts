@@ -23,6 +23,11 @@ export class RateLimitHelpers {
 
   /**
    * Resolves the subject key (by IP), or null when the IP is unknown.
+   *
+   * FUTURE: (heavy exposure) this is per-IP only — a distributed/botnet brute force rotating IPs
+   * isn't capped. If the app becomes widely exposed, add an account-level lockout (a counter keyed
+   * on the login subject, not the IP) as a second limiter on /auth/login, and/or lean on a
+   * Cloudflare Rate Limiting Rule. (Weigh the lockout-as-DoS risk on the single shared account.)
    **/
   resolveSubjectKey(req: Request): string | null {
     const ip = req.ip ? this.normalizeIp(req.ip) : null;

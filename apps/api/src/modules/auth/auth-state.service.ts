@@ -6,6 +6,10 @@ import { AUTH_STATE_ID } from './auth.constants';
 
 /**
  * Owns the operator's token version — the single source of truth for JWT revocation.
+ *
+ * FUTURE: (multi-user) the version is stored on a single global `AuthState` row, so bumping it
+ * revokes tokens for every operator at once. For multiple users, move `tokenVersion` onto a
+ * per-user row and key get/bump by user id (the RefreshToken table is already `subject`-keyed).
  **/
 @Injectable()
 export class AuthStateService {
