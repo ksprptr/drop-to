@@ -74,6 +74,37 @@ describe('Drive (integration)', () => {
     });
   });
 
+  describe('GET /api/v1/storage/drive/names', () => {
+    it('returns an empty array (and never touches the provider) when no ids are given', async () => {
+      prisma.driveAccount.findFirst.mockResolvedValue(null);
+
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/storage/drive/names')
+        .set('Cookie', accessCookie());
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    });
+
+    it('resolves the display name for each requested id', async () => {
+      connectAccountWithRoots('root-1');
+      driveFilesMock.get.mockImplementation(({ fileId }: { fileId: string }) =>
+        Promise.resolve({ data: { id: fileId, name: `folder-${fileId}` } }),
+      );
+
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/storage/drive/names')
+        .query({ ids: ' a , b ,' })
+        .set('Cookie', accessCookie());
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([
+        { id: 'a', name: 'folder-a' },
+        { id: 'b', name: 'folder-b' },
+      ]);
+    });
+  });
+
   describe('POST /api/v1/storage/drive/folders/:id/subfolder', () => {
     it('creates a subfolder inside an authorized folder (201)', async () => {
       connectAccountWithRoots('root-1');

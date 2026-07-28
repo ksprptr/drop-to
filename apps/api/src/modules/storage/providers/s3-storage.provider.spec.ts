@@ -259,6 +259,35 @@ describe('S3StorageProvider', () => {
     });
   });
 
+  describe('resolveNames', () => {
+    it('names a bucket root by its bucket and a key by its basename', async () => {
+      const result = await make().resolveNames([idOf(BUCKET, ''), idOf(BUCKET, 'dir/sub/')]);
+
+      expect(result).toEqual([
+        { id: idOf(BUCKET, ''), name: BUCKET },
+        { id: idOf(BUCKET, 'dir/sub/'), name: 'sub' },
+      ]);
+    });
+
+    it('rejects an id for a non-configured bucket (403)', () => {
+      expect(() => make().resolveNames([idOf('other', 'x/')])).toThrow(ForbiddenException);
+    });
+  });
+
+  describe('createFolderArchive', () => {
+    it('refuses to ZIP a bucket root (400)', async () => {
+      await expect(make().createFolderArchive(idOf(BUCKET, ''))).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('returns an archive named after the prefix basename', async () => {
+      const { name } = await make().createFolderArchive(idOf(BUCKET, 'dir/sub/'));
+
+      expect(name).toBe('sub');
+    });
+  });
+
   describe('downloadFile', () => {
     it('refuses to download a folder or bucket root (400)', async () => {
       await expect(make().downloadFile(idOf(BUCKET, ''))).rejects.toBeInstanceOf(BadRequestException);
