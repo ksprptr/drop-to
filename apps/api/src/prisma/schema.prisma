@@ -64,6 +64,23 @@ model AllowedFolder {
   @@map("allowed_folders")
 }
 
+/// One row per issued refresh token, rotated on every refresh. The raw token is a signed JWT
+/// carrying this row's id as its `jti`; presenting a token whose row is already revoked signals
+/// reuse (theft) and triggers a full session revocation. `subject` keys rows per operator so the
+/// table is ready for multiple users. Expired rows are pruned on refresh to keep it small.
+model RefreshToken {
+  id                String    @id @default(uuid())
+  subject           String
+  revokedAt         DateTime? @map("revoked_at")
+  replacedByTokenId String?   @map("replaced_by_token_id")
+  expiresAt         DateTime  @map("expires_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@index([subject], map: "idx_refresh_token_subject")
+  @@index([expiresAt], map: "idx_refresh_token_expires_at")
+  @@map("refresh_tokens")
+}
+
 /// Audit trail of upload attempts for the history view.
 model UploadLog {
   id        String       @id @default(uuid())

@@ -12,11 +12,12 @@ export const signAccessToken = (sub: string = TEST_USERNAME): string =>
   jwtService.sign({ sub, ver: 0 }, { secret: process.env['JWT_ACCESS_SECRET'], expiresIn: 3600 });
 
 /**
- * Signs a refresh token with the test secret.
+ * Signs a refresh token with the test secret. `jti` matches the default row id returned by the
+ * Prisma mock's `refreshToken.findUnique`, so the rotation lookup succeeds.
  */
-export const signRefreshToken = (sub: string = TEST_USERNAME): string =>
+export const signRefreshToken = (sub: string = TEST_USERNAME, jti = 'refresh-row-1'): string =>
   jwtService.sign(
-    { sub, ver: 0 },
+    { sub, ver: 0, jti },
     { secret: process.env['JWT_REFRESH_SECRET'], expiresIn: 7 * 24 * 3600 },
   );
 

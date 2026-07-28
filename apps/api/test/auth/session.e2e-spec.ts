@@ -96,6 +96,38 @@ describe('Auth session (integration)', () => {
 
       expect(res.status).toBe(401);
     });
+
+    it('rejects an unknown token id (pruned/never issued) with 401', async () => {
+      prisma.refreshToken.findUnique.mockResolvedValue(null);
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', refreshCookie());
+
+      expect(res.status).toBe(401);
+    });
+
+    it('detects reuse of an already-rotated token and revokes every session (401)', async () => {
+      // The presented token's row is already revoked → replay is treated as theft.
+      prisma.refreshToken.findUnique.mockResolvedValue({
+        id: 'refresh-row-1',
+        subject: TEST_USERNAME,
+        revokedAt: new Date(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', refreshCookie());
+
+      expect(res.status).toBe(401);
+      // Every live session revoked + token version bumped (kills outstanding access tokens).
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { subject: TEST_USERNAME, revokedAt: null },
+        data: { revokedAt: expect.any(Date) },
+      });
+      expect(prisma.authState.upsert).toHaveBeenCalled();
+    });
   });
 
   describe('POST /api/v1/auth/logout', () => {

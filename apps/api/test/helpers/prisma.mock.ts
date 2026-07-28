@@ -21,6 +21,13 @@ export interface PrismaMock {
     findMany: jest.Mock;
     upsert: jest.Mock;
   };
+  refreshToken: {
+    create: jest.Mock;
+    findUnique: jest.Mock;
+    update: jest.Mock;
+    updateMany: jest.Mock;
+    deleteMany: jest.Mock;
+  };
   uploadLog: { create: jest.Mock };
 }
 
@@ -48,6 +55,20 @@ export const createPrismaMock = (): PrismaMock => ({
     findMany: jest.fn(),
     upsert: jest.fn(),
   },
+  // Default: issuing a session creates a row with a stable id; lookups find a live (non-revoked,
+  // unexpired) row so refresh/logout succeed unless a test scripts otherwise.
+  refreshToken: {
+    create: jest.fn().mockResolvedValue({ id: 'refresh-row-1' }),
+    findUnique: jest.fn().mockResolvedValue({
+      id: 'refresh-row-1',
+      subject: 'test-admin',
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    }),
+    update: jest.fn().mockResolvedValue(undefined),
+    updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+  },
   uploadLog: { create: jest.fn().mockResolvedValue(undefined) },
 });
 
@@ -66,5 +87,15 @@ export const resetPrismaMock = (mock: PrismaMock): void => {
   mock.driveAccount.delete.mockReset();
   mock.allowedFolder.findMany.mockReset();
   mock.allowedFolder.upsert.mockReset();
+  mock.refreshToken.create.mockReset().mockResolvedValue({ id: 'refresh-row-1' });
+  mock.refreshToken.findUnique.mockReset().mockResolvedValue({
+    id: 'refresh-row-1',
+    subject: 'test-admin',
+    revokedAt: null,
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  });
+  mock.refreshToken.update.mockReset().mockResolvedValue(undefined);
+  mock.refreshToken.updateMany.mockReset().mockResolvedValue({ count: 0 });
+  mock.refreshToken.deleteMany.mockReset().mockResolvedValue({ count: 0 });
   mock.uploadLog.create.mockReset().mockResolvedValue(undefined);
 };
