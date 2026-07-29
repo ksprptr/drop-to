@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "prisma generate && nest build",
+    "build": "nest build",
     "start": "nest start",
     "dev": "nest start --watch",
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",
@@ -14,7 +14,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "prisma:seed": "ts-node --transpile-only src/prisma/seed.ts"
+    "prisma:reset": "prisma reset",
+    "prisma:seed": "ts-node --transpile-only src/prisma/seed.ts",
+    "openapi:export": "ts-node --transpile-only -r tsconfig-paths/register src/common/scripts/export-openapi.ts"
   },
   "jest": {
     "moduleFileExtensions": [
