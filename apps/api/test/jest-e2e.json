@@ -1,0 +1,24 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "roots": ["<rootDir>/test"],
+  "testRegex": ".e2e-spec\\.ts$",
+  "transformIgnorePatterns": [
+    "/node_modules/.pnpm/(?!(cookie|archiver|compress-commons|crc32-stream|is-stream|zip-stream)@)",
+    "\\.pnp\\.[^/]+$"
+  ],
+  "transform": {
+    "^.+\\.(t|j)s$": ["ts-jest", { "tsconfig": "<rootDir>/tsconfig.spec.json" }]
+  },
+  "moduleNameMapper": {
+    "^(\\.{1,2}/.*)\\.js$": "$1",
+    "^@/(.*)$": "<rootDir>/src/$1",
+    "^prisma/(.*)$": "<rootDir>/src/prisma/$1",
+    "^src/(.*)$": "<rootDir>/src/$1"
+  },
+  "testEnvironment": "node",
+  "setupFiles": ["<rootDir>/test/setup-env.ts"],
+  "testTimeout": 30000,
+  "maxWorkers": 1,
+  "forceExit": true
+}

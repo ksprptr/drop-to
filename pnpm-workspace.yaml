@@ -1,0 +1,35 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+overrides:
+  # googleapis 173 pulls google-auth-library ^10.2.0 (10.9.0) while its own
+  # googleapis-common pins 10.5.0 exactly — two copies make the OAuth2Client
+  # types incompatible. Dedupe to a single (latest) version.
+  google-auth-library: 10.9.0
+  # Security: force patched transitive versions (advisories on the ranges Next
+  # pulled). sharp < 0.35.0 = libvips CVEs (image optimization, production);
+  # postcss <= 8.5.17 = arbitrary file read / path traversal (build-time CSS).
+  sharp: ^0.35.3
+  postcss: ^8.5.23
+  # Build/dev-tooling transitives (Prisma dev, ajv, glob). Patched within-major
+  # (no breaking bump): fast-uri host confusion, brace-expansion 5.x DoS,
+  # @hono/node-server middleware bypass / path traversal, valibot flatten() throw.
+  fast-uri@3: 3.1.4
+  brace-expansion: 5.0.8
+  '@hono/node-server': ^1.19.17
+  valibot: ^1.4.2
+  # js-yaml 5.x flow-collection DoS (only the 5.x copy under @nestjs/swagger, dev-only);
+  # find-my-way <9.6.1 under Prisma's dev server (not in the request path). Both patched within-major.
+  js-yaml@5: 5.2.2
+  find-my-way: ^9.6.1
+allowBuilds:
+  '@prisma/engines': true
+  '@scarf/scarf': false
+  '@swc/core': true
+  esbuild: true
+  prisma: true
+  sharp: true
+  unrs-resolver: true
+minimumReleaseAgeExclude:
+  - '@nestjs/cli@11.0.24'
+  - '@hono/node-server@1.19.17'

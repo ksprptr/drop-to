@@ -1,0 +1,66 @@
+import { Inject, Injectable } from '@nestjs/common';
+import { stringifySetCookie } from 'cookie';
+import type { Response } from 'express';
+
+import { type AppConfig, appConfig } from '@/config/app.config';
+import { type AuthConfig, authConfig } from '@/config/auth.config';
+
+import { ACCESS_COOKIE_MAX_AGE_SECONDS, REFRESH_TOKEN_TTL_SECONDS } from './auth-tokens.constants';
+
+type AuthTokenType = 'accessToken' | 'refreshToken';
+
+interface AddTokenToResponseParams {
+  response: Response;
+  type: AuthTokenType;
+  value: string;
+}
+
+/**
+ * Serializes access/refresh tokens into httpOnly cookies (empty value clears them).
+ **/
+@Injectable()
+export class AuthTokensHelper {
+  private readonly cookieDomain?: string;
+  private readonly isDevelopment: boolean;
+
+  constructor(
+    @Inject(appConfig.KEY) appCfg: AppConfig,
+    @Inject(authConfig.KEY) authCfg: AuthConfig,
+  ) {
+    this.isDevelopment = appCfg.isDevelopment;
+    this.cookieDomain = authCfg.cookieDomain;
+  }
+
+  /**
+   * Writes an auth token into the response cookies (empty value clears it).
+   **/
+  addToResponse({ response, type, value }: AddTokenToResponseParams): void {
+    const maxAge =
+      type === 'accessToken' ? ACCESS_COOKIE_MAX_AGE_SECONDS : REFRESH_TOKEN_TTL_SECONDS;
+
+    const serialized = stringifySetCookie({
+      name: type,
+      value,
+      ...(this.cookieDomain ? { domain: this.cookieDomain } : {}),
+      httpOnly: true,
+      // Secure everywhere except local dev (covers staging/other non-dev envs served over HTTPS).
+      secure: !this.isDevelopment,
+      sameSite: 'lax',
+      maxAge: value === '' ? 0 : maxAge,
+      path: '/',
+    });
+
+    const existing = response.getHeader('Set-Cookie');
+
+    if (!existing) {
+      response.setHeader('Set-Cookie', serialized);
+      return;
+    }
+
+    const cookies = Array.isArray(existing)
+      ? [...existing, serialized]
+      : [existing as string, serialized];
+
+    response.setHeader('Set-Cookie', cookies);
+  }
+}

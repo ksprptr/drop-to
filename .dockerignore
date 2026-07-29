@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+**/.env
+**/.env.*
+!**/.env.example
+.git
+example
+*.md
+**/*.tsbuildinfo
+apps/api/src/prisma/generated

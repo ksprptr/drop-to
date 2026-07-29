@@ -1,0 +1,101 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "dev": "nest start --watch",
+    "lint": "eslint \"{src,test}/**/*.ts\" --fix",
+    "test": "jest",
+    "test:cov": "jest --coverage",
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "prisma:seed": "ts-node --transpile-only src/prisma/seed.ts"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transformIgnorePatterns": [
+      "/node_modules/.pnpm/(?!(cookie|archiver|compress-commons|crc32-stream|is-stream|zip-stream)@)",
+      "\\.pnp\\.[^/]+$"
+    ],
+    "transform": {
+      "^.+\\.(t|j)s$": [
+        "ts-jest",
+        {
+          "tsconfig": "tsconfig.spec.json"
+        }
+      ]
+    },
+    "collectCoverageFrom": [
+      "**/*.(t|j)s"
+    ],
+    "coverageDirectory": "../coverage",
+    "testEnvironment": "node",
+    "setupFiles": [
+      "<rootDir>/../test/setup-env.ts"
+    ],
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1",
+      "^@/(.*)$": "<rootDir>/$1",
+      "^prisma/(.*)$": "<rootDir>/prisma/$1",
+      "^src/(.*)$": "<rootDir>/$1"
+    }
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1095.0",
+    "@aws-sdk/lib-storage": "^3.1095.0",
+    "@nestjs/common": "^11.1.28",
+    "@nestjs/config": "^4.0.4",
+    "@nestjs/core": "^11.1.28",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/platform-express": "^11.1.28",
+    "@nestjs/swagger": "^11.4.6",
+    "@nestjs/terminus": "^11.1.1",
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
+    "archiver": "^8.0.0",
+    "busboy": "^1.6.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "cookie": "^2.0.1",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "googleapis": "^173.0.0",
+    "helmet": "^8.3.0",
+    "ioredis": "^5.11.1",
+    "prisma": "^7.9.1",
+    "rate-limiter-flexible": "^11.2.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.24",
+    "@nestjs/schematics": "^11.1.0",
+    "@nestjs/testing": "^11.1.28",
+    "@types/archiver": "^8.0.0",
+    "@types/busboy": "^1.5.4",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.1.1",
+    "@types/supertest": "^7.2.1",
+    "eslint": "^10.8.0",
+    "jest": "^30.4.2",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.12",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^6.0.3"
+  }
+}

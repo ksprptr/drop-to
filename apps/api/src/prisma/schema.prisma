@@ -1,0 +1,101 @@
+// Prisma schema for dropto.
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider     = "prisma-client"
+  output       = "./generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+//
+// Enums
+//
+enum UploadStatus {
+  SUCCESS
+  FAILED
+}
+
+//
+// Models
+//
+
+/// Single-row store for the operator's token version. Stateless JWTs are otherwise
+/// irrevocable; bumping this version on logout invalidates every access/refresh token
+/// issued before it (the AuthGuard rejects a token whose `ver` no longer matches).
+model AuthState {
+  id           String   @id @default("singleton")
+  tokenVersion Int      @default(0) @map("token_version")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("auth_state")
+}
+
+/// The single authorized Google account whose Drive quota is used for uploads.
+/// The refresh token is stored encrypted (AES-256-GCM), never in plaintext.
+model DriveAccount {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  refreshTokenEnc String   @map("refresh_token_enc")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  allowedFolders AllowedFolder[]
+
+  @@map("drive_accounts")
+}
+
+/// A folder the account owner explicitly authorized via the Google Picker.
+/// All Drive operations are validated to stay within this set (or descendants).
+model AllowedFolder {
+  id             String   @id @default(uuid())
+  driveAccountId String   @map("drive_account_id")
+  folderId       String   @map("folder_id")
+  name           String
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  driveAccount DriveAccount @relation(fields: [driveAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([driveAccountId, folderId])
+  @@index([driveAccountId], map: "idx_allowed_folder_drive_account_id")
+  @@map("allowed_folders")
+}
+
+/// One row per issued refresh token, rotated on every refresh. The token itself is an opaque random
+/// secret; only its SHA-256 hash (`tokenHash`) is stored, so a DB leak never exposes usable tokens.
+/// Presenting a token whose row is already revoked signals reuse (theft) → full session revocation.
+/// `expiresAt` is the sliding idle window; `sessionExpiresAt` is the absolute cap inherited across
+/// rotations so a session can't outlive `login + absolute TTL`. `subject` keys rows per operator so
+/// the table is ready for multiple users. Expired rows are pruned on refresh to keep it small.
+model RefreshToken {
+  id                String    @id @default(uuid())
+  tokenHash         String    @unique @map("token_hash")
+  subject           String
+  revokedAt         DateTime? @map("revoked_at")
+  replacedByTokenId String?   @map("replaced_by_token_id")
+  expiresAt         DateTime  @map("expires_at")
+  sessionExpiresAt  DateTime  @map("session_expires_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@index([subject], map: "idx_refresh_token_subject")
+  @@index([expiresAt], map: "idx_refresh_token_expires_at")
+  @@map("refresh_tokens")
+}
+
+/// Audit trail of upload attempts for the history view.
+model UploadLog {
+  id        String       @id @default(uuid())
+  fileName  String       @map("file_name")
+  folderId  String       @map("folder_id")
+  fileId    String?      @map("file_id")
+  size      BigInt?
+  status    UploadStatus
+  error     String?
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  @@index([createdAt], map: "idx_upload_log_created_at")
+  @@map("upload_logs")
+}
