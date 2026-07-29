@@ -2,6 +2,7 @@
 export const ACCESS_TOKEN_COOKIE = 'accessToken';
 export const REFRESH_TOKEN_COOKIE = 'refreshToken';
 export const REFRESH_LOCK_COOKIE = 'refresh_lock';
+export const DRIVE_OWNER_COOKIE = 'driveOwner';
 
 /** Refresh proactively when the access token expires within this window. */
 export const ACCESS_EXP_SKEW_MS = 60_000;

@@ -56,4 +56,5 @@ export interface StorageStatus {
   email?: string | null;
   /** Human-readable reason the configured backend broke (revoked Drive token, unreachable S3 bucket). */
   error?: string | null;
+  isOwner?: boolean;
 }

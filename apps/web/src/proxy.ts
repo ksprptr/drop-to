@@ -17,6 +17,7 @@ import {
   type ParsedSetCookie,
 } from '@/common/services/auth/tokens.server';
 import { isAccessTokenFresh } from '@/common/utils/jwt.functions';
+import { resolveRequestOrigin } from '@/common/utils/request-origin';
 import { appServerConfig } from '@/configs/app/app.server-config';
 
 /** Routes reachable without a valid session. */
@@ -46,7 +47,7 @@ const withRefreshedCookies = (request: NextRequest, tokens: ParsedSetCookie[]): 
  * Builds a redirect to the login page, optionally flagging an expired session.
  **/
 const redirectToLogin = (request: NextRequest, sessionExpired: boolean): NextResponse => {
-  const url = new URL('/login', request.url);
+  const url = new URL('/login', resolveRequestOrigin(request));
   if (sessionExpired) {
     url.searchParams.set('reason', 'session-expired');
   }
@@ -93,7 +94,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // Public routes: bounce authenticated users to the workspace, else let them through.
   if (isPublicPath(pathname)) {
     if (accessFresh) {
-      return NextResponse.redirect(new URL('/', request.url));
+      return NextResponse.redirect(new URL('/', resolveRequestOrigin(request)));
     }
     return NextResponse.next();
   }

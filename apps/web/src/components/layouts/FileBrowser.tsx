@@ -71,6 +71,8 @@ interface Props {
   onDownload: (entry: ViewEntry) => void;
   onRename: (entry: ViewEntry) => void;
   onDelete: (entry: ViewEntry) => void;
+  /** Unselect an authorized root folder (Drive owner only); enables a three-dots menu at the roots level. */
+  onUnselectRoot?: (entry: ViewEntry) => void;
   split?: boolean;
   onToggleSplit?: () => void;
   /** Copies the current folder's shareable URL (main pane only). */
@@ -192,6 +194,7 @@ export default function FileBrowser({
   onDownload,
   onRename,
   onDelete,
+  onUnselectRoot,
   split = false,
   onToggleSplit,
   onCopyLink,
@@ -213,6 +216,8 @@ export default function FileBrowser({
   const [internalSortDir, setInternalSortDir] = useState<SortDir>('asc');
   const sortKey = controlledSortKey ?? internalSortKey;
   const sortDir = controlledSortDir ?? internalSortDir;
+
+  const rootMenu = path.length === 0 && Boolean(onUnselectRoot);
   const [menu, setMenu] = useState<RowMenu | null>(null);
   const [toolbarMenu, setToolbarMenu] = useState<DOMRect | null>(null);
 
@@ -279,10 +284,14 @@ export default function FileBrowser({
 
   const allSelected = entries.length > 0 && entries.every((entry) => selectedIds.has(entry.id));
 
-  // Checkbox + actions columns only when modifiable; "Modified" is dropped on mobile.
+  // The trailing three-dots column shows when rows are modifiable or a root can be unselected.
+  const showActions = canModify || rootMenu;
+  // Checkbox column only when modifiable; actions column when either; "Modified" is dropped on mobile.
   const gridCols = canModify
     ? 'grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_2rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_8rem_5rem_2rem]'
-    : 'grid-cols-[minmax(0,1fr)_4.5rem] sm:grid-cols-[minmax(0,1fr)_8rem_6rem]';
+    : rootMenu
+      ? 'grid-cols-[minmax(0,1fr)_4.5rem_2rem] sm:grid-cols-[minmax(0,1fr)_8rem_6rem_2rem]'
+      : 'grid-cols-[minmax(0,1fr)_4.5rem] sm:grid-cols-[minmax(0,1fr)_8rem_6rem]';
 
   const openMenu = (event: MouseEvent<HTMLButtonElement>, entry: ViewEntry) => {
     event.stopPropagation();
@@ -515,7 +524,7 @@ export default function FileBrowser({
                   onToggle={toggleSort}
                 />
               </div>
-              {canModify && <span />}
+              {showActions && <span />}
             </div>
 
             {/* Rows */}
@@ -611,7 +620,7 @@ export default function FileBrowser({
                       <span className='text-right text-xs text-zinc-600 dark:text-zinc-400'>
                         {entry.isFolder ? '—' : formatBytes(entry.size)}
                       </span>
-                      {canModify && (
+                      {(canModify || (rootMenu && entry.isFolder)) && (
                         <div className='flex justify-end'>
                           <button
                             type='button'
@@ -755,33 +764,44 @@ export default function FileBrowser({
             exit={MENU_MOTION.exit}
             transition={MENU_MOTION.transition}
             className='fixed z-50 flex flex-col gap-y-0.5 rounded-xl border border-zinc-300 bg-zinc-50 p-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-800'>
-            <MenuItem
-              icon='ArrowDownTray'
-              label={menu.entry.isFolder ? 'Download as ZIP' : 'Download'}
-              onClick={() => runMenuAction(onDownload, menu.entry)}
-            />
-            {menu.entry.webViewLink && !menu.entry.isFolder && (
+            {rootMenu && onUnselectRoot ? (
               <MenuItem
-                icon='ArrowTopRightOnSquare'
-                label='Open in Drive'
-                onClick={() => {
-                  const link = menu.entry.webViewLink;
-                  setMenu(null);
-                  if (link) window.open(link, '_blank');
-                }}
+                icon='FolderMinus'
+                label='Remove from app'
+                tone='danger'
+                onClick={() => runMenuAction(onUnselectRoot, menu.entry)}
               />
+            ) : (
+              <>
+                <MenuItem
+                  icon='ArrowDownTray'
+                  label={menu.entry.isFolder ? 'Download as ZIP' : 'Download'}
+                  onClick={() => runMenuAction(onDownload, menu.entry)}
+                />
+                {menu.entry.webViewLink && !menu.entry.isFolder && (
+                  <MenuItem
+                    icon='ArrowTopRightOnSquare'
+                    label='Open in Drive'
+                    onClick={() => {
+                      const link = menu.entry.webViewLink;
+                      setMenu(null);
+                      if (link) window.open(link, '_blank');
+                    }}
+                  />
+                )}
+                <MenuItem
+                  icon='Pencil'
+                  label='Rename'
+                  onClick={() => runMenuAction(onRename, menu.entry)}
+                />
+                <MenuItem
+                  icon='Trash'
+                  label='Delete'
+                  tone='danger'
+                  onClick={() => runMenuAction(onDelete, menu.entry)}
+                />
+              </>
             )}
-            <MenuItem
-              icon='Pencil'
-              label='Rename'
-              onClick={() => runMenuAction(onRename, menu.entry)}
-            />
-            <MenuItem
-              icon='Trash'
-              label='Delete'
-              tone='danger'
-              onClick={() => runMenuAction(onDelete, menu.entry)}
-            />
           </motion.div>
         )}
       </AnimatePresence>

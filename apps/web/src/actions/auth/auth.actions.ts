@@ -4,10 +4,20 @@ import type { AllowedFolder, SaveFoldersPayload } from '@dropto/types';
 import { isAxiosError } from 'axios';
 import { cookies } from 'next/headers';
 
-import { disconnectAccount, getPickerToken, saveFolders } from '@/common/services/api/auth.api';
+import { DRIVE_OWNER_COOKIE } from '@/common/constants/auth.constants';
+import {
+  disconnectAccount,
+  getPickerToken,
+  removeFolder,
+  saveFolders,
+} from '@/common/services/api/auth.api';
 import { applyAuthCookies, parseAuthSetCookies } from '@/common/services/auth/tokens.server';
 import { getHttp } from '@/common/services/axios/axios.instance';
 import { type ActionResult, extractApiError, runAction } from '@/common/utils/action.functions';
+import { appServerConfig } from '@/configs/app/app.server-config';
+
+/** Owner-proof cookie lifetime — mirrors the API's DRIVE_OWNER_TTL_MS (30 days). */
+const DRIVE_OWNER_MAX_AGE_S = 30 * 24 * 60 * 60;
 
 /** Outcome of a sign-in attempt. */
 export interface LoginResult {
@@ -46,12 +56,42 @@ export async function login(username: string, password: string): Promise<LoginRe
 }
 
 /**
+ * Stores the Drive owner-proof (minted by the API on OAuth connect) in an httpOnly cookie, so the browser that connected the account can manage/disconnect it. Forwarded to the API on those calls.
+ **/
+export async function claimDriveOwnerAction(token: string): Promise<void> {
+  const { isProduction } = appServerConfig.nodeEnv;
+
+  (await cookies()).set(DRIVE_OWNER_COOKIE, token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'lax',
+    path: '/',
+    domain: isProduction ? appServerConfig.cookieDomain : undefined,
+    maxAge: DRIVE_OWNER_MAX_AGE_S,
+  });
+}
+
+/**
+ * Clears the Drive owner-proof cookie (on disconnect).
+ **/
+export async function revokeDriveOwnerAction(): Promise<void> {
+  (await cookies()).delete(DRIVE_OWNER_COOKIE);
+}
+
+/**
  * Persists the folders selected via the Google Picker.
  **/
 export async function saveFoldersAction(
   payload: SaveFoldersPayload,
 ): Promise<ActionResult<AllowedFolder[]>> {
   return runAction(() => saveFolders(payload));
+}
+
+/**
+ * Removes a single authorized folder (unselect); owner-gated by the API.
+ **/
+export async function removeFolderAction(folderId: string): Promise<ActionResult> {
+  return runAction(() => removeFolder(folderId));
 }
 
 /**

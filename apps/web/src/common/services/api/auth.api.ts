@@ -36,6 +36,14 @@ export const saveFolders = async (payload: SaveFoldersPayload): Promise<AllowedF
 };
 
 /**
+ * Removes a single authorized folder (unselect); owner-gated by the API.
+ **/
+export const removeFolder = async (folderId: string): Promise<void> => {
+  const http = await getHttp();
+  await http.delete(`/google-auth/folders/${encodeURIComponent(folderId)}`);
+};
+
+/**
  * Disconnects the Google account from the app.
  **/
 export const disconnectAccount = async (): Promise<void> => {
