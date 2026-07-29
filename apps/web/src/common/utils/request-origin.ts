@@ -7,13 +7,22 @@ export const isCrossSiteRequest = (request: Request): boolean =>
 /**
  * The externally-visible origin of a request, honoring the reverse proxy's forwarded headers.
  **/
-export const resolveRequestOrigin = (request: Request): string => {
-  const forwardedHost = request.headers.get('x-forwarded-host');
+export const resolveForwardedOrigin = (
+  getHeader: (name: string) => string | null,
+  fallback: string,
+): string => {
+  const forwardedHost = getHeader('x-forwarded-host');
   if (forwardedHost) {
     const host = forwardedHost.split(',')[0].trim();
-    const proto = (request.headers.get('x-forwarded-proto') ?? 'https').split(',')[0].trim();
+    const proto = (getHeader('x-forwarded-proto') ?? 'https').split(',')[0].trim();
     return `${proto}://${host}`;
   }
 
-  return new URL(request.url).origin;
+  return fallback;
 };
+
+/**
+ * The externally-visible origin of a request (redirect targets), falling back to its own origin.
+ **/
+export const resolveRequestOrigin = (request: Request): string =>
+  resolveForwardedOrigin((name) => request.headers.get(name), new URL(request.url).origin);

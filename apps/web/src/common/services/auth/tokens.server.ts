@@ -74,7 +74,16 @@ export const applyAuthCookies = (writer: CookieWriter, cookiesToSet: ParsedSetCo
  * Clears every auth cookie (logout / failed refresh).
  **/
 export const clearAuthCookies = (writer: CookieWriter): void => {
+  const { isProduction } = appServerConfig.nodeEnv;
+
   for (const name of AUTH_COOKIE_NAMES) {
-    writer.delete(name);
+    writer.set(name, '', {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/',
+      domain: isProduction ? appServerConfig.cookieDomain : undefined,
+      maxAge: 0,
+    });
   }
 };
