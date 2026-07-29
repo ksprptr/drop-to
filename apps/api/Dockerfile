@@ -27,11 +27,10 @@ COPY tsconfig.base.json ./
 
 WORKDIR /app/apps/api
 
-# prisma generate loads prisma.config.ts, whose datasource url is templated from DB_* — it doesn't
-# connect, so build-time placeholders suffice; real values come from env_file at runtime.
+# `pnpm run build` runs `prisma generate` first; it loads prisma.config.ts, whose datasource url is
+# templated from DB_* — generate doesn't connect, so build-time placeholders suffice (real values
+# come from env_file at runtime).
 ENV DB_USER=build DB_PASS=build DB_HOST=localhost DB_PORT=5432 DB_NAME=build
-
-RUN pnpm prisma:generate
 
 # tsc needs headroom here (the googleapis type surface is large and OOMs the default ~1 GiB
 # old-space). Requires a build host / Docker VM with >= ~4 GiB RAM.
