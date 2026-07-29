@@ -87,6 +87,13 @@ interface Props {
   sortKey?: SortKey;
   sortDir?: SortDir;
   onToggleSort?: (key: SortKey) => void;
+  /** Controlled search box: filters this view's entries (instant client-side + server-side for Drive). */
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
+  /** Infinite scroll: more pages exist, and the callback to load the next one. */
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 /** An open row-actions menu, anchored to the three-dot button's screen position. */
@@ -206,6 +213,11 @@ export default function FileBrowser({
   sortKey: controlledSortKey,
   sortDir: controlledSortDir,
   onToggleSort,
+  searchQuery = '',
+  onSearchChange,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -220,6 +232,12 @@ export default function FileBrowser({
   const rootMenu = path.length === 0 && Boolean(onUnselectRoot);
   const [menu, setMenu] = useState<RowMenu | null>(null);
   const [toolbarMenu, setToolbarMenu] = useState<DOMRect | null>(null);
+
+  // Infinite scroll: the scroll container + a bottom sentinel watched by an IntersectionObserver.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef(onLoadMore);
+  loadMoreRef.current = onLoadMore;
 
   // `webkitdirectory` has no typed React prop, so set it imperatively.
   useEffect(() => {
@@ -250,10 +268,16 @@ export default function FileBrowser({
     };
   }, [menu, toolbarMenu]);
 
+  // Instant client-side filter of the loaded rows (Drive also filters server-side; this is a superset,
+  // so it never hides server results — and it handles roots + S3, which aren't searched server-side).
+  const query = searchQuery.trim().toLowerCase();
   const sorted = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1;
+    const list = query
+      ? entries.filter((entry) => entry.name.toLowerCase().includes(query))
+      : entries;
 
-    return [...entries].sort((a, b) => {
+    return [...list].sort((a, b) => {
       // Folders always group before files, regardless of the column.
       if (a.isFolder !== b.isFolder) {
         return a.isFolder ? -1 : 1;
@@ -267,7 +291,36 @@ export default function FileBrowser({
       }
       return a.name.localeCompare(b.name) * dir;
     });
-  }, [entries, sortKey, sortDir]);
+  }, [entries, sortKey, sortDir, query]);
+
+  // Identity of the current view — changes only on folder / sort / search, i.e. a "fresh load".
+  const viewKey = `${path.map((crumb) => crumb.id).join('/')}|${sortKey}|${sortDir}|${query}`;
+
+  // Reset the scroll to the top on a fresh load — but NOT when appending pages (that must not jump).
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [viewKey]);
+
+  // Load the next page as the sentinel nears the viewport; pauses while a page is in flight.
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    const root = scrollRef.current;
+    if (!sentinel || !root || !hasMore || loadingMore) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (records) => {
+        if (records[0]?.isIntersecting) {
+          loadMoreRef.current?.();
+        }
+      },
+      { root, rootMargin: '400px' },
+    );
+    observer.observe(sentinel);
+
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, sorted.length]);
 
   const toggleSort = (key: SortKey) => {
     if (onToggleSort) {
@@ -399,7 +452,9 @@ export default function FileBrowser({
         <div className='flex shrink-0 items-center gap-x-1'>
           {!loading && (
             <span className='mr-1 hidden text-xs text-zinc-600 sm:block dark:text-zinc-400'>
-              {entries.length} item{entries.length === 1 ? '' : 's'}
+              {query
+                ? `${sorted.length} of ${entries.length}`
+                : `${entries.length} item${entries.length === 1 ? '' : 's'}`}
             </span>
           )}
           {(canUpload || onToggleSplit || onCopyLink) && (
@@ -418,8 +473,40 @@ export default function FileBrowser({
         </div>
       </header>
 
+      {/* Search this view (folders + files). Instant client filter; Drive also narrows server-side. */}
+      {!notFound && (entries.length > 0 || query) && (
+        <div className='shrink-0 px-2 pb-2'>
+          <div className='relative'>
+            <Icon
+              icon='MagnifyingGlass'
+              className='pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-zinc-500'
+            />
+            <input
+              type='text'
+              value={searchQuery}
+              onChange={(event) => onSearchChange?.(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') onSearchChange?.('');
+              }}
+              placeholder='Search this folder'
+              className='w-full rounded-lg border border-zinc-300 bg-zinc-50 py-1.5 pr-8 pl-8 text-sm text-zinc-950 transition placeholder:text-zinc-500 focus:border-green-600 focus:ring-1 focus:ring-green-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50'
+            />
+            {searchQuery && (
+              <button
+                type='button'
+                onClick={() => onSearchChange?.('')}
+                title='Clear search'
+                className='absolute top-1/2 right-2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-950 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'>
+                <Icon icon='XMark' className='h-3.5 w-3.5' />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Content / drop zone */}
       <div
+        ref={scrollRef}
         onClick={onDeselect}
         onDragOver={handleDragOver}
         onDragLeave={(event) => {
@@ -484,6 +571,12 @@ export default function FileBrowser({
                   ? 'Add folders or buckets to this storage in the sidebar.'
                   : 'Choose a storage in the sidebar to start browsing.'}
             </p>
+          </div>
+        ) : sorted.length === 0 ? (
+          <div className='flex h-full flex-col items-center justify-center text-center text-zinc-600 dark:text-zinc-400'>
+            <Icon icon='MagnifyingGlass' className='mb-3 h-9 w-9 opacity-40' />
+            <p className='text-sm font-medium text-zinc-950 dark:text-zinc-50'>No matches</p>
+            <p className='mt-1 text-xs'>Nothing here matches “{searchQuery.trim()}”.</p>
           </div>
         ) : (
           <div className='px-1'>
@@ -638,6 +731,15 @@ export default function FileBrowser({
                 );
               })}
             </ul>
+
+            {loadingMore && (
+              <div className='flex items-center justify-center gap-x-2 py-3 text-xs text-zinc-600 dark:text-zinc-400'>
+                <LoadingIndicator />
+                Loading more…
+              </div>
+            )}
+            {/* Sentinel: when it nears the viewport the next page loads (see the observer effect). */}
+            <div ref={sentinelRef} className='h-px w-full' />
           </div>
         )}
       </div>

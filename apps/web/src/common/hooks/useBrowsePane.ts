@@ -1,11 +1,16 @@
 'use client';
 
 import type { StorageBackend } from '@dropto/types';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { listContentsAction } from '@/actions/storage/storage.actions';
-import type { Crumb, ViewEntry } from '@/common/types/workspace.types';
+import { useDebouncedValue } from '@/common/hooks/useDebouncedValue';
+import type { Crumb, SortDir, SortKey, ViewEntry } from '@/common/types/workspace.types';
 import { toViewEntries } from '@/common/utils/view-entry.functions';
+
+/** Drive filters by name server-side; S3 lists a whole level and is filtered client-side. */
+const serverSearch = (backend: StorageBackend | null, term: string): string | undefined =>
+  backend === 'drive' && term ? term : undefined;
 
 /** A failed read, surfaced to the pane's error handler. */
 export interface PaneError {
@@ -22,6 +27,15 @@ export interface BrowsePane {
   /** Null at the roots level. */
   currentFolderId: string | null;
   atRoots: boolean;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  toggleSort: (key: SortKey) => void;
+  search: string;
+  setSearch: (query: string) => void;
+  /** Whether another page can be loaded (infinite scroll). */
+  hasMore: boolean;
+  loadingMore: boolean;
+  loadMore: () => Promise<void>;
   openFolder: (entry: ViewEntry) => void;
   navigate: (index: number) => void;
   goTo: (path: Crumb[]) => void;
@@ -45,9 +59,15 @@ export function useBrowsePane(
   const [entries, setEntries] = useState<ViewEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [search, setSearch] = useState('');
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const currentFolderId = path.length > 0 ? path[path.length - 1].id : null;
   const atRoots = path.length === 0;
+  const debouncedSearch = useDebouncedValue(search.trim(), 250);
 
   useEffect(() => {
     setPath([]);
@@ -57,25 +77,66 @@ export function useBrowsePane(
     setSelectedIds(new Set());
   }, [currentFolderId, backend]);
 
+  // A new folder starts unfiltered.
+  useEffect(() => {
+    setSearch('');
+  }, [currentFolderId, backend]);
+
+  // Keep the latest sortKey for toggleSort without making it depend on (and re-create) on every change.
+  const sortKeyRef = useRef<SortKey>(sortKey);
+  sortKeyRef.current = sortKey;
+
+  const toggleSort = useCallback((key: SortKey) => {
+    setSortDir((dir) => (key === sortKeyRef.current ? (dir === 'asc' ? 'desc' : 'asc') : 'asc'));
+    setSortKey(key);
+  }, []);
+
   const reload = useCallback(async () => {
     if (currentFolderId === null || backend === null) {
       setEntries(roots);
+      setNextPageToken(null);
       return;
     }
 
     setLoading(true);
-    const result = await listContentsAction(backend, currentFolderId);
+    const result = await listContentsAction(backend, currentFolderId, {
+      search: serverSearch(backend, debouncedSearch),
+      sortKey,
+      sortDir,
+    });
     if (result.ok) {
-      setEntries(toViewEntries(result.data ?? []));
+      setEntries(toViewEntries(result.data?.entries ?? []));
+      setNextPageToken(result.data?.nextPageToken ?? null);
     } else {
       onError({ error: result.error, status: result.status });
     }
     setLoading(false);
-  }, [backend, currentFolderId, roots, onError]);
+  }, [backend, currentFolderId, roots, onError, debouncedSearch, sortKey, sortDir]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  const loadMore = useCallback(async () => {
+    if (nextPageToken === null || backend === null || currentFolderId === null || loadingMore) {
+      return;
+    }
+
+    setLoadingMore(true);
+    const result = await listContentsAction(backend, currentFolderId, {
+      pageToken: nextPageToken,
+      search: serverSearch(backend, debouncedSearch),
+      sortKey,
+      sortDir,
+    });
+    if (result.ok) {
+      setEntries((current) => [...current, ...toViewEntries(result.data?.entries ?? [])]);
+      setNextPageToken(result.data?.nextPageToken ?? null);
+    } else {
+      onError({ error: result.error, status: result.status });
+    }
+    setLoadingMore(false);
+  }, [nextPageToken, backend, currentFolderId, loadingMore, debouncedSearch, sortKey, sortDir, onError]);
 
   const openFolder = useCallback((entry: ViewEntry) => {
     setPath((current) => [...current, { id: entry.id, name: entry.name }]);
@@ -126,6 +187,14 @@ export function useBrowsePane(
       selectedIds,
       currentFolderId,
       atRoots,
+      sortKey,
+      sortDir,
+      toggleSort,
+      search,
+      setSearch,
+      hasMore: nextPageToken !== null,
+      loadingMore,
+      loadMore,
       openFolder,
       navigate,
       goTo,
@@ -143,6 +212,13 @@ export function useBrowsePane(
       selectedIds,
       currentFolderId,
       atRoots,
+      sortKey,
+      sortDir,
+      toggleSort,
+      search,
+      nextPageToken,
+      loadingMore,
+      loadMore,
       openFolder,
       navigate,
       goTo,

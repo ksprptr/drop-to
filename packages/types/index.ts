@@ -20,12 +20,31 @@ export interface DriveEntry {
   webViewLink: string | null;
 }
 
+/** One page of folder contents; `nextPageToken` is the cursor for the next page (null = last page). */
+export interface DriveEntryPage {
+  entries: DriveEntry[];
+  nextPageToken: string | null;
+}
+
+/** How the browser wants a folder listed: cursor page + optional server-side search/sort. */
+export interface ListContentsQuery {
+  pageToken?: string;
+  search?: string;
+  sortKey?: 'name' | 'modified' | 'size';
+  sortDir?: 'asc' | 'desc';
+}
+
 /** Result of a successful file upload. */
 export interface UploadResult {
   fileId: string;
   fileName: string;
   size: number | null;
   webViewLink: string | null;
+}
+
+/** A resumable upload session: the browser PUTs the file bytes straight to `uploadUrl` (bypasses the app + CDN). */
+export interface ResumableUploadSession {
+  uploadUrl: string;
 }
 
 /** Payload sent from the Picker setup flow to persist the selected folders. */

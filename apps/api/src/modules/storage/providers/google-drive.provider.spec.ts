@@ -70,7 +70,10 @@ describe('GoogleDriveProvider', () => {
       withAllowedRoots('root-1');
       files.list.mockResolvedValue({ data: { files: [] } });
 
-      await expect(service.listContents('root-1')).resolves.toEqual([]);
+      await expect(service.listContents('root-1')).resolves.toEqual({
+        entries: [],
+        nextPageToken: null,
+      });
       expect(files.get).not.toHaveBeenCalled();
     });
 
@@ -79,7 +82,10 @@ describe('GoogleDriveProvider', () => {
       files.get.mockResolvedValue({ data: { id: 'child', parents: ['root-1'] } });
       files.list.mockResolvedValue({ data: { files: [] } });
 
-      await expect(service.listContents('child')).resolves.toEqual([]);
+      await expect(service.listContents('child')).resolves.toEqual({
+        entries: [],
+        nextPageToken: null,
+      });
       expect(files.get).toHaveBeenCalledWith({ fileId: 'child', fields: 'id, parents' });
     });
 
@@ -113,12 +119,33 @@ describe('GoogleDriveProvider', () => {
         },
       });
 
-      const result = await service.listContents('root-1');
+      const { entries, nextPageToken } = await service.listContents('root-1');
 
-      expect(result[0]).toMatchObject({ id: 'f1', isFolder: true, size: null });
-      expect(result[1]).toMatchObject({ id: 'f2', isFolder: false, size: 2048 });
-      expect(result[2]).toMatchObject({ id: 'f3', isFolder: false, size: null });
-      expect(result[3]).toMatchObject({ id: 'f4', name: '', mimeType: '', size: null });
+      expect(entries[0]).toMatchObject({ id: 'f1', isFolder: true, size: null });
+      expect(entries[1]).toMatchObject({ id: 'f2', isFolder: false, size: 2048 });
+      expect(entries[2]).toMatchObject({ id: 'f3', isFolder: false, size: null });
+      expect(entries[3]).toMatchObject({ id: 'f4', name: '', mimeType: '', size: null });
+      expect(nextPageToken).toBeNull();
+    });
+
+    it('returns the cursor for the next page', async () => {
+      withAllowedRoots('root-1');
+      files.list.mockResolvedValue({ data: { files: [], nextPageToken: 'CURSOR' } });
+
+      const { nextPageToken } = await service.listContents('root-1');
+
+      expect(nextPageToken).toBe('CURSOR');
+    });
+
+    it('adds an escaped name filter to the query when searching', async () => {
+      withAllowedRoots('root-1');
+      files.list.mockResolvedValue({ data: { files: [] } });
+
+      await service.listContents('root-1', { search: "a'b" });
+
+      expect(files.list).toHaveBeenCalledWith(
+        expect.objectContaining({ q: expect.stringContaining("name contains 'a\\'b'") }),
+      );
     });
   });
 
