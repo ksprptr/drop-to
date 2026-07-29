@@ -1136,7 +1136,7 @@ function WorkspaceInner({
             ))}
           </ul>
           <div className='flex flex-wrap justify-end gap-2'>
-            <Button variant='transparent' onClick={() => resolveDuplicate('cancel')}>
+            <Button variant='soft-danger' onClick={() => resolveDuplicate('cancel')}>
               Cancel
             </Button>
             <Button variant='normal' onClick={() => resolveDuplicate('keep')}>
@@ -1160,7 +1160,7 @@ function WorkspaceInner({
             autoFocus
           />
           <div className='flex justify-end gap-x-2'>
-            <Button variant='transparent' onClick={() => setNewFolderOpen(false)}>
+            <Button variant='soft-danger' onClick={() => setNewFolderOpen(false)}>
               Cancel
             </Button>
             <Button
@@ -1192,7 +1192,7 @@ function WorkspaceInner({
           />
           <div className='flex justify-end gap-x-2'>
             <Button
-              variant='transparent'
+              variant='soft-danger'
               onClick={() => {
                 setRenameTarget(null);
                 setExtWarning(null);
@@ -1229,7 +1229,7 @@ function WorkspaceInner({
             </p>
           </div>
           <div className='flex flex-wrap justify-end gap-2'>
-            <Button variant='transparent' onClick={() => setExtWarning(null)}>
+            <Button variant='soft-danger' onClick={() => setExtWarning(null)}>
               Cancel
             </Button>
             <Button

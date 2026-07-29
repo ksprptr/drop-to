@@ -48,7 +48,7 @@ export default function ConfirmDialog({
           <p className='text-sm text-zinc-600 dark:text-zinc-400'>{message}</p>
         </div>
         <div className='flex justify-end gap-x-2'>
-          <Button variant='transparent' onClick={onClose}>
+          <Button variant='soft-danger' onClick={onClose}>
             Cancel
           </Button>
           <Button variant={styles.confirm} loading={loading} onClick={onConfirm}>

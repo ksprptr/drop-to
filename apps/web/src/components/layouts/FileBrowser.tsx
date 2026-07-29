@@ -488,7 +488,7 @@ export default function FileBrowser({
                   checked={allSelected}
                   onChange={() => (allSelected ? onClearSelection() : onSelectAll())}
                   title={allSelected ? 'Clear selection' : 'Select all'}
-                  className='h-4 w-4 cursor-pointer accent-green-600'
+                  className='h-4 w-4'
                 />
               )}
               <SortHeader
@@ -587,7 +587,7 @@ export default function FileBrowser({
                             checked={checked}
                             onClick={(event) => event.stopPropagation()}
                             onChange={() => onToggleSelect(entry.id)}
-                            className='hidden h-4 w-4 cursor-pointer accent-green-600 max-sm:block'
+                            className='hidden h-4 w-4 max-sm:block'
                           />
                           {/* Desktop: a check indicator (no checkbox) for selected rows. */}
                           {checked && (

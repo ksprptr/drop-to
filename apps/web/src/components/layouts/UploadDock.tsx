@@ -101,9 +101,13 @@ function BatchCard({ batch, onCancel }: { batch: UploadBatch; onCancel: (id: str
   const total = batch.tasks.length;
   const done = batch.tasks.filter((task) => task.status === 'done').length;
   const inFlight = batch.tasks.filter(
-    (task) => task.status === 'pending' || task.status === 'uploading' || task.status === 'processing',
+    (task) =>
+      task.status === 'pending' || task.status === 'uploading' || task.status === 'processing',
   );
-  const remainingBytes = inFlight.reduce((sum, task) => sum + task.size * (1 - task.percent / 100), 0);
+  const remainingBytes = inFlight.reduce(
+    (sum, task) => sum + task.size * (1 - task.percent / 100),
+    0,
+  );
   const rate = batch.tasks.reduce((max, task) => Math.max(max, task.rate ?? 0), 0);
   const eta = rate > 0 ? formatEta(remainingBytes / rate) : '';
 
@@ -112,7 +116,9 @@ function BatchCard({ batch, onCancel }: { batch: UploadBatch; onCancel: (id: str
   const showList = !many || expanded;
 
   const title = `${batch.status === 'done' ? 'Uploaded' : 'Uploading'} ${
-    batch.kind === 'folder' ? `folder “${batch.folderName}”` : `${total} file${total === 1 ? '' : 's'}`
+    batch.kind === 'folder'
+      ? `folder “${batch.folderName}”`
+      : `${total} file${total === 1 ? '' : 's'}`
   }`;
 
   return (
