@@ -20,6 +20,20 @@ export interface DriveEntry {
   webViewLink: string | null;
 }
 
+/** One page of folder contents; `nextPageToken` is the cursor for the next page (null = last page). */
+export interface DriveEntryPage {
+  entries: DriveEntry[];
+  nextPageToken: string | null;
+}
+
+/** How the browser wants a folder listed: cursor page + optional server-side search/sort. */
+export interface ListContentsQuery {
+  pageToken?: string;
+  search?: string;
+  sortKey?: 'name' | 'modified' | 'size';
+  sortDir?: 'asc' | 'desc';
+}
+
 /** Result of a successful file upload. */
 export interface UploadResult {
   fileId: string;

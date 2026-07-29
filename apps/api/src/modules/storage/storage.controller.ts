@@ -42,6 +42,7 @@ import { CreateUploadSessionDto } from './dto/create-upload-session.dto';
 import { MoveItemDto } from './dto/move-item.dto';
 import { RenameItemDto } from './dto/rename-item.dto';
 import { DriveEntryEntity } from './entities/drive-entry.entity';
+import { DriveEntryPageEntity } from './entities/drive-entry-page.entity';
 import { ResolvedNameEntity } from './entities/resolved-name.entity';
 import { ResumableUploadSessionEntity } from './entities/resumable-upload-session.entity';
 import { StorageStatusEntity } from './entities/storage-status.entity';
@@ -93,16 +94,23 @@ export class StorageController {
     return this.registry.resolve(backend).listRoots();
   }
 
-  @ApiOperation({ summary: 'List the contents of a folder' })
-  @ApiOkResponse({ type: [DriveEntryEntity], description: 'Successful' })
+  @ApiOperation({ summary: 'List one page of a folder’s contents (cursor paginated, searchable)' })
+  @ApiOkResponse({ type: DriveEntryPageEntity, description: 'Successful' })
   @ApiForbiddenResponse({ type: ResponseEntity, description: 'Folder outside authorized tree' })
   @BackendParam()
   @Get(':backend/folders/:id/contents')
   async getContents(
     @Param('backend') backend: string,
     @Param('id') id: string,
-  ): Promise<DriveEntryEntity[]> {
-    return this.registry.resolve(backend).listContents(id);
+    @Query('pageToken') pageToken?: string,
+    @Query('search') search?: string,
+    @Query('sort') sort?: string,
+    @Query('dir') dir?: string,
+  ): Promise<DriveEntryPageEntity> {
+    const sortKey = sort === 'modified' || sort === 'size' ? sort : 'name';
+    const sortDir = dir === 'desc' ? 'desc' : 'asc';
+
+    return this.registry.resolve(backend).listContents(id, { pageToken, search, sortKey, sortDir });
   }
 
   @ApiOperation({ summary: 'Resolve display names for a set of ids (breadcrumb rebuild)' })

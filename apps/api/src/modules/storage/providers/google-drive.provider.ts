@@ -20,6 +20,8 @@ import { ResolvedNameEntity } from '../entities/resolved-name.entity';
 import { StorageStatusEntity } from '../entities/storage-status.entity';
 import { UploadResultEntity } from '../entities/upload-result.entity';
 import {
+  ContentsPage,
+  ListContentsOptions,
   ResumableUploadInit,
   StorageArchive,
   StorageBackend,
@@ -38,6 +40,8 @@ import { logUploadFailure, logUploadSuccess } from '../upload-log.functions';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const MAX_ANCESTOR_DEPTH = 50;
 const LABEL = 'Google Drive';
+// One network page. Small enough to keep first paint fast, big enough that most folders need one call.
+const PAGE_SIZE = 100;
 
 /**
  * StorageProvider over the Drive API; every op is validated to stay inside the authorized folder tree.
@@ -175,31 +179,56 @@ export class GoogleDriveProvider implements StorageProvider {
     });
   }
 
-  async listContents(folderId: string): Promise<DriveEntryEntity[]> {
+  async listContents(folderId: string, options: ListContentsOptions = {}): Promise<ContentsPage> {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
     const drive = await this.getDrive(driveAccountId);
     const allowedIds = await this.getAllowedFolderIds(driveAccountId);
 
     await this.assertItemAllowed(drive, folderId, allowedIds);
 
-    const files: drive_v3.Schema$File[] = [];
-    let pageToken: string | undefined;
+    const res = await drive.files.list({
+      q: this.buildContentsQuery(folderId, options.search),
+      fields: 'nextPageToken, files(id, name, mimeType, size, modifiedTime, iconLink, webViewLink)',
+      orderBy: this.buildOrderBy(options.sortKey, options.sortDir),
+      pageSize: PAGE_SIZE,
+      pageToken: options.pageToken,
+    });
 
-    do {
-      const res = await drive.files.list({
-        q: `'${folderId}' in parents and trashed = false`,
-        fields:
-          'nextPageToken, files(id, name, mimeType, size, modifiedTime, iconLink, webViewLink)',
-        orderBy: 'folder,name',
-        pageSize: 1000,
-        pageToken,
-      });
+    return {
+      entries: (res.data.files ?? []).map((file) => this.toDriveEntry(file)),
+      nextPageToken: res.data.nextPageToken ?? null,
+    };
+  }
 
-      files.push(...(res.data.files ?? []));
-      pageToken = res.data.nextPageToken ?? undefined;
-    } while (pageToken);
+  /**
+   * The Drive `q` for a folder's direct children, optionally narrowed by a name search. The search
+   * term is escaped (`\` and `'`) so it can't break out of the quoted string (query injection).
+   **/
+  private buildContentsQuery(folderId: string, search: string | undefined): string {
+    let query = `'${folderId}' in parents and trashed = false`;
 
-    return files.map((file) => this.toDriveEntry(file));
+    const term = search?.trim();
+    if (term) {
+      const escaped = term.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      query += ` and name contains '${escaped}'`;
+    }
+
+    return query;
+  }
+
+  /**
+   * Maps the UI sort to a Drive `orderBy`. `folder` always leads so folders group before files,
+   * regardless of the chosen column/direction.
+   **/
+  private buildOrderBy(
+    sortKey: ListContentsOptions['sortKey'],
+    sortDir: ListContentsOptions['sortDir'],
+  ): string {
+    const field =
+      sortKey === 'modified' ? 'modifiedTime' : sortKey === 'size' ? 'quotaBytesUsed' : 'name';
+    const direction = sortDir === 'desc' ? ' desc' : '';
+
+    return `folder,${field}${direction}`;
   }
 
   async resolveNames(ids: string[]): Promise<ResolvedNameEntity[]> {

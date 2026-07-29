@@ -21,6 +21,7 @@ import {
   statusesAction,
 } from '@/actions/storage/storage.actions';
 import { useBrowsePane } from '@/common/hooks/useBrowsePane';
+import { useDebouncedValue } from '@/common/hooks/useDebouncedValue';
 import {
   fileDownloadUrl,
   folderDownloadUrl,
@@ -128,6 +129,9 @@ function WorkspaceInner({
   const [path, setPath] = useState<Crumb[]>(initialPath ?? []);
   const [entries, setEntries] = useState<ViewEntry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
+  const [search, setSearch] = useState('');
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selected, setSelected] = useState<ViewEntry | null>(null);
   const [duplicate, setDuplicate] = useState<string[] | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<ViewEntry | null>(null);
@@ -167,6 +171,7 @@ function WorkspaceInner({
 
   const currentFolderId = path.length > 0 ? path[path.length - 1].id : null;
   const atRoots = path.length === 0;
+  const debouncedSearch = useDebouncedValue(search.trim(), 250);
 
   // Server-detected 404 (bad folder URL): shown in the file area until the operator navigates away.
   const notFoundPathname = useRef(initialNotFound ? pathname : null);
@@ -320,16 +325,28 @@ function WorkspaceInner({
     }
   }, [searchParams, toast, loadStatus]);
 
+  // A new folder starts unfiltered.
+  useEffect(() => {
+    setSearch('');
+  }, [currentFolderId, activeBackend]);
+
   const loadEntries = useCallback(async () => {
     if (currentFolderId === null || activeBackend === null) {
       setEntries(roots);
+      setNextPageToken(null);
       return;
     }
 
     setLoadingEntries(true);
-    const result = await listContentsAction(activeBackend, currentFolderId);
+    const result = await listContentsAction(activeBackend, currentFolderId, {
+      // Drive filters server-side; S3 lists the whole level and is filtered client-side.
+      search: activeBackend === 'drive' && debouncedSearch ? debouncedSearch : undefined,
+      sortKey,
+      sortDir,
+    });
     if (result.ok) {
-      setEntries(toViewEntries(result.data ?? []));
+      setEntries(toViewEntries(result.data?.entries ?? []));
+      setNextPageToken(result.data?.nextPageToken ?? null);
     } else {
       toast.error(result.error ?? 'Failed to open the folder.');
       // Storage disconnected mid-session — refresh so the sidebar reflects it.
@@ -338,11 +355,42 @@ function WorkspaceInner({
       }
     }
     setLoadingEntries(false);
-  }, [activeBackend, currentFolderId, roots, toast, loadStatus]);
+  }, [activeBackend, currentFolderId, roots, toast, loadStatus, debouncedSearch, sortKey, sortDir]);
 
   useEffect(() => {
     void loadEntries();
   }, [loadEntries]);
+
+  const loadMoreEntries = useCallback(async () => {
+    if (nextPageToken === null || activeBackend === null || currentFolderId === null || loadingMore) {
+      return;
+    }
+
+    setLoadingMore(true);
+    const result = await listContentsAction(activeBackend, currentFolderId, {
+      pageToken: nextPageToken,
+      search: activeBackend === 'drive' && debouncedSearch ? debouncedSearch : undefined,
+      sortKey,
+      sortDir,
+    });
+    if (result.ok) {
+      // Append (never replace) so the scroll position is preserved during infinite scroll.
+      setEntries((current) => [...current, ...toViewEntries(result.data?.entries ?? [])]);
+      setNextPageToken(result.data?.nextPageToken ?? null);
+    } else if (result.status === 424) {
+      void loadStatus();
+    }
+    setLoadingMore(false);
+  }, [
+    nextPageToken,
+    activeBackend,
+    currentFolderId,
+    loadingMore,
+    debouncedSearch,
+    sortKey,
+    sortDir,
+    loadStatus,
+  ]);
 
   // Reload both panes after a mutation so the source and destination both refresh.
   const reloadPanes = useCallback(async () => {
@@ -1095,6 +1143,11 @@ function WorkspaceInner({
             sortDir={sortDir}
             onToggleSort={handleToggleSort}
             onCopyLink={handleCopyLink}
+            searchQuery={search}
+            onSearchChange={setSearch}
+            hasMore={nextPageToken !== null}
+            loadingMore={loadingMore}
+            onLoadMore={loadMoreEntries}
             onUnselectRoot={
               activeBackend === 'drive' && (driveStatus?.isOwner ?? false)
                 ? setUnselectTarget
@@ -1150,6 +1203,14 @@ function WorkspaceInner({
                 onDownload={handleDownload}
                 onRename={openRename}
                 onDelete={setConfirmTarget}
+                sortKey={paneB.sortKey}
+                sortDir={paneB.sortDir}
+                onToggleSort={paneB.toggleSort}
+                searchQuery={paneB.search}
+                onSearchChange={paneB.setSearch}
+                hasMore={paneB.hasMore}
+                loadingMore={paneB.loadingMore}
+                onLoadMore={paneB.loadMore}
               />
             </div>
           </div>

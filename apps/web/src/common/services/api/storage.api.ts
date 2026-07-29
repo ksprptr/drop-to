@@ -1,6 +1,8 @@
 import 'server-only';
 import type {
   DriveEntry,
+  DriveEntryPage,
+  ListContentsQuery,
   ResumableUploadSession,
   StorageBackend,
   StorageStatus,
@@ -23,15 +25,24 @@ export const getStatuses = async (): Promise<StorageStatus[]> => {
 };
 
 /**
- * Lists the contents (files + folders) of a folder.
+ * Lists one page of a folder's contents (cursor paginated; optional server-side search + sort).
  **/
 export const listContents = async (
   backend: StorageBackend,
   folderId: string,
-): Promise<DriveEntry[]> => {
+  query: ListContentsQuery = {},
+): Promise<DriveEntryPage> => {
   const http = await getHttp();
-  const { data } = await http.get<DriveEntry[]>(
+  const { data } = await http.get<DriveEntryPage>(
     `/storage/${backend}/folders/${seg(folderId)}/contents`,
+    {
+      params: {
+        ...(query.pageToken ? { pageToken: query.pageToken } : {}),
+        ...(query.search ? { search: query.search } : {}),
+        ...(query.sortKey ? { sort: query.sortKey } : {}),
+        ...(query.sortDir ? { dir: query.sortDir } : {}),
+      },
+    },
   );
 
   return data;

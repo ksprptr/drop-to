@@ -31,6 +31,8 @@ import { ResolvedNameEntity } from '../entities/resolved-name.entity';
 import { StorageStatusEntity } from '../entities/storage-status.entity';
 import { UploadResultEntity } from '../entities/upload-result.entity';
 import {
+  ContentsPage,
+  ListContentsOptions,
   ResumableUploadInit,
   StorageArchive,
   StorageBackend,
@@ -215,7 +217,7 @@ export class S3StorageProvider implements StorageProvider {
     );
   }
 
-  async listContents(folderId: string): Promise<DriveEntryEntity[]> {
+  async listContents(folderId: string, _options: ListContentsOptions = {}): Promise<ContentsPage> {
     const ref = this.resolve(folderId);
     const client = this.getClient();
 
@@ -258,7 +260,7 @@ export class S3StorageProvider implements StorageProvider {
       throw error;
     }
 
-    return [...folders, ...files];
+    return { entries: [...folders, ...files], nextPageToken: null };
   }
 
   resolveNames(ids: string[]): Promise<ResolvedNameEntity[]> {
@@ -324,7 +326,10 @@ export class S3StorageProvider implements StorageProvider {
   /**
    * S3 has no browser-direct resumable session in this app — uploads go through the streamed route.
    **/
-  createResumableUpload(_folderId: string, _init: ResumableUploadInit): Promise<{ uploadUrl: string }> {
+  createResumableUpload(
+    _folderId: string,
+    _init: ResumableUploadInit,
+  ): Promise<{ uploadUrl: string }> {
     throw new BadRequestException('Direct upload is not supported for this backend.');
   }
 

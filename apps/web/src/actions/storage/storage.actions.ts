@@ -2,6 +2,8 @@
 
 import type {
   DriveEntry,
+  DriveEntryPage,
+  ListContentsQuery,
   ResumableUploadSession,
   StorageBackend,
   StorageStatus,
@@ -34,8 +36,9 @@ export async function statusesAction(): Promise<ActionResult<StorageStatus[]>> {
 export async function listContentsAction(
   backend: StorageBackend,
   folderId: string,
-): Promise<ActionResult<DriveEntry[]>> {
-  return runAction(() => listContents(backend, folderId));
+  query: ListContentsQuery = {},
+): Promise<ActionResult<DriveEntryPage>> {
+  return runAction(() => listContents(backend, folderId, query));
 }
 
 /**

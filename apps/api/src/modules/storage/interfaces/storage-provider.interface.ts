@@ -31,6 +31,20 @@ export interface ResumableUploadInit {
   origin: string;
 }
 
+/** How to list a folder: a cursor page, optionally narrowed by a name search and ordered server-side. */
+export interface ListContentsOptions {
+  pageToken?: string;
+  search?: string;
+  sortKey?: 'name' | 'modified' | 'size';
+  sortDir?: 'asc' | 'desc';
+}
+
+/** One page of folder contents plus the cursor for the next page (null when there are no more). */
+export interface ContentsPage {
+  entries: DriveEntryEntity[];
+  nextPageToken: string | null;
+}
+
 /** A file opened for download: stream + headers (`size` null when unreported). */
 export interface StorageDownload {
   stream: Readable;
@@ -56,8 +70,8 @@ export interface StorageProvider {
   /** Lists the authorized root folders (the ones picked during setup). */
   listRoots(): Promise<AllowedFolderEntity[]>;
 
-  /** Lists the files and subfolders directly inside an authorized folder. */
-  listContents(folderId: string): Promise<DriveEntryEntity[]>;
+  /** Lists one page of the files and subfolders directly inside an authorized folder. */
+  listContents(folderId: string, options?: ListContentsOptions): Promise<ContentsPage>;
 
   /** Resolves the display names of ids (for rebuilding a breadcrumb from a deep link). */
   resolveNames(ids: string[]): Promise<ResolvedNameEntity[]>;

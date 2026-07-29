@@ -150,7 +150,7 @@ describe('S3StorageProvider', () => {
           IsTruncated: false,
         });
 
-      const entries = await make().listContents(idOf(BUCKET, ''));
+      const { entries } = await make().listContents(idOf(BUCKET, ''));
 
       expect(entries.map((e) => [e.name, e.isFolder])).toEqual([
         ['folder1', true],
