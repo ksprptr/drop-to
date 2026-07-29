@@ -7,6 +7,10 @@ generator client {
   moduleFormat = "cjs"
 }
 
+generator dbml {
+  provider = "prisma-dbml-generator"
+}
+
 datasource db {
   provider = "postgresql"
 }

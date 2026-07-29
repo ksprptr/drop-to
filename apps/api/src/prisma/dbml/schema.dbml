@@ -1,0 +1,79 @@
+//// ------------------------------------------------------
+//// THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+//// ------------------------------------------------------
+
+Table auth_state {
+  id String [pk, default: 'singleton']
+  tokenVersion Int [not null, default: 0]
+  updatedAt DateTime [not null]
+
+  Note: 'Single-row store for the operator\'s token version. Stateless JWTs are otherwise
+irrevocable; bumping this version on logout invalidates every access/refresh token
+issued before it (the AuthGuard rejects a token whose `ver` no longer matches).'
+}
+
+Table drive_accounts {
+  id String [pk]
+  email String [unique, not null]
+  refreshTokenEnc String [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  allowedFolders allowed_folders [not null]
+
+  Note: 'The single authorized Google account whose Drive quota is used for uploads.
+The refresh token is stored encrypted (AES-256-GCM), never in plaintext.'
+}
+
+Table allowed_folders {
+  id String [pk]
+  driveAccountId String [not null]
+  folderId String [not null]
+  name String [not null]
+  createdAt DateTime [default: `now()`, not null]
+  driveAccount drive_accounts [not null]
+
+  indexes {
+    (driveAccountId, folderId) [unique]
+  }
+
+  Note: 'A folder the account owner explicitly authorized via the Google Picker.
+All Drive operations are validated to stay within this set (or descendants).'
+}
+
+Table refresh_tokens {
+  id String [pk]
+  tokenHash String [unique, not null]
+  subject String [not null]
+  revokedAt DateTime
+  replacedByTokenId String
+  expiresAt DateTime [not null]
+  sessionExpiresAt DateTime [not null]
+  createdAt DateTime [default: `now()`, not null]
+
+  Note: 'One row per issued refresh token, rotated on every refresh. The token itself is an opaque random
+secret; only its SHA-256 hash (`tokenHash`) is stored, so a DB leak never exposes usable tokens.
+Presenting a token whose row is already revoked signals reuse (theft) → full session revocation.
+`expiresAt` is the sliding idle window; `sessionExpiresAt` is the absolute cap inherited across
+rotations so a session can\'t outlive `login + absolute TTL`. `subject` keys rows per operator so
+the table is ready for multiple users. Expired rows are pruned on refresh to keep it small.'
+}
+
+Table upload_logs {
+  id String [pk]
+  fileName String [not null]
+  folderId String [not null]
+  fileId String
+  size BigInt
+  status UploadStatus [not null]
+  error String
+  createdAt DateTime [default: `now()`, not null]
+
+  Note: 'Audit trail of upload attempts for the history view.'
+}
+
+Enum UploadStatus {
+  SUCCESS
+  FAILED
+}
+
+Ref: allowed_folders.driveAccountId > drive_accounts.id [delete: Cascade]

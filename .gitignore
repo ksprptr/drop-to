@@ -40,7 +40,6 @@ coverage/
 
 # Misc
 *.tsbuildinfo
-apps/api/src/prisma/generated/
 
 # Reference material (not part of the app)
 example/
