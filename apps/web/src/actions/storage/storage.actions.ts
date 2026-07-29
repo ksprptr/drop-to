@@ -1,10 +1,18 @@
 'use server';
 
-import type { DriveEntry, StorageBackend, StorageStatus } from '@dropto/types';
+import type {
+  DriveEntry,
+  ResumableUploadSession,
+  StorageBackend,
+  StorageStatus,
+  UploadResult,
+} from '@dropto/types';
 
 import {
   createSubfolder,
+  createUploadSession,
   deleteItem,
+  finalizeUpload,
   getStatuses,
   listContents,
   moveItem,
@@ -49,6 +57,27 @@ export async function createFolderAction(
   name: string,
 ): Promise<ActionResult<DriveEntry>> {
   return runAction(() => createSubfolder(backend, parentId, name));
+}
+
+/**
+ * Opens a resumable upload session (browser streams the file straight to storage).
+ **/
+export async function createUploadSessionAction(
+  backend: StorageBackend,
+  folderId: string,
+  meta: { name: string; mimeType: string; size: number },
+): Promise<ActionResult<ResumableUploadSession>> {
+  return runAction(() => createUploadSession(backend, folderId, meta));
+}
+
+/**
+ * Validates + records a browser-completed resumable upload.
+ **/
+export async function finalizeUploadAction(
+  backend: StorageBackend,
+  fileId: string,
+): Promise<ActionResult<UploadResult>> {
+  return runAction(() => finalizeUpload(backend, fileId));
 }
 
 /**

@@ -1,5 +1,11 @@
 import 'server-only';
-import type { DriveEntry, StorageBackend, StorageStatus } from '@dropto/types';
+import type {
+  DriveEntry,
+  ResumableUploadSession,
+  StorageBackend,
+  StorageStatus,
+  UploadResult,
+} from '@dropto/types';
 
 import { getHttp } from '@/common/services/axios/axios.instance';
 import { seg } from '@/common/utils/storage-path';
@@ -59,6 +65,36 @@ export const createSubfolder = async (
     `/storage/${backend}/folders/${seg(parentId)}/subfolder`,
     { name },
   );
+
+  return data;
+};
+
+/**
+ * Opens a resumable upload session; the browser then streams the file straight to storage.
+ **/
+export const createUploadSession = async (
+  backend: StorageBackend,
+  folderId: string,
+  meta: { name: string; mimeType: string; size: number },
+): Promise<ResumableUploadSession> => {
+  const http = await getHttp();
+  const { data } = await http.post<ResumableUploadSession>(
+    `/storage/${backend}/folders/${seg(folderId)}/upload-session`,
+    meta,
+  );
+
+  return data;
+};
+
+/**
+ * Validates + records a browser-completed resumable upload, returning the stored file.
+ **/
+export const finalizeUpload = async (
+  backend: StorageBackend,
+  fileId: string,
+): Promise<UploadResult> => {
+  const http = await getHttp();
+  const { data } = await http.post<UploadResult>(`/storage/${backend}/files/${seg(fileId)}/finalize`);
 
   return data;
 };

@@ -28,6 +28,11 @@ export interface UploadResult {
   webViewLink: string | null;
 }
 
+/** A resumable upload session: the browser PUTs the file bytes straight to `uploadUrl` (bypasses the app + CDN). */
+export interface ResumableUploadSession {
+  uploadUrl: string;
+}
+
 /** Payload sent from the Picker setup flow to persist the selected folders. */
 export interface SaveFoldersPayload {
   folders: Array<{ folderId: string; name: string }>;

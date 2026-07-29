@@ -20,6 +20,7 @@ import { ResolvedNameEntity } from '../entities/resolved-name.entity';
 import { StorageStatusEntity } from '../entities/storage-status.entity';
 import { UploadResultEntity } from '../entities/upload-result.entity';
 import {
+  ResumableUploadInit,
   StorageArchive,
   StorageBackend,
   StorageDownload,
@@ -267,6 +268,89 @@ export class GoogleDriveProvider implements StorageProvider {
       await logUploadFailure(this.prismaService, { fileName, folderId, error, signal });
       throw error;
     }
+  }
+
+  /**
+   * Opens a Drive resumable upload session server-side (the access token never leaves the server) and
+   * returns the session URL. The parent folder is validated + baked into the session, so the browser
+   * can only stream the one file into the one authorized folder — it cannot redirect it elsewhere.
+   **/
+  async createResumableUpload(
+    folderId: string,
+    init: ResumableUploadInit,
+  ): Promise<{ uploadUrl: string }> {
+    const driveAccountId = await this.googleAuthService.getActiveAccountId();
+    const drive = await this.getDrive(driveAccountId);
+    const allowedIds = await this.getAllowedFolderIds(driveAccountId);
+
+    await this.assertItemAllowed(drive, folderId, allowedIds);
+
+    const auth = await this.googleAuthService.getAuthorizedClient(driveAccountId);
+    const { token } = await auth.getAccessToken();
+
+    if (!token) {
+      throw new ServiceUnavailableException('Google Drive is temporarily unreachable. Try again.');
+    }
+
+    const response = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json; charset=UTF-8',
+          'X-Upload-Content-Type': init.mimeType,
+          'X-Upload-Content-Length': String(init.size),
+          // Lets Google return a session that a browser at this origin may PUT to (CORS).
+          Origin: init.origin,
+        },
+        body: JSON.stringify({ name: init.name, parents: [folderId] }),
+      },
+    );
+
+    const uploadUrl = response.headers.get('location');
+
+    if (!response.ok || !uploadUrl) {
+      this.logger.warn(`Failed to open a Drive upload session (status ${response.status}).`);
+      throw new ServiceUnavailableException('Could not start the upload. Try again.');
+    }
+
+    return { uploadUrl };
+  }
+
+  /**
+   * Validates a browser-completed resumable upload lands inside the authorized tree, records it, and returns the stored file. The session already pinned the parent — this is the server-side backstop.
+   **/
+  async finalizeUpload(fileId: string): Promise<UploadResultEntity> {
+    const driveAccountId = await this.googleAuthService.getActiveAccountId();
+    const drive = await this.getDrive(driveAccountId);
+    const allowedIds = await this.getAllowedFolderIds(driveAccountId);
+
+    await this.assertItemAllowed(drive, fileId, allowedIds);
+
+    const res = await drive.files.get({
+      fileId,
+      fields: 'id, name, size, parents, webViewLink',
+    });
+
+    const size = this.parseSize(res.data.size);
+    const fileName = res.data.name ?? '';
+
+    await logUploadSuccess(this.prismaService, {
+      fileName,
+      folderId: res.data.parents?.[0] ?? '',
+      fileId: res.data.id,
+      size,
+    });
+
+    this.logger.log(`Finalized upload "${fileName}" (${res.data.id}).`);
+
+    return {
+      fileId: res.data.id ?? fileId,
+      fileName,
+      size,
+      webViewLink: res.data.webViewLink ?? null,
+    };
   }
 
   /**

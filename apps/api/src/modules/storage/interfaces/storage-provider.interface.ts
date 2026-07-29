@@ -22,6 +22,15 @@ export interface StorageUpload {
   signal?: AbortSignal;
 }
 
+/** Metadata to open a resumable upload session (the browser then streams the bytes straight to storage). */
+export interface ResumableUploadInit {
+  name: string;
+  mimeType: string;
+  size: number;
+  /** Browser origin, so the created session permits a cross-origin PUT from the web app. */
+  origin: string;
+}
+
 /** A file opened for download: stream + headers (`size` null when unreported). */
 export interface StorageDownload {
   stream: Readable;
@@ -56,8 +65,17 @@ export interface StorageProvider {
   /** Creates a subfolder inside an authorized folder. */
   createFolder(parentId: string, name: string): Promise<DriveEntryEntity>;
 
-  /** Uploads a file into an authorized folder. */
+  /** Uploads a file into an authorized folder (server-streamed; used by S3 and as the small-file path). */
   uploadFile(folderId: string, upload: StorageUpload): Promise<UploadResultEntity>;
+
+  /**
+   * Opens a resumable upload session into an authorized folder and returns the session URL the browser
+   * PUTs the bytes to directly (never through the app server / CDN). The access token stays server-side.
+   */
+  createResumableUpload(folderId: string, init: ResumableUploadInit): Promise<{ uploadUrl: string }>;
+
+  /** Validates + records a resumable upload once the browser finished it; returns the stored file. */
+  finalizeUpload(fileId: string): Promise<UploadResultEntity>;
 
   /** Deletes a file or subfolder inside the authorized tree (never a root). */
   deleteItem(itemId: string): Promise<void>;
