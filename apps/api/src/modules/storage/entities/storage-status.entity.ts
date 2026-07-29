@@ -45,7 +45,8 @@ export class StorageStatusEntity {
   @ApiProperty({
     type: 'boolean',
     required: false,
-    description: 'Whether the caller is the verified Drive owner (may manage/disconnect). Drive only.',
+    description:
+      'Whether the caller is the verified Drive owner (may manage/disconnect). Drive only.',
   })
   isOwner?: boolean;
 }

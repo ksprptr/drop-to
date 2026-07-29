@@ -167,7 +167,9 @@ export class GoogleAuthService {
    * browser that completed OAuth. Opaque and tamper-proof (AES-256-GCM), self-expiring via `exp`.
    **/
   issueOwnerToken(email: string): string {
-    return this.cryptoService.encrypt(JSON.stringify({ email, exp: Date.now() + DRIVE_OWNER_TTL_MS }));
+    return this.cryptoService.encrypt(
+      JSON.stringify({ email, exp: Date.now() + DRIVE_OWNER_TTL_MS }),
+    );
   }
 
   /**
