@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 
-import { accessCookie } from '../helpers/auth.helper';
+import { accessCookie, ownerCookie } from '../helpers/auth.helper';
 import { encryptedTestRefreshToken } from '../helpers/fixtures.helper';
 import { oauthClientMock, resetGoogleApisMock } from '../helpers/googleapis.mock';
 import { createPrismaMock, PrismaMock, resetPrismaMock } from '../helpers/prisma.mock';
@@ -73,24 +73,37 @@ describe('Google Auth (integration)', () => {
   });
 
   describe('POST /api/v1/google-auth/folders', () => {
-    it('returns 400 when the payload is invalid (empty folders)', async () => {
+    it('returns 403 without a verified owner cookie', async () => {
+      prisma.driveAccount.findFirst.mockResolvedValue({ id: 'acc-1', email: 'owner@gmail.com' });
+
       const res = await request(app.getHttpServer())
         .post('/api/v1/google-auth/folders')
         .set('Cookie', accessCookie())
+        .send({ folders: [{ folderId: 'drive-1', name: 'Photos' }] });
+
+      expect(res.status).toBe(403);
+    });
+
+    it('returns 400 when the payload is invalid (empty folders)', async () => {
+      prisma.driveAccount.findFirst.mockResolvedValue({ id: 'acc-1', email: 'owner@gmail.com' });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/google-auth/folders')
+        .set('Cookie', `${accessCookie()}; ${ownerCookie('owner@gmail.com')}`)
         .send({ folders: [] });
 
       expect(res.status).toBe(400);
     });
 
     it('persists the selected folders and returns the updated list (201)', async () => {
-      prisma.driveAccount.findFirst.mockResolvedValue({ id: 'acc-1' });
+      prisma.driveAccount.findFirst.mockResolvedValue({ id: 'acc-1', email: 'owner@gmail.com' });
       prisma.allowedFolder.findMany.mockResolvedValue([
         { id: 'f1', folderId: 'drive-1', name: 'Photos', createdAt: new Date() },
       ]);
 
       const res = await request(app.getHttpServer())
         .post('/api/v1/google-auth/folders')
-        .set('Cookie', accessCookie())
+        .set('Cookie', `${accessCookie()}; ${ownerCookie('owner@gmail.com')}`)
         .send({ folders: [{ folderId: 'drive-1', name: 'Photos' }] });
 
       expect(res.status).toBe(201);
@@ -119,6 +132,17 @@ describe('Google Auth (integration)', () => {
   });
 
   describe('DELETE /api/v1/google-auth/account', () => {
+    it('returns 403 without a verified owner cookie', async () => {
+      prisma.driveAccount.findFirst.mockResolvedValue({ id: 'acc-1', email: 'owner@gmail.com' });
+
+      const res = await request(app.getHttpServer())
+        .delete('/api/v1/google-auth/account')
+        .set('Cookie', accessCookie());
+
+      expect(res.status).toBe(403);
+      expect(prisma.driveAccount.delete).not.toHaveBeenCalled();
+    });
+
     it('disconnects the account and returns 204', async () => {
       prisma.driveAccount.findFirst.mockResolvedValue({ id: 'acc-1', email: 'owner@gmail.com' });
       prisma.driveAccount.findUnique.mockResolvedValue({
@@ -129,7 +153,7 @@ describe('Google Auth (integration)', () => {
 
       const res = await request(app.getHttpServer())
         .delete('/api/v1/google-auth/account')
-        .set('Cookie', accessCookie());
+        .set('Cookie', `${accessCookie()}; ${ownerCookie('owner@gmail.com')}`);
 
       expect(res.status).toBe(204);
       expect(oauthClientMock.revokeCredentials).toHaveBeenCalled();

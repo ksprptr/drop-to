@@ -2,7 +2,11 @@ import 'server-only';
 import { type AxiosInstance, create } from 'axios';
 import { cookies, headers } from 'next/headers';
 
-import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/common/constants/auth.constants';
+import {
+  ACCESS_TOKEN_COOKIE,
+  DRIVE_OWNER_COOKIE,
+  REFRESH_TOKEN_COOKIE,
+} from '@/common/constants/auth.constants';
 import { ApiUnavailableError } from '@/common/services/axios/axios.errors';
 import { appServerConfig } from '@/configs/app/app.server-config';
 
@@ -21,7 +25,7 @@ export const getHttp = async (): Promise<AxiosInstance> => {
   http.interceptors.request.use((config) => {
     const parts: string[] = [];
 
-    for (const name of [ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE]) {
+    for (const name of [ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, DRIVE_OWNER_COOKIE]) {
       const value = cookieStore.get(name)?.value;
       if (value) {
         parts.push(`${name}=${value}`);

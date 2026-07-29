@@ -32,6 +32,8 @@ import type { Request, Response } from 'express';
 
 import { ResponseEntity } from '@/common/entities/response.entity';
 import { AllowedFolderEntity } from '@/modules/google-auth/entities/allowed-folder.entity';
+import { DRIVE_OWNER_COOKIE } from '@/modules/google-auth/google-auth.constants';
+import { GoogleAuthService } from '@/modules/google-auth/google-auth.service';
 
 import { CreateSubfolderDto } from './dto/create-subfolder.dto';
 import { MoveItemDto } from './dto/move-item.dto';
@@ -60,13 +62,20 @@ const BackendParam = () =>
 @ApiUnauthorizedResponse({ type: ResponseEntity, description: 'Unauthorized' })
 @Controller('storage')
 export class StorageController {
-  constructor(private readonly registry: StorageRegistry) {}
+  constructor(
+    private readonly registry: StorageRegistry,
+    private readonly googleAuthService: GoogleAuthService,
+  ) {}
 
   @ApiOperation({ summary: 'Get the status of every storage backend' })
   @ApiOkResponse({ type: [StorageStatusEntity], description: 'Per-backend status' })
   @Get('status')
-  async getStatuses(): Promise<StorageStatusEntity[]> {
-    return Promise.all(this.registry.all().map((provider) => provider.status()));
+  async getStatuses(@Req() req: Request): Promise<StorageStatusEntity[]> {
+    const statuses = await Promise.all(this.registry.all().map((provider) => provider.status()));
+    const ownerToken = (req.cookies as Record<string, string> | undefined)?.[DRIVE_OWNER_COOKIE];
+    const isOwner = await this.googleAuthService.isVerifiedOwner(ownerToken);
+
+    return statuses.map((status) => (status.backend === 'drive' ? { ...status, isOwner } : status));
   }
 
   @ApiOperation({ summary: 'List the browse roots of a backend' })

@@ -41,4 +41,11 @@ export class StorageStatusEntity {
     description: 'Why a configured backend is unusable (revoked token / unreachable bucket)',
   })
   error?: string | null;
+
+  @ApiProperty({
+    type: 'boolean',
+    required: false,
+    description: 'Whether the caller is the verified Drive owner (may manage/disconnect). Drive only.',
+  })
+  isOwner?: boolean;
 }

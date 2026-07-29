@@ -5,16 +5,19 @@ import {
   Get,
   HttpCode,
   Inject,
+  Param,
   Post,
   Query,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiCookieAuth,
   ApiCreatedResponse,
   ApiExcludeEndpoint,
+  ApiForbiddenResponse,
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
@@ -32,6 +35,7 @@ import { SaveFoldersDto } from './dto/save-folders.dto';
 import { AllowedFolderEntity } from './entities/allowed-folder.entity';
 import { DriveAccountStatusEntity } from './entities/drive-account-status.entity';
 import { GoogleAuthService } from './google-auth.service';
+import { DriveOwnerGuard } from './guards/drive-owner.guard';
 
 /** Name of the short-lived cookie holding the OAuth `state` nonce (CSRF defense). */
 const OAUTH_STATE_COOKIE = 'oauthState';
@@ -103,6 +107,7 @@ export class GoogleAuthController {
       const email = await this.googleAuthService.handleCallback(code);
       redirectUrl.searchParams.set('connected', '1');
       redirectUrl.searchParams.set('email', email);
+      redirectUrl.searchParams.set('ownerToken', this.googleAuthService.issueOwnerToken(email));
     } catch {
       redirectUrl.searchParams.set('error', 'callback_failed');
     }
@@ -124,9 +129,21 @@ export class GoogleAuthController {
   @ApiOperation({ summary: 'Save the Picker-selected allowed folders' })
   @ApiCreatedResponse({ type: [AllowedFolderEntity], description: 'Allowed folders saved' })
   @ApiBadRequestResponse({ type: ResponseEntity, description: 'Validation failed' })
+  @ApiForbiddenResponse({ type: ResponseEntity, description: 'Not the verified Drive owner' })
+  @UseGuards(DriveOwnerGuard)
   @Post('folders')
   async saveFolders(@Body() saveFoldersDto: SaveFoldersDto): Promise<AllowedFolderEntity[]> {
     return this.googleAuthService.saveAllowedFolders(saveFoldersDto);
+  }
+
+  @ApiOperation({ summary: 'Remove an authorized folder (unselect)' })
+  @ApiNoContentResponse({ description: 'Folder removed' })
+  @ApiForbiddenResponse({ type: ResponseEntity, description: 'Not the verified Drive owner' })
+  @UseGuards(DriveOwnerGuard)
+  @HttpCode(204)
+  @Delete('folders/:folderId')
+  async removeFolder(@Param('folderId') folderId: string): Promise<void> {
+    await this.googleAuthService.removeAllowedFolder(folderId);
   }
 
   @ApiOperation({ summary: 'Get a short-lived access token for the Google Picker' })
@@ -145,6 +162,8 @@ export class GoogleAuthController {
 
   @ApiOperation({ summary: 'Disconnect the Google account' })
   @ApiNoContentResponse({ description: 'Account disconnected' })
+  @ApiForbiddenResponse({ type: ResponseEntity, description: 'Not the verified Drive owner' })
+  @UseGuards(DriveOwnerGuard)
   @HttpCode(204)
   @Delete('account')
   async disconnect(): Promise<void> {

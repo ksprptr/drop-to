@@ -14,6 +14,7 @@ import { PrismaService } from '@/prisma/prisma.service';
 import { SaveFoldersDto } from './dto/save-folders.dto';
 import { AllowedFolderEntity } from './entities/allowed-folder.entity';
 import { DriveAccountStatusEntity } from './entities/drive-account-status.entity';
+import { DRIVE_OWNER_TTL_MS } from './google-auth.constants';
 
 /**
  * OAuth lifecycle for the single Drive account: consent, token exchange, encrypted storage, authorized clients.
@@ -159,6 +160,64 @@ export class GoogleAuthService {
     }
 
     return account.id;
+  }
+
+  /**
+   * Signs a proof that `email` was just verified via Google, unlocking account management in the
+   * browser that completed OAuth. Opaque and tamper-proof (AES-256-GCM), self-expiring via `exp`.
+   **/
+  issueOwnerToken(email: string): string {
+    return this.cryptoService.encrypt(JSON.stringify({ email, exp: Date.now() + DRIVE_OWNER_TTL_MS }));
+  }
+
+  /**
+   * Whether the proof identifies the currently connected account's owner (decodes + email must match).
+   **/
+  async isVerifiedOwner(token: string | undefined): Promise<boolean> {
+    const email = this.verifyOwnerToken(token);
+    if (!email) {
+      return false;
+    }
+
+    const account = await this.prismaService.driveAccount.findFirst({
+      orderBy: { updatedAt: 'desc' },
+      select: { email: true },
+    });
+
+    return account?.email === email;
+  }
+
+  /**
+   * Decodes an owner proof, returning its email — or null when missing, tampered, or expired.
+   **/
+  private verifyOwnerToken(token: string | undefined): string | null {
+    if (!token) {
+      return null;
+    }
+
+    try {
+      const { email, exp } = JSON.parse(this.cryptoService.decrypt(token)) as {
+        email?: string;
+        exp?: number;
+      };
+
+      if (!email || typeof exp !== 'number' || exp < Date.now()) {
+        return null;
+      }
+
+      return email;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Removes a single authorized root folder from the active account (unselect).
+   **/
+  async removeAllowedFolder(folderId: string): Promise<void> {
+    const driveAccountId = await this.getActiveAccountId();
+
+    await this.prismaService.allowedFolder.deleteMany({ where: { driveAccountId, folderId } });
   }
 
   /**

@@ -18,6 +18,7 @@ interface Props {
   loading: boolean;
   username: string;
   saving: boolean;
+  isOwner: boolean;
   onSelectStorage: (backend: StorageBackend) => void;
   onManageFolders: () => void;
   onDisconnect: () => void;
@@ -43,6 +44,7 @@ export default function AccountSidebar({
   loading,
   username,
   saving,
+  isOwner,
   onSelectStorage,
   onManageFolders,
   onDisconnect,
@@ -108,16 +110,25 @@ export default function AccountSidebar({
                 </div>
               </div>
 
-              <div className='flex flex-col gap-y-2'>
-                <Button variant='secondary' fullWidth onClick={onManageFolders} loading={saving}>
-                  <Icon icon='FolderPlus' className='h-4 w-4' />
-                  Manage folders
-                </Button>
-                <Button variant='soft-danger' fullWidth onClick={onDisconnect}>
-                  <Icon icon='ArrowRightStartOnRectangle' className='h-4 w-4' />
-                  Disconnect
-                </Button>
-              </div>
+              {isOwner ? (
+                <div className='flex flex-col gap-y-2'>
+                  <Button variant='secondary' fullWidth onClick={onManageFolders} loading={saving}>
+                    <Icon icon='FolderPlus' className='h-4 w-4' />
+                    Manage folders
+                  </Button>
+                  <Button variant='soft-danger' fullWidth onClick={onDisconnect}>
+                    <Icon icon='ArrowRightStartOnRectangle' className='h-4 w-4' />
+                    Disconnect
+                  </Button>
+                </div>
+              ) : (
+                <a
+                  href={getGoogleAuthUrl()}
+                  className='inline-flex w-full items-center justify-center gap-x-2 rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900'>
+                  <Icon icon='LockClosed' className='h-4 w-4' />
+                  Verify with Google to manage
+                </a>
+              )}
             </div>
           )}
         </div>

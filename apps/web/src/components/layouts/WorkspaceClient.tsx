@@ -4,7 +4,13 @@ import type { StorageBackend, StorageStatus } from '@dropto/types';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { disconnectAction, saveFoldersAction } from '@/actions/auth/auth.actions';
+import {
+  claimDriveOwnerAction,
+  disconnectAction,
+  removeFolderAction,
+  revokeDriveOwnerAction,
+  saveFoldersAction,
+} from '@/actions/auth/auth.actions';
 import {
   createFolderAction,
   deleteItemAction,
@@ -126,6 +132,8 @@ function WorkspaceInner({
   const [duplicate, setDuplicate] = useState<string[] | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<ViewEntry | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [unselectTarget, setUnselectTarget] = useState<ViewEntry | null>(null);
+  const [unselecting, setUnselecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -295,7 +303,13 @@ function WorkspaceInner({
 
     if (searchParams.get('connected') === '1') {
       toast.success('Google account connected successfully.');
-      void loadStatus();
+      const ownerToken = searchParams.get('ownerToken');
+      void (async () => {
+        if (ownerToken) {
+          await claimDriveOwnerAction(ownerToken);
+        }
+        await loadStatus();
+      })();
     }
     const error = searchParams.get('error');
     if (error) {
@@ -964,12 +978,34 @@ function WorkspaceInner({
         toast.error(result.error ?? 'Something went wrong.');
         return;
       }
+      await revokeDriveOwnerAction();
       await loadStatus();
       toast.success('Google account disconnected.');
     } catch (error) {
       toast.error(extractApiErrorMessage(error));
     }
   }, [loadStatus, toast]);
+
+  const confirmUnselect = useCallback(async () => {
+    if (!unselectTarget) {
+      return;
+    }
+    setUnselecting(true);
+    try {
+      const result = await removeFolderAction(unselectTarget.id);
+      if (!result.ok) {
+        toast.error(result.error ?? 'Something went wrong.');
+        return;
+      }
+      setUnselectTarget(null);
+      await loadStatus();
+      toast.success('Folder removed from the app.');
+    } catch (error) {
+      toast.error(extractApiErrorMessage(error));
+    } finally {
+      setUnselecting(false);
+    }
+  }, [unselectTarget, loadStatus, toast]);
 
   const handleLogout = useCallback(() => {
     setLoggingOut(true);
@@ -990,6 +1026,7 @@ function WorkspaceInner({
         loading={loadingStatus}
         username={username}
         saving={saving}
+        isOwner={driveStatus?.isOwner ?? false}
         onSelectStorage={selectStorage}
         onManageFolders={handleManageFolders}
         onDisconnect={handleDisconnect}
@@ -1058,6 +1095,11 @@ function WorkspaceInner({
             sortDir={sortDir}
             onToggleSort={handleToggleSort}
             onCopyLink={handleCopyLink}
+            onUnselectRoot={
+              activeBackend === 'drive' && (driveStatus?.isOwner ?? false)
+                ? setUnselectTarget
+                : undefined
+            }
           />
 
           <div className='min-w-0 overflow-hidden'>
@@ -1281,6 +1323,16 @@ function WorkspaceInner({
         confirmLabel='Delete'
         loading={deleting}
         onConfirm={confirmDelete}
+      />
+
+      <ConfirmDialog
+        open={unselectTarget !== null}
+        onClose={() => setUnselectTarget(null)}
+        title='Remove folder'
+        message={`Remove "${unselectTarget?.name}" from the app? It stays in Google Drive — only its authorization here is revoked.`}
+        confirmLabel='Remove'
+        loading={unselecting}
+        onConfirm={confirmUnselect}
       />
     </div>
   );
