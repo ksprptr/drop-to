@@ -44,7 +44,7 @@ describe('GoogleAuthService', () => {
     clientId: 'client-id',
     clientSecret: 'client-secret',
     redirectUri: 'http://localhost/callback',
-    scopes: ['openid', 'email', 'https://www.googleapis.com/auth/drive.file'],
+    scopes: ['openid', 'email', 'https://www.googleapis.com/auth/drive'],
   } as unknown as GoogleConfig;
 
   beforeEach(() => {

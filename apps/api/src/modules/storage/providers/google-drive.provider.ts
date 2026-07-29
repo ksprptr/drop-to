@@ -145,7 +145,7 @@ export class GoogleDriveProvider implements StorageProvider {
           const res = await drive.files.get({ fileId: id, fields: 'id, parents' });
           parents = res.data.parents ?? [];
         } catch {
-          // Not visible under drive.file scope — treat as not allowed.
+          // Not reachable (deleted / no access) — treat as not allowed.
           continue;
         }
 
