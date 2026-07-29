@@ -16,7 +16,12 @@ export class DriveEntryEntity {
   @ApiProperty({ type: 'number', nullable: true, description: 'Size in bytes (null for folders)' })
   size: number | null;
 
-  @ApiProperty({ type: 'string', nullable: true, format: 'date-time', description: 'Last modified' })
+  @ApiProperty({
+    type: 'string',
+    nullable: true,
+    format: 'date-time',
+    description: 'Last modified',
+  })
   modifiedTime: string | null;
 
   @ApiProperty({ type: 'string', nullable: true, description: 'Icon URL' })

@@ -9,7 +9,11 @@ import { AuthHelpers } from './helpers/auth.helpers';
 
 describe('AuthService', () => {
   let service: AuthService;
-  let authHelpers: { signAccessToken: jest.Mock; generateRefreshSecret: jest.Mock; hashToken: jest.Mock };
+  let authHelpers: {
+    signAccessToken: jest.Mock;
+    generateRefreshSecret: jest.Mock;
+    hashToken: jest.Mock;
+  };
   let authState: { getTokenVersion: jest.Mock; bumpTokenVersion: jest.Mock };
   let prisma: {
     $transaction: jest.Mock;
@@ -22,7 +26,11 @@ describe('AuthService', () => {
     };
   };
 
-  const authCfg = { username: 'operator', password: 'secret', cookieDomain: undefined } as AuthConfig;
+  const authCfg = {
+    username: 'operator',
+    password: 'secret',
+    cookieDomain: undefined,
+  } as AuthConfig;
 
   const liveRow = () => ({
     id: 'row-1',
@@ -70,7 +78,9 @@ describe('AuthService', () => {
       });
       // Only the hash of the freshly-minted secret is persisted.
       expect(prisma.refreshToken.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ tokenHash: 'hashed', subject: 'operator' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ tokenHash: 'hashed', subject: 'operator' }),
+        }),
       );
     });
 
@@ -98,7 +108,9 @@ describe('AuthService', () => {
       });
       // New row inherits the original session deadline (no extension past login + absolute TTL).
       expect(prisma.refreshToken.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ sessionExpiresAt: row.sessionExpiresAt }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ sessionExpiresAt: row.sessionExpiresAt }),
+        }),
       );
       // Old row revoked + linked to its replacement; expired rows pruned.
       expect(prisma.refreshToken.update).toHaveBeenCalledWith({

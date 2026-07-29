@@ -55,7 +55,9 @@ import { PrismaModule } from './prisma/prisma.module';
         // Reject a weak/placeholder access-JWT secret — a guessable secret means forgeable tokens.
         const weakSecrets = ['JWT_ACCESS_SECRET'].filter((key) => {
           const value = String(config[key] ?? '');
-          return value.length < 16 || /generate_me|change_me|your[_-]|example|secret_here/i.test(value);
+          return (
+            value.length < 16 || /generate_me|change_me|your[_-]|example|secret_here/i.test(value)
+          );
         });
         if (weakSecrets.length > 0) {
           throw new Error(

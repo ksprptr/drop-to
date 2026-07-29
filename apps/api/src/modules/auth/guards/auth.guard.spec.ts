@@ -10,7 +10,9 @@ import { AuthGuard } from './auth.guard';
 /**
  * Builds a minimal ExecutionContext exposing the given cookie header.
  **/
-const buildContext = (cookieHeader?: string): { context: ExecutionContext; request: { user?: unknown } } => {
+const buildContext = (
+  cookieHeader?: string,
+): { context: ExecutionContext; request: { user?: unknown } } => {
   const request: { headers: Record<string, unknown>; user?: unknown } = {
     headers: cookieHeader ? { cookie: cookieHeader } : {},
   };
@@ -85,17 +87,17 @@ describe('AuthGuard', () => {
     expired.name = 'TokenExpiredError';
     jwtService.verifyAsync.mockRejectedValue(expired);
 
-    await expect(guard.canActivate(buildContext('accessToken=expired').context)).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(
+      guard.canActivate(buildContext('accessToken=expired').context),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('rejects a malformed access token', async () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
     jwtService.verifyAsync.mockRejectedValue(new JsonWebTokenError('invalid signature'));
 
-    await expect(guard.canActivate(buildContext('accessToken=garbage').context)).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(
+      guard.canActivate(buildContext('accessToken=garbage').context),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

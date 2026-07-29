@@ -35,7 +35,9 @@ import { REDIS_RATE_LIMIT } from './rate-limit.constants';
 
         client.on('error', (error: Error) => {
           if (!loggedError) {
-            logger.warn(`Redis unavailable, rate limiting falls back to in-memory: ${error.message}`);
+            logger.warn(
+              `Redis unavailable, rate limiting falls back to in-memory: ${error.message}`,
+            );
             loggedError = true;
           }
         });

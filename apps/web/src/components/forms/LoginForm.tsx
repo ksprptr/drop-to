@@ -63,7 +63,10 @@ export default function LoginForm() {
           <p className='mt-1 text-sm text-zinc-600 dark:text-zinc-400'>Sign in to continue</p>
         </div>
 
-        <form onSubmit={handleSubmit} onKeyDownCapture={handleKeyDown} className='flex flex-col gap-y-4'>
+        <form
+          onSubmit={handleSubmit}
+          onKeyDownCapture={handleKeyDown}
+          className='flex flex-col gap-y-4'>
           <Input
             name='username'
             label='Username'

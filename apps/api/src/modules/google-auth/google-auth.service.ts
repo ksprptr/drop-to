@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Auth, google } from 'googleapis';
 
 import { CryptoService } from '@/common/services/crypto/crypto.service';

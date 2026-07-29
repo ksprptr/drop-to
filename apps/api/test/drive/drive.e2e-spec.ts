@@ -118,7 +118,12 @@ describe('Drive (integration)', () => {
         .send({ name: 'New folder' });
 
       expect(res.status).toBe(201);
-      expect(res.body).toMatchObject({ id: 'new-1', name: 'New folder', isFolder: true, size: null });
+      expect(res.body).toMatchObject({
+        id: 'new-1',
+        name: 'New folder',
+        isFolder: true,
+        size: null,
+      });
       expect(driveFilesMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           requestBody: { name: 'New folder', mimeType: FOLDER_MIME, parents: ['root-1'] },

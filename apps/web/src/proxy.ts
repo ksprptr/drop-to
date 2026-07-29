@@ -11,7 +11,11 @@ import {
   REFRESH_WAIT_MAX_ATTEMPTS,
 } from '@/common/constants/auth.constants';
 import { peekRefresh, refreshSession } from '@/common/services/auth/refresh.server';
-import { applyAuthCookies, clearAuthCookies, type ParsedSetCookie } from '@/common/services/auth/tokens.server';
+import {
+  applyAuthCookies,
+  clearAuthCookies,
+  type ParsedSetCookie,
+} from '@/common/services/auth/tokens.server';
 import { isAccessTokenFresh } from '@/common/utils/jwt.functions';
 import { appServerConfig } from '@/configs/app/app.server-config';
 
@@ -63,7 +67,6 @@ const waitForRefresh = async (refreshToken: string): Promise<ParsedSetCookie[] |
       return state;
     }
 
-     
     // eslint-disable-next-line no-await-in-loop -- deliberate delay between poll attempts
     await new Promise((resolve) => setTimeout(resolve, REFRESH_WAIT_INTERVAL_MS));
   }

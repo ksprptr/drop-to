@@ -23,7 +23,9 @@ describe('handlePrismaError', () => {
 
   it('maps P2003 (foreign-key violation) to 409 Conflict', () => {
     expect(() => handlePrismaError(prismaError('P2003'), messages)).toThrow(ConflictException);
-    expect(() => handlePrismaError(prismaError('P2003'), messages)).toThrow('Related record missing.');
+    expect(() => handlePrismaError(prismaError('P2003'), messages)).toThrow(
+      'Related record missing.',
+    );
   });
 
   it('maps P2025 (record not found) to 404 Not Found', () => {

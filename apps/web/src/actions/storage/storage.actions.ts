@@ -54,10 +54,7 @@ export async function createFolderAction(
 /**
  * Deletes a file or folder.
  **/
-export async function deleteItemAction(
-  backend: StorageBackend,
-  id: string,
-): Promise<ActionResult> {
+export async function deleteItemAction(backend: StorageBackend, id: string): Promise<ActionResult> {
   return runAction(() => deleteItem(backend, id));
 }
 

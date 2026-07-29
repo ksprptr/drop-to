@@ -5,10 +5,7 @@ import type { Response } from 'express';
 import { type AppConfig, appConfig } from '@/config/app.config';
 import { type AuthConfig, authConfig } from '@/config/auth.config';
 
-import {
-  ACCESS_COOKIE_MAX_AGE_SECONDS,
-  REFRESH_TOKEN_TTL_SECONDS,
-} from './auth-tokens.constants';
+import { ACCESS_COOKIE_MAX_AGE_SECONDS, REFRESH_TOKEN_TTL_SECONDS } from './auth-tokens.constants';
 
 type AuthTokenType = 'accessToken' | 'refreshToken';
 

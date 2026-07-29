@@ -14,7 +14,9 @@ describe('extractTokenFromCookies', () => {
   });
 
   it('returns undefined when there is no cookie header', () => {
-    expect(extractTokenFromCookies({ type: 'accessToken', request: requestWith() })).toBeUndefined();
+    expect(
+      extractTokenFromCookies({ type: 'accessToken', request: requestWith() }),
+    ).toBeUndefined();
   });
 
   it('returns undefined when the requested token is absent', () => {

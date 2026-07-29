@@ -28,7 +28,9 @@ describe('RateLimitHelpers', () => {
 
   describe('resolveSubjectKey', () => {
     it('builds an ip: key from the (normalized) request ip', () => {
-      expect(helpers.resolveSubjectKey({ ip: '::ffff:203.0.113.1' } as Request)).toBe('ip:203.0.113.1');
+      expect(helpers.resolveSubjectKey({ ip: '::ffff:203.0.113.1' } as Request)).toBe(
+        'ip:203.0.113.1',
+      );
     });
 
     it('returns null when the ip is unknown', () => {
@@ -49,7 +51,11 @@ describe('RateLimitHelpers', () => {
     it('creates distinct limiters for different routes or rules', () => {
       const a = helpers.getLimiter({ method: 'POST', path: '/x', rule });
       const b = helpers.getLimiter({ method: 'GET', path: '/x', rule });
-      const c = helpers.getLimiter({ method: 'POST', path: '/x', rule: { points: 5, duration: 60 } });
+      const c = helpers.getLimiter({
+        method: 'POST',
+        path: '/x',
+        rule: { points: 5, duration: 60 },
+      });
 
       expect(a).not.toBe(b);
       expect(a).not.toBe(c);

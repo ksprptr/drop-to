@@ -84,9 +84,11 @@ export const createPrismaMock = (): PrismaMock => {
 export const resetPrismaMock = (mock: PrismaMock): void => {
   mock.$runCommandRaw.mockReset().mockRejectedValue(new Error('Use the mongodb provider'));
   mock.$queryRawUnsafe.mockReset().mockResolvedValue([{ ok: 1 }]);
-  mock.$transaction.mockReset().mockImplementation((arg: unknown) =>
-    typeof arg === 'function' ? (arg as (tx: PrismaMock) => unknown)(mock) : Promise.resolve([]),
-  );
+  mock.$transaction
+    .mockReset()
+    .mockImplementation((arg: unknown) =>
+      typeof arg === 'function' ? (arg as (tx: PrismaMock) => unknown)(mock) : Promise.resolve([]),
+    );
   mock.authState.findUnique.mockReset().mockResolvedValue(null);
   mock.authState.upsert.mockReset().mockResolvedValue(undefined);
   mock.driveAccount.findFirst.mockReset();

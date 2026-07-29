@@ -93,7 +93,6 @@ interface RowMenu {
   rect: DOMRect;
 }
 
-
 /**
  * Icon name for a MIME type.
  **/
@@ -597,10 +596,7 @@ export default function FileBrowser({
                       )}
                       <span className='flex min-w-0 items-center gap-x-2.5'>
                         {entry.isFolder ? (
-                          <Icon
-                            icon='Folder'
-                            className='h-5 w-5 shrink-0 text-green-600'
-                          />
+                          <Icon icon='Folder' className='h-5 w-5 shrink-0 text-green-600' />
                         ) : (
                           <Icon
                             icon={fileIcon(entry.mimeType)}
@@ -746,7 +742,12 @@ export default function FileBrowser({
                 menu.rect.bottom + ROW_MENU_EST_HEIGHT > window.innerHeight;
               const transformOrigin = flipUp ? 'bottom right' : 'top right';
               return flipUp
-                ? { left, bottom: window.innerHeight - menu.rect.top + MENU_GAP, width, transformOrigin }
+                ? {
+                    left,
+                    bottom: window.innerHeight - menu.rect.top + MENU_GAP,
+                    width,
+                    transformOrigin,
+                  }
                 : { left, top: menu.rect.bottom + MENU_GAP, width, transformOrigin };
             })()}
             initial={MENU_MOTION.initial}

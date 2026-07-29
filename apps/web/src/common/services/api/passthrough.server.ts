@@ -54,7 +54,10 @@ export const resolveSessionForPassthrough = async (): Promise<PassthroughSession
 /**
  * Passthrough request headers to the API: forwards session cookies and the client IP.
  **/
-export const apiAuthHeaders = async (base?: HeadersInit, cookieHeader?: string): Promise<Headers> => {
+export const apiAuthHeaders = async (
+  base?: HeadersInit,
+  cookieHeader?: string,
+): Promise<Headers> => {
   const headersList = await headers();
   const result = new Headers(base);
 

@@ -77,7 +77,9 @@ describe('Google Auth OAuth flow (integration)', () => {
     });
 
     it('accepts a callback whose state matches the cookie and binds the account', async () => {
-      oauthClientMock.getToken.mockResolvedValue({ tokens: { refresh_token: 'rt', id_token: null } });
+      oauthClientMock.getToken.mockResolvedValue({
+        tokens: { refresh_token: 'rt', id_token: null },
+      });
       prisma.driveAccount.upsert.mockResolvedValue({ id: 'acc-1', email: 'owner@example.com' });
 
       const res = await request(app.getHttpServer())

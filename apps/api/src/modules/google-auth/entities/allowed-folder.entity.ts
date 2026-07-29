@@ -10,6 +10,10 @@ export class AllowedFolderEntity {
   @ApiProperty({ type: 'string', description: 'Cached folder name' })
   name: string;
 
-  @ApiProperty({ type: 'string', format: 'date-time', description: 'When the folder was authorized' })
+  @ApiProperty({
+    type: 'string',
+    format: 'date-time',
+    description: 'When the folder was authorized',
+  })
   createdAt: Date;
 }

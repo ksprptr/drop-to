@@ -187,7 +187,8 @@ export class GoogleDriveProvider implements StorageProvider {
     do {
       const res = await drive.files.list({
         q: `'${folderId}' in parents and trashed = false`,
-        fields: 'nextPageToken, files(id, name, mimeType, size, modifiedTime, iconLink, webViewLink)',
+        fields:
+          'nextPageToken, files(id, name, mimeType, size, modifiedTime, iconLink, webViewLink)',
         orderBy: 'folder,name',
         pageSize: 1000,
         pageToken,

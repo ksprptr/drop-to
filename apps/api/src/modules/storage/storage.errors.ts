@@ -1,7 +1,8 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 
 /** Toast/sidebar message shown when the Google Drive connection is no longer usable. */
-export const DRIVE_DISCONNECTED_MESSAGE = 'Your Google Drive was disconnected. Please reconnect it.';
+export const DRIVE_DISCONNECTED_MESSAGE =
+  'Your Google Drive was disconnected. Please reconnect it.';
 
 /** Sidebar/toast message shown when the configured S3 storage cannot be reached. */
 export const S3_UNAVAILABLE_MESSAGE =

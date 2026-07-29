@@ -515,9 +515,7 @@ export class S3StorageProvider implements StorageProvider {
    **/
   private async headSize(bucket: string, key: string): Promise<number | null> {
     try {
-      const head = await this.getClient().send(
-        new HeadObjectCommand({ Bucket: bucket, Key: key }),
-      );
+      const head = await this.getClient().send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
 
       return head.ContentLength ?? null;
     } catch {
@@ -557,11 +555,7 @@ export class S3StorageProvider implements StorageProvider {
   /**
    * Copies every object under a prefix to a new prefix, then deletes the originals.
    **/
-  private async renamePrefix(
-    bucket: string,
-    oldPrefix: string,
-    newPrefix: string,
-  ): Promise<void> {
+  private async renamePrefix(bucket: string, oldPrefix: string, newPrefix: string): Promise<void> {
     const client = this.getClient();
     let token: string | undefined;
 
@@ -604,7 +598,11 @@ export class S3StorageProvider implements StorageProvider {
 
     do {
       const res = await client.send(
-        new ListObjectsV2Command({ Bucket: srcBucket, Prefix: srcPrefix, ContinuationToken: token }),
+        new ListObjectsV2Command({
+          Bucket: srcBucket,
+          Prefix: srcPrefix,
+          ContinuationToken: token,
+        }),
       );
 
       for (const object of res.Contents ?? []) {

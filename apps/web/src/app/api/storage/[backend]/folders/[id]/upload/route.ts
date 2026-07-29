@@ -32,13 +32,16 @@ export async function POST(
   }
 
   try {
-    const apiResponse = await fetch(apiUrl(`/storage/${assertBackend(backend)}/folders/${seg(id)}/upload`), {
-      method: 'POST',
-      body: request.body,
-      headers,
-      signal: request.signal,
-      duplex: 'half',
-    } as RequestInit & { duplex: 'half' });
+    const apiResponse = await fetch(
+      apiUrl(`/storage/${assertBackend(backend)}/folders/${seg(id)}/upload`),
+      {
+        method: 'POST',
+        body: request.body,
+        headers,
+        signal: request.signal,
+        duplex: 'half',
+      } as RequestInit & { duplex: 'half' },
+    );
 
     const body = await apiResponse.text();
 

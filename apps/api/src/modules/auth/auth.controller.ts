@@ -51,7 +51,10 @@ export class AuthController {
   @Public()
   @ApiOperation({ summary: 'Refresh the access token' })
   @ApiOkResponse({ type: ResponseEntity, description: 'Token refreshed' })
-  @ApiUnauthorizedResponse({ type: ResponseEntity, description: 'Invalid or expired refresh token' })
+  @ApiUnauthorizedResponse({
+    type: ResponseEntity,
+    description: 'Invalid or expired refresh token',
+  })
   @ApiTooManyRequestsResponse({ type: ResponseEntity, description: 'Too many requests' })
   @RateLimit({ points: 30, duration: 60 })
   @HttpCode(200)

@@ -119,8 +119,7 @@ export class AuthService {
     const rawRefreshToken = this.authHelpers.generateRefreshSecret();
 
     const now = Date.now();
-    const absoluteExpiry =
-      sessionExpiresAt ?? new Date(now + REFRESH_ABSOLUTE_TTL_SECONDS * 1000);
+    const absoluteExpiry = sessionExpiresAt ?? new Date(now + REFRESH_ABSOLUTE_TTL_SECONDS * 1000);
     const idleExpiry = new Date(now + REFRESH_TOKEN_TTL_SECONDS * 1000);
     // The idle window slides forward each rotation but never past the absolute deadline.
     const expiresAt = idleExpiry < absoluteExpiry ? idleExpiry : absoluteExpiry;

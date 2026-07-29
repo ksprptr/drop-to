@@ -50,9 +50,9 @@ describe('GoogleDriveProvider', () => {
 
     googleAuth = {
       getActiveAccountId: jest.fn().mockResolvedValue('account-1'),
-      getAuthorizedClient: jest
-        .fn()
-        .mockResolvedValue({ getAccessToken: jest.fn().mockResolvedValue({ token: 'access-token' }) }),
+      getAuthorizedClient: jest.fn().mockResolvedValue({
+        getAccessToken: jest.fn().mockResolvedValue({ token: 'access-token' }),
+      }),
     };
     prisma = {
       allowedFolder: { findMany: jest.fn() },
@@ -170,7 +170,9 @@ describe('GoogleDriveProvider', () => {
       withAllowedRoots('root-1');
       files.get.mockResolvedValue({ data: { parents: [] } });
 
-      await expect(service.createFolder('orphan', 'New')).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.createFolder('orphan', 'New')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
       expect(files.create).not.toHaveBeenCalled();
     });
   });
@@ -195,7 +197,9 @@ describe('GoogleDriveProvider', () => {
         webViewLink: 'http://view',
       });
       expect(prisma.uploadLog.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: 'SUCCESS', fileId: 'up-1' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'SUCCESS', fileId: 'up-1' }),
+        }),
       );
     });
 
@@ -204,7 +208,11 @@ describe('GoogleDriveProvider', () => {
       files.create.mockRejectedValue(new Error('quota exceeded'));
 
       await expect(
-        service.uploadFile('root-1', { body: {} as never, fileName: 'photo.jpg', mimeType: 'image/jpeg' }),
+        service.uploadFile('root-1', {
+          body: {} as never,
+          fileName: 'photo.jpg',
+          mimeType: 'image/jpeg',
+        }),
       ).rejects.toThrow('quota exceeded');
 
       expect(prisma.uploadLog.create).toHaveBeenCalledWith(
@@ -250,7 +258,9 @@ describe('GoogleDriveProvider', () => {
     it('refuses to ZIP an authorized root folder (400)', async () => {
       withAllowedRoots('root-1');
 
-      await expect(service.createFolderArchive('root-1')).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.createFolderArchive('root-1')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
       // Rejected before any metadata lookup or archive stream is opened.
       expect(files.get).not.toHaveBeenCalled();
     });
@@ -271,7 +281,9 @@ describe('GoogleDriveProvider', () => {
         getAccessToken: jest.fn().mockRejectedValue({ message: 'invalid_grant' }),
       });
 
-      await expect(service.resolveNames(['a'])).rejects.toBeInstanceOf(StorageDisconnectedException);
+      await expect(service.resolveNames(['a'])).rejects.toBeInstanceOf(
+        StorageDisconnectedException,
+      );
     });
 
     it('maps a transient network error to a clean 503 without leaking the token', async () => {

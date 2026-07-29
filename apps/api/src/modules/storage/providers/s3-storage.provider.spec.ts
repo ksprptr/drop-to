@@ -55,7 +55,8 @@ describe('S3StorageProvider', () => {
   const make = (override: Partial<S3Config> = {}) =>
     new S3StorageProvider({ ...baseCfg, ...override }, prisma as unknown as PrismaService);
 
-  const sentCmds = () => send.mock.calls.map((call) => call[0] as { cmd: string; input: Record<string, unknown> });
+  const sentCmds = () =>
+    send.mock.calls.map((call) => call[0] as { cmd: string; input: Record<string, unknown> });
 
   beforeAll(() => {
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
@@ -66,7 +67,10 @@ describe('S3StorageProvider', () => {
     send = jest.fn().mockResolvedValue({});
     (S3Client as unknown as jest.Mock).mockImplementation(() => ({ send }));
     uploadDone = jest.fn().mockResolvedValue({});
-    (Upload as unknown as jest.Mock).mockImplementation(() => ({ done: uploadDone, abort: jest.fn() }));
+    (Upload as unknown as jest.Mock).mockImplementation(() => ({
+      done: uploadDone,
+      abort: jest.fn(),
+    }));
     prisma = { uploadLog: { create: jest.fn().mockResolvedValue(undefined) } };
   });
 
@@ -208,7 +212,9 @@ describe('S3StorageProvider', () => {
 
   describe('renameItem', () => {
     it('refuses to rename a bucket (409)', async () => {
-      await expect(make().renameItem(idOf(BUCKET, ''), 'x')).rejects.toBeInstanceOf(ConflictException);
+      await expect(make().renameItem(idOf(BUCKET, ''), 'x')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
     });
 
     it('renames a file via copy + delete, keeping its parent prefix', async () => {
@@ -290,8 +296,12 @@ describe('S3StorageProvider', () => {
 
   describe('downloadFile', () => {
     it('refuses to download a folder or bucket root (400)', async () => {
-      await expect(make().downloadFile(idOf(BUCKET, ''))).rejects.toBeInstanceOf(BadRequestException);
-      await expect(make().downloadFile(idOf(BUCKET, 'p/'))).rejects.toBeInstanceOf(BadRequestException);
+      await expect(make().downloadFile(idOf(BUCKET, ''))).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      await expect(make().downloadFile(idOf(BUCKET, 'p/'))).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
 
     it('returns the object stream, name, mime and size', async () => {
@@ -337,7 +347,9 @@ describe('S3StorageProvider', () => {
       ).rejects.toThrow('nope');
 
       expect(prisma.uploadLog.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED', error: 'nope' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'FAILED', error: 'nope' }),
+        }),
       );
     });
   });

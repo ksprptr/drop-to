@@ -107,8 +107,14 @@ function WorkspaceInner({
   const pathname = usePathname();
   const toast = useToast();
   const { openPicker } = usePicker();
-  const { setBatches, setDownloads, updateTask, setBatchStatus, scheduleRemoveBatch, batchRuntime } =
-    useUploadActions();
+  const {
+    setBatches,
+    setDownloads,
+    updateTask,
+    setBatchStatus,
+    scheduleRemoveBatch,
+    batchRuntime,
+  } = useUploadActions();
 
   const [statuses, setStatuses] = useState<StorageStatus[]>(initialStatuses);
   const [loadingStatus, setLoadingStatus] = useState(false);
@@ -234,7 +240,8 @@ function WorkspaceInner({
     const backend = paramBackend;
     const backendRoots = statuses.find((status) => status.backend === backend)?.roots ?? [];
     const folderSegs = segments.slice(1);
-    const root = folderSegs.length > 0 && backendRoots.find((r) => slugify(r.name) === folderSegs[0]);
+    const root =
+      folderSegs.length > 0 && backendRoots.find((r) => slugify(r.name) === folderSegs[0]);
 
     if (!root) {
       setActiveBackend(backend);
@@ -363,7 +370,9 @@ function WorkspaceInner({
   const handleToggleSort = useCallback(
     (key: SortKey) => {
       const nextDir: SortDir = key === sortKey ? (sortDir === 'asc' ? 'desc' : 'asc') : 'asc';
-      const base = activeBackend ? buildWorkspaceUrl(activeBackend, path) : window.location.pathname;
+      const base = activeBackend
+        ? buildWorkspaceUrl(activeBackend, path)
+        : window.location.pathname;
       // Default (name/asc) stays out of the URL to keep it clean.
       const query = key === 'name' && nextDir === 'asc' ? '' : `?sort=${key}&dir=${nextDir}`;
       window.history.replaceState(null, '', `${base}${query}`);

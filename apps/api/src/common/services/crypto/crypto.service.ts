@@ -1,10 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import {
-  type CipherGCMTypes,
-  createCipheriv,
-  createDecipheriv,
-  randomBytes,
-} from 'node:crypto';
+import { type CipherGCMTypes, createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 import { type CryptoConfig, cryptoConfig } from '@/config/crypto.config';
 

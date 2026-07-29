@@ -14,7 +14,8 @@ export const signAccessToken = (sub: string = TEST_USERNAME): string =>
 /**
  * Builds an `accessToken` cookie header value for an authenticated request.
  **/
-export const accessCookie = (sub: string = TEST_USERNAME): string => `accessToken=${signAccessToken(sub)}`;
+export const accessCookie = (sub: string = TEST_USERNAME): string =>
+  `accessToken=${signAccessToken(sub)}`;
 
 /**
  * Builds a `refreshToken` cookie header value (any opaque value works — the mock returns a live row).

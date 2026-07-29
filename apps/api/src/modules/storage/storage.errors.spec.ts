@@ -1,10 +1,6 @@
 import { HttpStatus } from '@nestjs/common';
 
-import {
-  isInvalidGrant,
-  isS3Unavailable,
-  StorageDisconnectedException,
-} from './storage.errors';
+import { isInvalidGrant, isS3Unavailable, StorageDisconnectedException } from './storage.errors';
 
 describe('storage.errors', () => {
   describe('StorageDisconnectedException', () => {
@@ -41,13 +37,20 @@ describe('storage.errors', () => {
     });
 
     it('is true for whole-backend error names', () => {
-      for (const name of ['NoSuchBucket', 'InvalidAccessKeyId', 'SignatureDoesNotMatch', 'NetworkingError']) {
+      for (const name of [
+        'NoSuchBucket',
+        'InvalidAccessKeyId',
+        'SignatureDoesNotMatch',
+        'NetworkingError',
+      ]) {
         expect(isS3Unavailable({ name })).toBe(true);
       }
     });
 
     it('is false for a per-item 4xx / unknown error / non-object', () => {
-      expect(isS3Unavailable({ $metadata: { httpStatusCode: 403 }, name: 'SomeItemError' })).toBe(false);
+      expect(isS3Unavailable({ $metadata: { httpStatusCode: 403 }, name: 'SomeItemError' })).toBe(
+        false,
+      );
       expect(isS3Unavailable({ name: 'NoSuchKey' })).toBe(false);
       expect(isS3Unavailable(null)).toBe(false);
       expect(isS3Unavailable(new Error('boom'))).toBe(false);

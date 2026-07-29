@@ -34,9 +34,7 @@ describe('Auth session (integration)', () => {
 
   describe('POST /api/v1/auth/login', () => {
     it('sets the access and refresh cookies on valid credentials', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/api/v1/auth/login')
-        .send(CREDENTIALS);
+      const res = await request(app.getHttpServer()).post('/api/v1/auth/login').send(CREDENTIALS);
 
       expect(res.status).toBe(200);
       const setCookie = res.headers['set-cookie'] as unknown as string[];

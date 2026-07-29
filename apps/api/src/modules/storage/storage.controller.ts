@@ -266,7 +266,10 @@ export class StorageController {
   @ApiOperation({ summary: 'Move a file or subfolder into another folder' })
   @ApiOkResponse({ type: DriveEntryEntity, description: 'Item moved' })
   @ApiBadRequestResponse({ type: ResponseEntity, description: 'Invalid move target' })
-  @ApiForbiddenResponse({ type: ResponseEntity, description: 'Item or target outside authorized tree' })
+  @ApiForbiddenResponse({
+    type: ResponseEntity,
+    description: 'Item or target outside authorized tree',
+  })
   @ApiConflictResponse({ type: ResponseEntity, description: 'Root folders cannot be moved' })
   @BackendParam()
   @Patch(':backend/files/:id/move')
