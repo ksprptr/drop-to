@@ -91,6 +91,7 @@ export function usePicker() {
       const view = new picker.DocsView(picker.ViewId.FOLDERS)
         .setSelectFolderEnabled(true)
         .setIncludeFolders(true)
+        .setOwnedByMe(true)
         .setMimeTypes('application/vnd.google-apps.folder');
 
       const builder = new picker.PickerBuilder()
