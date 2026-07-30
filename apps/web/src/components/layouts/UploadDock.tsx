@@ -117,6 +117,10 @@ function BatchCard({ batch, onCancel }: { batch: UploadBatch; onCancel: (id: str
   const many = total > 4;
   const showList = !many || expanded;
 
+  const finishedRank = (task: UploadTask): number =>
+    task.status === 'done' || task.status === 'error' || task.status === 'canceled' ? 1 : 0;
+  const orderedTasks = [...batch.tasks].sort((a, b) => finishedRank(a) - finishedRank(b));
+
   const title = `${batch.status === 'done' ? 'Uploaded' : 'Uploading'} ${
     batch.kind === 'folder'
       ? `folder “${batch.folderName}”`
@@ -204,8 +208,13 @@ function BatchCard({ batch, onCancel }: { batch: UploadBatch; onCancel: (id: str
 
           {showList && (
             <div className='mt-3 flex max-h-64 flex-col gap-y-3 overflow-y-auto pr-1'>
-              {batch.tasks.map((task) => (
-                <TaskRow key={task.id} task={task} />
+              {orderedTasks.map((task) => (
+                <motion.div
+                  key={task.id}
+                  layout
+                  transition={{ type: 'spring', stiffness: 500, damping: 40 }}>
+                  <TaskRow task={task} />
+                </motion.div>
               ))}
             </div>
           )}

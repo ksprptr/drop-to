@@ -86,13 +86,13 @@ export default function ToastProvider({ children }: PropsWithChildren) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className='pointer-events-none fixed inset-x-4 bottom-4 z-50 flex flex-col items-center gap-2 sm:right-4 sm:left-auto sm:items-end'>
+      <div className='pointer-events-none fixed inset-x-4 top-4 z-50 flex flex-col items-center gap-2 sm:right-4 sm:left-auto sm:items-end'>
         <AnimatePresence initial={false}>
           {toasts.map((toast) => (
             <motion.button
               key={toast.id}
               layout
-              initial={{ opacity: 0, y: 20, scale: 0.96 }}
+              initial={{ opacity: 0, y: -20, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ type: 'spring', stiffness: 380, damping: 30 }}
