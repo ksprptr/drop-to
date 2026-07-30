@@ -8,7 +8,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { Archiver, ZipArchive } from 'archiver';
-import { drive_v3, google } from 'googleapis';
+import { Auth, drive_v3, google } from 'googleapis';
 import { Readable } from 'node:stream';
 
 import { AllowedFolderEntity } from '@/modules/google-auth/entities/allowed-folder.entity';
@@ -19,6 +19,7 @@ import { DriveEntryEntity } from '../entities/drive-entry.entity';
 import { ResolvedNameEntity } from '../entities/resolved-name.entity';
 import { StorageStatusEntity } from '../entities/storage-status.entity';
 import { UploadResultEntity } from '../entities/upload-result.entity';
+import { UploadStatusEntity } from '../entities/upload-status.entity';
 import {
   ContentsPage,
   ListContentsOptions,
@@ -65,10 +66,12 @@ export class GoogleDriveProvider implements StorageProvider {
     }
 
     // Probe the token so a dead one shows "reconnect" instead of a false "connected".
+    let quota: { usage: number; limit: number | null } | null = null;
     try {
       const accountId = await this.googleAuthService.getActiveAccountId();
       const auth = await this.googleAuthService.getAuthorizedClient(accountId);
       await auth.getAccessToken();
+      quota = await this.fetchQuota(auth);
     } catch (error) {
       if (isInvalidGrant(error)) {
         return {
@@ -89,7 +92,35 @@ export class GoogleDriveProvider implements StorageProvider {
       connected: true,
       email: status.email,
       roots: status.allowedFolders.map((folder) => ({ id: folder.folderId, name: folder.name })),
+      quota,
     };
+  }
+
+  /**
+   * The connected account's storage usage (`about.get`); best-effort — null if it can't be read.
+   **/
+  private async fetchQuota(
+    auth: Auth.OAuth2Client,
+  ): Promise<{ usage: number; limit: number | null } | null> {
+    try {
+      const drive = google.drive({ version: 'v3', auth });
+      const res = await drive.about.get({ fields: 'storageQuota' });
+      const storageQuota = res.data.storageQuota;
+
+      if (!storageQuota) {
+        return null;
+      }
+
+      const usage = Number(storageQuota.usage ?? 0);
+      const limit = storageQuota.limit != null ? Number(storageQuota.limit) : null;
+
+      return {
+        usage: Number.isFinite(usage) ? usage : 0,
+        limit: limit !== null && Number.isFinite(limit) ? limit : null,
+      };
+    } catch {
+      return null;
+    }
   }
 
   private async getDrive(driveAccountId: string): Promise<drive_v3.Drive> {
@@ -333,7 +364,7 @@ export class GoogleDriveProvider implements StorageProvider {
           // Lets Google return a session that a browser at this origin may PUT to (CORS).
           Origin: init.origin,
         },
-        body: JSON.stringify({ name: init.name, parents: [folderId] }),
+        body: JSON.stringify({ name: init.name, parents: [folderId], mimeType: init.mimeType }),
       },
     );
 
@@ -345,6 +376,38 @@ export class GoogleDriveProvider implements StorageProvider {
     }
 
     return { uploadUrl };
+  }
+
+  /**
+   * Queries how far a resumable session got (server-side, where CORS doesn't hide the `Range` header), so the browser can resume a dropped upload from `receivedBytes` instead of re-uploading the whole file.
+   **/
+  async getUploadStatus(uploadUrl: string, size: number): Promise<UploadStatusEntity> {
+    if (!uploadUrl.startsWith('https://www.googleapis.com/upload/drive/')) {
+      throw new BadRequestException('Invalid upload URL.');
+    }
+
+    const res = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Range': `bytes */${size}` },
+    });
+
+    if (res.status === 200 || res.status === 201) {
+      const data = (await res.json().catch(() => null)) as { id?: string } | null;
+      return { complete: true, receivedBytes: size, fileId: data?.id ?? null };
+    }
+
+    if (res.status === 308) {
+      // "Range: bytes=0-N" → N+1 bytes received; absent header → nothing received yet.
+      const range = res.headers.get('range');
+      const received = range ? Number(range.split('-')[1]) + 1 : 0;
+      return {
+        complete: false,
+        receivedBytes: Number.isFinite(received) ? received : 0,
+        fileId: null,
+      };
+    }
+
+    throw new ServiceUnavailableException('Could not query the upload status. Try again.');
   }
 
   /**

@@ -8,6 +8,7 @@ import type {
   StorageBackend,
   StorageStatus,
   UploadResult,
+  UploadStatus,
 } from '@dropto/types';
 
 import {
@@ -16,6 +17,7 @@ import {
   deleteItem,
   finalizeUpload,
   getStatuses,
+  getUploadStatus,
   listContents,
   moveItem,
   renameItem,
@@ -81,6 +83,17 @@ export async function finalizeUploadAction(
   fileId: string,
 ): Promise<ActionResult<UploadResult>> {
   return runAction(() => finalizeUpload(backend, fileId));
+}
+
+/**
+ * Queries a resumable session's confirmed byte count so a dropped upload can resume.
+ **/
+export async function uploadStatusAction(
+  backend: StorageBackend,
+  uploadUrl: string,
+  size: number,
+): Promise<ActionResult<UploadStatus>> {
+  return runAction(() => getUploadStatus(backend, uploadUrl, size));
 }
 
 /**

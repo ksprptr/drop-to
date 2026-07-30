@@ -33,6 +33,7 @@ import type { Request, Response } from 'express';
 
 import { ResponseEntity } from '@/common/entities/response.entity';
 import { type AppConfig, appConfig } from '@/config/app.config';
+import { type UploadConfig, uploadConfig } from '@/config/upload.config';
 import { AllowedFolderEntity } from '@/modules/google-auth/entities/allowed-folder.entity';
 import { DRIVE_OWNER_COOKIE } from '@/modules/google-auth/google-auth.constants';
 import { GoogleAuthService } from '@/modules/google-auth/google-auth.service';
@@ -41,19 +42,16 @@ import { CreateSubfolderDto } from './dto/create-subfolder.dto';
 import { CreateUploadSessionDto } from './dto/create-upload-session.dto';
 import { MoveItemDto } from './dto/move-item.dto';
 import { RenameItemDto } from './dto/rename-item.dto';
+import { UploadStatusDto } from './dto/upload-status.dto';
 import { DriveEntryEntity } from './entities/drive-entry.entity';
 import { DriveEntryPageEntity } from './entities/drive-entry-page.entity';
 import { ResolvedNameEntity } from './entities/resolved-name.entity';
 import { ResumableUploadSessionEntity } from './entities/resumable-upload-session.entity';
 import { StorageStatusEntity } from './entities/storage-status.entity';
 import { UploadResultEntity } from './entities/upload-result.entity';
+import { UploadStatusEntity } from './entities/upload-status.entity';
 import { sanitizeUploadFilename } from './storage.functions';
 import { StorageRegistry } from './storage.registry';
-
-// 2 GiB per-file ceiling; the file is streamed straight through to storage (never buffered).
-// NOTE: a proxy/CDN in front (e.g. Cloudflare Free/Pro caps request bodies at 100 MB) can reject
-// large uploads with 413 before they ever reach here — raise/​bypass that limit too.
-const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
 
 /**
  * Documents the `:backend` path param (drive | s3) on the routes that carry it.
@@ -73,6 +71,7 @@ export class StorageController {
     private readonly registry: StorageRegistry,
     private readonly googleAuthService: GoogleAuthService,
     @Inject(appConfig.KEY) private readonly appCfg: AppConfig,
+    @Inject(uploadConfig.KEY) private readonly uploadCfg: UploadConfig,
   ) {}
 
   @ApiOperation({ summary: 'Get the status of every storage backend' })
@@ -223,7 +222,10 @@ export class StorageController {
       return await new Promise<UploadResultEntity>((resolve, reject) => {
         let bb: ReturnType<typeof busboy>;
         try {
-          bb = busboy({ headers: req.headers, limits: { files: 1, fileSize: MAX_UPLOAD_BYTES } });
+          bb = busboy({
+            headers: req.headers,
+            limits: { files: 1, fileSize: this.uploadCfg.maxUploadBytes },
+          });
         } catch {
           reject(new BadRequestException('No file provided.'));
           return;
@@ -239,7 +241,7 @@ export class StorageController {
           const mimeType = info.mimeType || 'application/octet-stream';
 
           stream.on('limit', () => {
-            reject(new BadRequestException('File exceeds the maximum allowed size of 2 GB.'));
+            reject(new BadRequestException('File exceeds the maximum allowed size.'));
           });
 
           // Pipe straight to storage; backpressure throttles the request to the upstream speed.
@@ -272,7 +274,9 @@ export class StorageController {
     }
   }
 
-  @ApiOperation({ summary: 'Open a resumable upload session (browser streams the file straight to storage)' })
+  @ApiOperation({
+    summary: 'Open a resumable upload session (browser streams the file straight to storage)',
+  })
   @ApiCreatedResponse({ type: ResumableUploadSessionEntity, description: 'Upload session opened' })
   @ApiBadRequestResponse({ type: ResponseEntity, description: 'Invalid metadata / file too large' })
   @ApiForbiddenResponse({ type: ResponseEntity, description: 'Folder outside authorized tree' })
@@ -283,16 +287,25 @@ export class StorageController {
     @Param('id') id: string,
     @Body() dto: CreateUploadSessionDto,
   ): Promise<ResumableUploadSessionEntity> {
-    return this.registry.resolve(backend).createResumableUpload(id, {
+    if (dto.size > this.uploadCfg.maxUploadBytes) {
+      throw new BadRequestException('File exceeds the maximum allowed size.');
+    }
+
+    const session = await this.registry.resolve(backend).createResumableUpload(id, {
       name: dto.name,
       mimeType: dto.mimeType,
       size: dto.size,
       // Browser origin so the created session accepts the cross-origin PUT from the web app.
       origin: this.appCfg.webAppUrl,
     });
+
+    // Hand the client the configured offline timeout so the resumable loop uses the server-set value.
+    return { ...session, offlineTimeoutMs: this.uploadCfg.offlineTimeoutMs };
   }
 
-  @ApiOperation({ summary: 'Finalize a resumable upload (validate + record the browser-uploaded file)' })
+  @ApiOperation({
+    summary: 'Finalize a resumable upload (validate + record the browser-uploaded file)',
+  })
   @ApiCreatedResponse({ type: UploadResultEntity, description: 'Upload recorded' })
   @ApiForbiddenResponse({ type: ResponseEntity, description: 'File outside authorized tree' })
   @BackendParam()
@@ -302,6 +315,20 @@ export class StorageController {
     @Param('id') id: string,
   ): Promise<UploadResultEntity> {
     return this.registry.resolve(backend).finalizeUpload(id);
+  }
+
+  @ApiOperation({
+    summary: 'Query a resumable session (how many bytes it has), so a drop can resume',
+  })
+  @ApiCreatedResponse({ type: UploadStatusEntity, description: 'Session status' })
+  @ApiBadRequestResponse({ type: ResponseEntity, description: 'Invalid upload URL' })
+  @BackendParam()
+  @Post(':backend/upload-status')
+  async getUploadStatus(
+    @Param('backend') backend: string,
+    @Body() dto: UploadStatusDto,
+  ): Promise<UploadStatusEntity> {
+    return this.registry.resolve(backend).getUploadStatus(dto.uploadUrl, dto.size);
   }
 
   @ApiOperation({ summary: 'Rename a file or subfolder' })

@@ -16,6 +16,7 @@ import { jwtConfig } from './config/jwt.config';
 import { rateLimitConfig } from './config/rate-limit.config';
 import { redisConfig } from './config/redis.config';
 import { s3Config } from './config/s3.config';
+import { uploadConfig } from './config/upload.config';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuthGuard } from './modules/auth/guards/auth.guard';
 import { GoogleAuthModule } from './modules/google-auth/google-auth.module';
@@ -39,6 +40,7 @@ import { PrismaModule } from './prisma/prisma.module';
         rateLimitConfig,
         redisConfig,
         s3Config,
+        uploadConfig,
       ],
       validate: (config) => {
         const envExample = fs.readFileSync(path.join(__dirname, '..', '.env.example'), 'utf-8');

@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import type { ReactNode } from 'react';
 
 import { getGoogleAuthUrl } from '@/common/services/api/auth.client';
+import { formatBytes } from '@/common/utils/format.functions';
 import Button from '@/components/common/Button';
 import Icon from '@/components/common/Icon';
 import ThemeToggle from '@/components/common/ThemeToggle';
@@ -31,6 +32,28 @@ function SectionLabel({ children }: { children: ReactNode }) {
     <p className='mb-2 px-1 text-[10px] font-semibold tracking-wider text-zinc-600 uppercase dark:text-zinc-400'>
       {children}
     </p>
+  );
+}
+
+/**
+ * A storage-usage bar (used of total), colored green → amber (≥ 75%) → red (> 95%).
+ **/
+function StorageMeter({ usage, limit }: { usage: number; limit: number }) {
+  const pct = limit > 0 ? Math.min(100, Math.round((usage / limit) * 100)) : 0;
+  const color = pct > 95 ? 'bg-red-500' : pct >= 75 ? 'bg-amber-500' : 'bg-green-600';
+
+  return (
+    <div className='rounded-xl bg-zinc-100 p-2.5 dark:bg-zinc-900'>
+      <div className='h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700'>
+        <div
+          className={`h-full rounded-full transition-all duration-300 ${color}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className='mt-2 text-xs font-medium text-zinc-600 dark:text-zinc-400'>
+        {formatBytes(usage, 2)} of {formatBytes(limit, 2)} used
+      </p>
+    </div>
   );
 }
 
@@ -109,6 +132,11 @@ export default function AccountSidebar({
                   <p className='text-[10px] text-zinc-600 dark:text-zinc-400'>Connected</p>
                 </div>
               </div>
+
+              {/* Storage usage — bar under the account card; amber ≥ 75%, red > 95%. */}
+              {driveStatus.quota && driveStatus.quota.limit !== null && (
+                <StorageMeter usage={driveStatus.quota.usage} limit={driveStatus.quota.limit} />
+              )}
 
               {isOwner ? (
                 <div className='flex flex-col gap-y-2'>

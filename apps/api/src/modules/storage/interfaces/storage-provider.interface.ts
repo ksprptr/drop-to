@@ -7,6 +7,7 @@ import { DriveEntryEntity } from '../entities/drive-entry.entity';
 import { ResolvedNameEntity } from '../entities/resolved-name.entity';
 import { StorageStatusEntity } from '../entities/storage-status.entity';
 import { UploadResultEntity } from '../entities/upload-result.entity';
+import { UploadStatusEntity } from '../entities/upload-status.entity';
 
 /** The storage backends the workspace can browse. */
 export type StorageBackend = 'drive' | 's3';
@@ -90,6 +91,9 @@ export interface StorageProvider {
 
   /** Validates + records a resumable upload once the browser finished it; returns the stored file. */
   finalizeUpload(fileId: string): Promise<UploadResultEntity>;
+
+  /** How far a resumable session got, so a dropped upload can resume from there (server-side, no CORS). */
+  getUploadStatus(uploadUrl: string, size: number): Promise<UploadStatusEntity>;
 
   /** Deletes a file or subfolder inside the authorized tree (never a root). */
   deleteItem(itemId: string): Promise<void>;

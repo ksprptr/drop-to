@@ -30,6 +30,7 @@ import { DriveEntryEntity } from '../entities/drive-entry.entity';
 import { ResolvedNameEntity } from '../entities/resolved-name.entity';
 import { StorageStatusEntity } from '../entities/storage-status.entity';
 import { UploadResultEntity } from '../entities/upload-result.entity';
+import { UploadStatusEntity } from '../entities/upload-status.entity';
 import {
   ContentsPage,
   ListContentsOptions,
@@ -337,6 +338,13 @@ export class S3StorageProvider implements StorageProvider {
    * Not applicable to S3 (no resumable session to finalize).
    **/
   finalizeUpload(_fileId: string): Promise<UploadResultEntity> {
+    throw new BadRequestException('Direct upload is not supported for this backend.');
+  }
+
+  /**
+   * Not applicable to S3 (no resumable session to query).
+   **/
+  getUploadStatus(_uploadUrl: string, _size: number): Promise<UploadStatusEntity> {
     throw new BadRequestException('Direct upload is not supported for this backend.');
   }
 

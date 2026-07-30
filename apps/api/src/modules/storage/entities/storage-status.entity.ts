@@ -49,4 +49,12 @@ export class StorageStatusEntity {
       'Whether the caller is the verified Drive owner (may manage/disconnect). Drive only.',
   })
   isOwner?: boolean;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description: 'Storage usage of the connected account (Drive only), in bytes',
+    example: { usage: 123456789, limit: 5497558138880 },
+  })
+  quota?: { usage: number; limit: number | null } | null;
 }

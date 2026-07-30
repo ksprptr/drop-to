@@ -7,4 +7,10 @@ import { ApiProperty } from '@nestjs/swagger';
 export class ResumableUploadSessionEntity {
   @ApiProperty({ type: 'string', description: 'Session URL the browser streams the file bytes to' })
   uploadUrl: string;
+
+  @ApiProperty({
+    type: 'integer',
+    description: 'How long the browser waits for a dropped connection before failing (ms)',
+  })
+  offlineTimeoutMs: number;
 }
