@@ -362,7 +362,12 @@ function WorkspaceInner({
   }, [loadEntries]);
 
   const loadMoreEntries = useCallback(async () => {
-    if (nextPageToken === null || activeBackend === null || currentFolderId === null || loadingMore) {
+    if (
+      nextPageToken === null ||
+      activeBackend === null ||
+      currentFolderId === null ||
+      loadingMore
+    ) {
       return;
     }
 
@@ -485,6 +490,45 @@ function WorkspaceInner({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [split, currentFolderId, toggleSplit]);
+
+  // Move the given ids into a target folder (Finder-style drop onto a folder row, same pane).
+  const handleMoveIntoFolder = useCallback(
+    async (targetFolderId: string, ids: string[]) => {
+      if (activeBackend === null) {
+        return;
+      }
+      // Can't move a folder into itself.
+      const moveIds = ids.filter((id) => id !== targetFolderId);
+      if (moveIds.length === 0) {
+        return;
+      }
+      const backend = activeBackend;
+
+      const count = `${moveIds.length} item${moveIds.length === 1 ? '' : 's'}`;
+      const toastId = toast.loading(`Moving ${count}…`);
+
+      const results = await Promise.all(
+        moveIds.map((id) => moveItemAction(backend, id, targetFolderId)),
+      );
+      const failed = results.filter((result) => !result.ok).length;
+
+      await reloadPanes();
+      setSelectedIds(new Set());
+      paneB.clearSelection();
+      if (selected && moveIds.includes(selected.id)) {
+        setSelected(null);
+      }
+
+      toast.update(toastId, {
+        variant: failed > 0 ? 'error' : 'success',
+        message:
+          failed > 0
+            ? `Failed to move ${failed} item${failed === 1 ? '' : 's'}.`
+            : `Moved ${count}.`,
+      });
+    },
+    [activeBackend, toast, reloadPanes, paneB, selected],
+  );
 
   const handleMoveDrop = useCallback(
     async (targetPane: 0 | 1) => {
@@ -738,14 +782,17 @@ function WorkspaceInner({
       if (signal.aborted) {
         await rollbackBatch(batchId, backend);
       } else {
-        // Replacements are in — now remove the originals they superseded.
-        if (replaceIds.length > 0) {
-          await Promise.all(replaceIds.map((id) => deleteItemAction(backend, id)));
+        try {
+          // Replacements are in — now remove the originals they superseded.
+          if (replaceIds.length > 0) {
+            await Promise.all(replaceIds.map((id) => deleteItemAction(backend, id)));
+          }
+          await reloadPanes();
+        } finally {
+          batchRuntime.current.delete(batchId);
+          setBatchStatus(batchId, 'done');
+          scheduleRemoveBatch(batchId);
         }
-        batchRuntime.current.delete(batchId);
-        await reloadPanes();
-        setBatchStatus(batchId, 'done');
-        scheduleRemoveBatch(batchId);
       }
     },
     [
@@ -1148,6 +1195,7 @@ function WorkspaceInner({
             hasMore={nextPageToken !== null}
             loadingMore={loadingMore}
             onLoadMore={loadMoreEntries}
+            onMoveIntoFolder={handleMoveIntoFolder}
             onUnselectRoot={
               activeBackend === 'drive' && (driveStatus?.isOwner ?? false)
                 ? setUnselectTarget
@@ -1211,6 +1259,7 @@ function WorkspaceInner({
                 hasMore={paneB.hasMore}
                 loadingMore={paneB.loadingMore}
                 onLoadMore={paneB.loadMore}
+                onMoveIntoFolder={handleMoveIntoFolder}
               />
             </div>
           </div>
@@ -1229,7 +1278,6 @@ function WorkspaceInner({
 
       <UploadDock />
 
-      {/* Duplicate name modal */}
       <Modal
         open={duplicate !== null}
         onClose={() => resolveDuplicate('cancel')}
@@ -1261,7 +1309,6 @@ function WorkspaceInner({
         </div>
       </Modal>
 
-      {/* New folder modal */}
       <Modal open={newFolderOpen} onClose={() => setNewFolderOpen(false)} title='New folder'>
         <form onSubmit={handleCreateFolder} className='flex flex-col gap-y-4'>
           <Input
@@ -1286,7 +1333,6 @@ function WorkspaceInner({
         </form>
       </Modal>
 
-      {/* Rename modal */}
       <Modal
         open={renameTarget !== null}
         onClose={() => {

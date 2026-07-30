@@ -5,6 +5,7 @@ import {
   type ChangeEvent,
   type DragEvent,
   type MouseEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -35,8 +36,7 @@ const MENU_MOTION = {
   transition: { duration: 0.08, ease: 'easeOut' },
 } as const;
 
-// Popup-menu geometry (px): fixed widths, an estimated row-menu height for the flip-up decision,
-// and the gap between the anchor and the menu.
+// Popup-menu geometry (px): widths, estimated row-menu height for the flip-up decision, anchor gap.
 const TOOLBAR_MENU_WIDTH = 176;
 const ROW_MENU_WIDTH = 200;
 const ROW_MENU_EST_HEIGHT = 200;
@@ -94,6 +94,8 @@ interface Props {
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  /** Move dragged items into a folder row (Finder-style drop, same pane). */
+  onMoveIntoFolder?: (targetFolderId: string, ids: string[]) => void;
 }
 
 /** An open row-actions menu, anchored to the three-dot button's screen position. */
@@ -218,6 +220,7 @@ export default function FileBrowser({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  onMoveIntoFolder,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -232,6 +235,15 @@ export default function FileBrowser({
   const rootMenu = path.length === 0 && Boolean(onUnselectRoot);
   const [menu, setMenu] = useState<RowMenu | null>(null);
   const [toolbarMenu, setToolbarMenu] = useState<DOMRect | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  // Folder row currently hovered as a move drop target (Finder-style same-pane move).
+  const [dropFolderId, setDropFolderId] = useState<string | null>(null);
+
+  // Close the search box and drop its filter.
+  const closeSearch = useCallback(() => {
+    setShowSearch(false);
+    onSearchChange?.('');
+  }, [onSearchChange]);
 
   // Infinite scroll: the scroll container + a bottom sentinel watched by an IntersectionObserver.
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -268,8 +280,7 @@ export default function FileBrowser({
     };
   }, [menu, toolbarMenu]);
 
-  // Instant client-side filter of the loaded rows (Drive also filters server-side; this is a superset,
-  // so it never hides server results — and it handles roots + S3, which aren't searched server-side).
+  // Instant client-side filter (superset of Drive's server-side filter; also covers roots + S3).
   const query = searchQuery.trim().toLowerCase();
   const sorted = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1;
@@ -439,7 +450,6 @@ export default function FileBrowser({
 
   return (
     <section className='flex min-h-0 flex-1 flex-col'>
-      {/* Toolbar */}
       <header className='flex h-12 shrink-0 items-center justify-between gap-x-4 px-2'>
         <Breadcrumb
           crumbs={path}
@@ -456,6 +466,20 @@ export default function FileBrowser({
                 ? `${sorted.length} of ${entries.length}`
                 : `${entries.length} item${entries.length === 1 ? '' : 's'}`}
             </span>
+          )}
+          {/* Search toggle — appears once the folder has loaded content (no empty-folder flash). */}
+          {!loading && entries.length > 0 && (
+            <button
+              type='button'
+              onClick={() => (showSearch ? closeSearch() : setShowSearch(true))}
+              title='Search'
+              className={`inline-flex h-9 w-9 items-center justify-center rounded-lg transition ${
+                showSearch
+                  ? 'bg-zinc-200 text-zinc-950 dark:bg-zinc-800 dark:text-zinc-50'
+                  : 'text-zinc-600 hover:bg-zinc-200 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'
+              }`}>
+              <Icon icon='MagnifyingGlass' className='h-5 w-5' />
+            </button>
           )}
           {(canUpload || onToggleSplit || onCopyLink) && (
             <button
@@ -474,37 +498,45 @@ export default function FileBrowser({
       </header>
 
       {/* Search this view (folders + files). Instant client filter; Drive also narrows server-side. */}
-      {!notFound && (entries.length > 0 || query) && (
-        <div className='shrink-0 px-2 pb-2'>
-          <div className='relative'>
-            <Icon
-              icon='MagnifyingGlass'
-              className='pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-zinc-500'
-            />
-            <input
-              type='text'
-              value={searchQuery}
-              onChange={(event) => onSearchChange?.(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') onSearchChange?.('');
-              }}
-              placeholder='Search this folder'
-              className='w-full rounded-lg border border-zinc-300 bg-zinc-50 py-1.5 pr-8 pl-8 text-sm text-zinc-950 transition placeholder:text-zinc-500 focus:border-green-600 focus:ring-1 focus:ring-green-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50'
-            />
-            {searchQuery && (
-              <button
-                type='button'
-                onClick={() => onSearchChange?.('')}
-                title='Clear search'
-                className='absolute top-1/2 right-2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-950 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'>
-                <Icon icon='XMark' className='h-3.5 w-3.5' />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {showSearch && (
+          <motion.div
+            key='search-bar'
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.15, ease: 'easeInOut' }}
+            className='shrink-0 overflow-hidden px-2 pt-1 pb-2'>
+            <div className='relative'>
+              <Icon
+                icon='MagnifyingGlass'
+                className='pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-zinc-500'
+              />
+              <input
+                type='text'
+                autoFocus
+                value={searchQuery}
+                onChange={(event) => onSearchChange?.(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') closeSearch();
+                }}
+                placeholder='Search this folder'
+                className='w-full rounded-lg border border-zinc-300 bg-zinc-50 py-1.5 pr-8 pl-8 text-sm text-zinc-950 transition placeholder:text-zinc-500 focus:outline-2 focus:-outline-offset-1 focus:outline-green-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50'
+              />
+              {searchQuery && (
+                <button
+                  type='button'
+                  onClick={() => onSearchChange?.('')}
+                  title='Clear search'
+                  className='absolute top-1/2 right-2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-950 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'>
+                  <Icon icon='XMark' className='h-3.5 w-3.5' />
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Content / drop zone */}
       <div
         ref={scrollRef}
         onClick={onDeselect}
@@ -580,7 +612,6 @@ export default function FileBrowser({
           </div>
         ) : (
           <div className='px-1'>
-            {/* Column headers */}
             <div
               className={`sticky top-0 z-1 grid ${gridCols} items-center gap-x-3 border-b border-zinc-300 bg-zinc-100 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900`}>
               {canModify && (
@@ -620,7 +651,6 @@ export default function FileBrowser({
               {showActions && <span />}
             </div>
 
-            {/* Rows */}
             <ul className='py-1'>
               {sorted.map((entry) => {
                 const selected = entry.id === selectedId;
@@ -633,6 +663,44 @@ export default function FileBrowser({
                       draggable={canModify}
                       onDragStart={(event) => handleRowDragStart(event, entry)}
                       onDragEnd={() => onMoveDragEnd?.()}
+                      onDragOver={(event) => {
+                        // A folder row accepts a move drop (unless it's part of the dragged selection).
+                        if (
+                          canModify &&
+                          onMoveIntoFolder &&
+                          entry.isFolder &&
+                          !selectedIds.has(entry.id) &&
+                          event.dataTransfer.types.includes(MOVE_MIME)
+                        ) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          event.dataTransfer.dropEffect = 'move';
+                          if (dropFolderId !== entry.id) setDropFolderId(entry.id);
+                        }
+                      }}
+                      onDragLeave={(event) => {
+                        if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                          return;
+                        }
+                        setDropFolderId((current) => (current === entry.id ? null : current));
+                      }}
+                      onDrop={(event) => {
+                        if (
+                          !canModify ||
+                          !onMoveIntoFolder ||
+                          !entry.isFolder ||
+                          !event.dataTransfer.types.includes(MOVE_MIME)
+                        ) {
+                          return;
+                        }
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setDropFolderId(null);
+                        const ids = event.dataTransfer.getData(MOVE_MIME).split(',').filter(Boolean);
+                        if (ids.length > 0 && !ids.includes(entry.id)) {
+                          onMoveIntoFolder(entry.id, ids);
+                        }
+                      }}
                       onClick={(event) => {
                         // Don't let the click reach the finder's deselect handler.
                         event.stopPropagation();
@@ -676,9 +744,11 @@ export default function FileBrowser({
                         }
                       }}
                       className={`grid ${gridCols} w-full cursor-pointer items-center gap-x-3 rounded-lg px-3 py-2 text-left transition ${
-                        checked || selected
-                          ? 'bg-green-600/10'
-                          : 'hover:bg-zinc-200 dark:hover:bg-zinc-800'
+                        dropFolderId === entry.id
+                          ? 'bg-green-600/15 ring-2 ring-green-600 ring-inset'
+                          : checked || selected
+                            ? 'bg-green-600/10'
+                            : 'hover:bg-zinc-200 dark:hover:bg-zinc-800'
                       }`}>
                       {canModify && (
                         // Wrapper keeps the grid cell aligned on desktop; the checkbox shows only on mobile.
@@ -744,7 +814,6 @@ export default function FileBrowser({
         )}
       </div>
 
-      {/* Bulk selection bar — below the list, styled like the sidebar */}
       <AnimatePresence initial={false}>
         {canModify && selectedIds.size > 0 && (
           <motion.div
@@ -779,7 +848,6 @@ export default function FileBrowser({
       <input ref={fileInputRef} type='file' multiple className='hidden' onChange={handleInput} />
       <input ref={folderInputRef} type='file' className='hidden' onChange={handleInput} />
 
-      {/* Toolbar actions menu (upload / new folder / split), same style as row menu */}
       <AnimatePresence>
         {toolbarMenu && (
           <motion.div

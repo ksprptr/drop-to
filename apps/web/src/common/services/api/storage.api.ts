@@ -7,12 +7,11 @@ import type {
   StorageBackend,
   StorageStatus,
   UploadResult,
+  UploadStatus,
 } from '@dropto/types';
 
 import { getHttp } from '@/common/services/axios/axios.instance';
 import { seg } from '@/common/utils/storage-path';
-
-// Server-side storage API via getHttp(); uploads/downloads use dedicated route handlers.
 
 /**
  * Fetches the status of every storage backend (Drive + S3).
@@ -105,7 +104,26 @@ export const finalizeUpload = async (
   fileId: string,
 ): Promise<UploadResult> => {
   const http = await getHttp();
-  const { data } = await http.post<UploadResult>(`/storage/${backend}/files/${seg(fileId)}/finalize`);
+  const { data } = await http.post<UploadResult>(
+    `/storage/${backend}/files/${seg(fileId)}/finalize`,
+  );
+
+  return data;
+};
+
+/**
+ * Asks how many bytes a resumable session confirmed, so a dropped upload resumes from there.
+ **/
+export const getUploadStatus = async (
+  backend: StorageBackend,
+  uploadUrl: string,
+  size: number,
+): Promise<UploadStatus> => {
+  const http = await getHttp();
+  const { data } = await http.post<UploadStatus>(`/storage/${backend}/upload-status`, {
+    uploadUrl,
+    size,
+  });
 
   return data;
 };

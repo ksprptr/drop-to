@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 
+import { useOnlineStatus } from '@/common/hooks/useOnlineStatus';
 import type { UploadBatch, UploadTask } from '@/common/types/workspace.types';
 import { formatEta } from '@/common/utils/format.functions';
 import Icon from '@/components/common/Icon';
@@ -97,6 +98,7 @@ function TaskRow({ task }: { task: UploadTask }) {
  **/
 function BatchCard({ batch, onCancel }: { batch: UploadBatch; onCancel: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
+  const online = useOnlineStatus();
 
   const total = batch.tasks.length;
   const done = batch.tasks.filter((task) => task.status === 'done').length;
@@ -129,6 +131,21 @@ function BatchCard({ batch, onCancel }: { batch: UploadBatch; onCancel: (id: str
       exit={{ opacity: 0, scale: 0.9 }}
       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
       className='pointer-events-auto rounded-xl border border-zinc-300 bg-zinc-50 p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-800'>
+      {batch.status === 'uploading' && (
+        <div
+          className={`mb-2.5 flex items-center gap-x-1.5 border-b pb-2.5 ${
+            online
+              ? 'border-zinc-200 text-amber-700 dark:border-zinc-700 dark:text-amber-400'
+              : 'border-zinc-200 text-red-600 dark:border-zinc-700 dark:text-red-400'
+          }`}>
+          <Icon icon='ExclamationTriangle' className='h-3.5 w-3.5 shrink-0' />
+          <span className='text-[10px] leading-snug font-medium'>
+            {online
+              ? "Don't refresh or close the page — it will cancel the upload."
+              : 'Connection lost — waiting to reconnect…'}
+          </span>
+        </div>
+      )}
       {single ? (
         <div className='flex flex-col gap-y-1'>
           <div className='flex items-center justify-between gap-x-2'>
@@ -204,27 +221,10 @@ function BatchCard({ batch, onCancel }: { batch: UploadBatch; onCancel: (id: str
 export default function UploadDock() {
   const { batches, downloads } = useUploadState();
   const { cancelBatch: onCancelBatch } = useUploadActions();
-  const hasActive = batches.some((batch) => batch.status === 'uploading');
 
   return (
-    <div className='pointer-events-none fixed right-4 bottom-4 z-40 flex w-72 flex-col gap-2'>
+    <div className='pointer-events-none fixed right-3 bottom-3 z-40 flex w-80 flex-col gap-2'>
       <AnimatePresence initial={false}>
-        {hasActive && (
-          <motion.div
-            key='upload-warning'
-            layout
-            initial={{ opacity: 0, y: 16, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-            className='pointer-events-auto flex items-start gap-x-2 rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-amber-800 shadow-lg dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200'>
-            <Icon icon='ExclamationTriangle' className='mt-px h-4 w-4 shrink-0' />
-            <span className='text-[11px] leading-snug font-medium'>
-              Upload in progress — don&apos;t refresh or close the page, it will cancel the upload.
-            </span>
-          </motion.div>
-        )}
-
         {downloads.map((download) => (
           <motion.div
             key={download.id}

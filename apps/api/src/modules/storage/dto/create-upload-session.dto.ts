@@ -1,8 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsInt, IsNotEmpty, IsString, Max, MaxLength, Min } from 'class-validator';
-
-// Keep in sync with the controller's MAX_UPLOAD_BYTES.
-const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
+import { IsInt, IsNotEmpty, IsString, MaxLength, Min } from 'class-validator';
 
 export class CreateUploadSessionDto {
   @ApiProperty({ type: 'string', description: 'File name to store', maxLength: 512 })
@@ -17,9 +14,8 @@ export class CreateUploadSessionDto {
   @MaxLength(255)
   mimeType: string;
 
-  @ApiProperty({ type: 'integer', description: 'File size in bytes', minimum: 1, maximum: MAX_UPLOAD_BYTES })
+  @ApiProperty({ type: 'integer', description: 'File size in bytes', minimum: 1 })
   @IsInt()
   @Min(1)
-  @Max(MAX_UPLOAD_BYTES)
   size: number;
 }

@@ -45,6 +45,15 @@ export interface UploadResult {
 /** A resumable upload session: the browser PUTs the file bytes straight to `uploadUrl` (bypasses the app + CDN). */
 export interface ResumableUploadSession {
   uploadUrl: string;
+  /** How long the browser waits for a dropped connection before failing this upload (ms). */
+  offlineTimeoutMs: number;
+}
+
+/** How far a resumable session got — so a dropped upload resumes from `receivedBytes` (never re-uploads whole). */
+export interface UploadStatus {
+  complete: boolean;
+  receivedBytes: number;
+  fileId: string | null;
 }
 
 /** Payload sent from the Picker setup flow to persist the selected folders. */
@@ -76,4 +85,6 @@ export interface StorageStatus {
   /** Human-readable reason the configured backend broke (revoked Drive token, unreachable S3 bucket). */
   error?: string | null;
   isOwner?: boolean;
+  /** Storage usage of the connected account (Drive only); bytes, `limit` null = unlimited/unknown. */
+  quota?: { usage: number; limit: number | null } | null;
 }

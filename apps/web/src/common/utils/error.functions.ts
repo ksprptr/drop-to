@@ -11,7 +11,13 @@ export const extractApiErrorMessage = (error: unknown): string => {
   }
 
   if (isAxiosError(error)) {
-    const data = error.response?.data as { message?: string | string[] } | undefined;
+    if (!error.response) {
+      return typeof navigator !== 'undefined' && !navigator.onLine
+        ? 'Connection lost.'
+        : 'Network error — could not reach the server.';
+    }
+
+    const data = error.response.data as { message?: string | string[] } | undefined;
 
     if (data?.message) {
       return Array.isArray(data.message) ? data.message.join(', ') : data.message;

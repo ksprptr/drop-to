@@ -5,8 +5,7 @@ import { DRIVE_OWNER_COOKIE } from '../google-auth.constants';
 import { GoogleAuthService } from '../google-auth.service';
 
 /**
- * Restricts Drive-account management (folder selection/removal, disconnect) to whoever proved control
- * of the connected Google account — a valid owner-proof cookie whose email matches the active account.
+ * Restricts Drive-account management to whoever proved control of the connected Google account.
  **/
 @Injectable()
 export class DriveOwnerGuard implements CanActivate {

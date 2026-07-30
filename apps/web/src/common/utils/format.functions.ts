@@ -1,7 +1,7 @@
 /**
  * Formats a byte count like `1.4 MB` (em dash when unknown).
  **/
-export const formatBytes = (bytes: number | null): string => {
+export const formatBytes = (bytes: number | null, maxDecimals = 1): string => {
   if (bytes === null || Number.isNaN(bytes)) {
     return '—';
   }
@@ -13,8 +13,9 @@ export const formatBytes = (bytes: number | null): string => {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
   const value = bytes / Math.pow(1024, exponent);
+  const decimals = value >= 10 || exponent === 0 ? 0 : maxDecimals;
 
-  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+  return `${value.toFixed(decimals)} ${units[exponent]}`;
 };
 
 /**

@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import type { ReactNode } from 'react';
 
 import { getGoogleAuthUrl } from '@/common/services/api/auth.client';
+import { formatBytes } from '@/common/utils/format.functions';
 import Button from '@/components/common/Button';
 import Icon from '@/components/common/Icon';
 import ThemeToggle from '@/components/common/ThemeToggle';
@@ -35,6 +36,28 @@ function SectionLabel({ children }: { children: ReactNode }) {
 }
 
 /**
+ * A storage-usage bar (used of total), colored green → amber (≥ 75%) → red (> 95%).
+ **/
+function StorageMeter({ usage, limit }: { usage: number; limit: number }) {
+  const pct = limit > 0 ? Math.min(100, Math.round((usage / limit) * 100)) : 0;
+  const color = pct > 95 ? 'bg-red-500' : pct >= 75 ? 'bg-amber-500' : 'bg-green-600';
+
+  return (
+    <div className='rounded-xl bg-zinc-100 p-2.5 dark:bg-zinc-900'>
+      <div className='h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700'>
+        <div
+          className={`h-full rounded-full transition-all duration-300 ${color}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className='mt-2 text-xs font-medium text-zinc-600 dark:text-zinc-400'>
+        {formatBytes(usage, 2)} of {formatBytes(limit, 2)} used
+      </p>
+    </div>
+  );
+}
+
+/**
  * Left pane: Google account + S3 status, storage switcher, and the session footer.
  **/
 export default function AccountSidebar({
@@ -56,7 +79,6 @@ export default function AccountSidebar({
 
   return (
     <aside className='hidden w-72 shrink-0 flex-col overflow-hidden rounded-2xl border border-zinc-300 bg-zinc-50 md:flex dark:border-zinc-700 dark:bg-zinc-800'>
-      {/* Brand */}
       <div className='flex h-16 shrink-0 items-center gap-x-2.5 border-b border-zinc-300 px-5 dark:border-zinc-700'>
         <div className='inline-flex h-8 w-8 items-center justify-center rounded-lg bg-green-600 text-white'>
           <Icon icon='CloudArrowUp' className='h-5 w-5' />
@@ -69,9 +91,7 @@ export default function AccountSidebar({
         </div>
       </div>
 
-      {/* Categories + storage switcher */}
       <div className='flex min-h-0 flex-1 flex-col gap-y-5 overflow-y-auto p-4'>
-        {/* Google account */}
         <div>
           <SectionLabel>Google account</SectionLabel>
 
@@ -110,6 +130,10 @@ export default function AccountSidebar({
                 </div>
               </div>
 
+              {driveStatus.quota && driveStatus.quota.limit !== null && (
+                <StorageMeter usage={driveStatus.quota.usage} limit={driveStatus.quota.limit} />
+              )}
+
               {isOwner ? (
                 <div className='flex flex-col gap-y-2'>
                   <Button variant='secondary' fullWidth onClick={onManageFolders} loading={saving}>
@@ -133,7 +157,6 @@ export default function AccountSidebar({
           )}
         </div>
 
-        {/* S3 storage */}
         <div>
           <SectionLabel>S3 storage</SectionLabel>
 
@@ -172,7 +195,6 @@ export default function AccountSidebar({
           )}
         </div>
 
-        {/* Storage switcher */}
         {!loading && connectedStorages.length > 0 && (
           <div className='min-h-0'>
             <SectionLabel>Browse</SectionLabel>
@@ -209,7 +231,6 @@ export default function AccountSidebar({
         )}
       </div>
 
-      {/* Footer */}
       <div className='flex items-center justify-between gap-x-2 border-t border-zinc-300 p-3 dark:border-zinc-700'>
         <div className='flex min-w-0 items-center gap-x-2'>
           <div className='inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-600/15 text-xs font-semibold text-green-600 uppercase'>
