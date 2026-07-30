@@ -232,8 +232,7 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * The Drive `q` for a folder's direct children, optionally narrowed by a name search. The search
-   * term is escaped (`\` and `'`) so it can't break out of the quoted string (query injection).
+   * Builds the Drive `q` for a folder's children; escapes the search term to prevent query injection.
    **/
   private buildContentsQuery(folderId: string, search: string | undefined): string {
     let query = `'${folderId}' in parents and trashed = false`;
@@ -248,8 +247,7 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Maps the UI sort to a Drive `orderBy`. `folder` always leads so folders group before files,
-   * regardless of the chosen column/direction.
+   * Maps the UI sort to a Drive `orderBy`, with `folder` leading so folders group before files.
    **/
   private buildOrderBy(
     sortKey: ListContentsOptions['sortKey'],
@@ -331,9 +329,7 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Opens a Drive resumable upload session server-side (the access token never leaves the server) and
-   * returns the session URL. The parent folder is validated + baked into the session, so the browser
-   * can only stream the one file into the one authorized folder — it cannot redirect it elsewhere.
+   * Opens a Drive resumable upload session server-side; the validated parent is baked in so the browser can't redirect the file elsewhere.
    **/
   async createResumableUpload(
     folderId: string,
@@ -379,7 +375,7 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Queries how far a resumable session got (server-side, where CORS doesn't hide the `Range` header), so the browser can resume a dropped upload from `receivedBytes` instead of re-uploading the whole file.
+   * Queries how far a resumable session got (server-side, where CORS doesn't hide `Range`) so the browser can resume from `receivedBytes`.
    **/
   async getUploadStatus(uploadUrl: string, size: number): Promise<UploadStatusEntity> {
     if (!uploadUrl.startsWith('https://www.googleapis.com/upload/drive/')) {
@@ -411,7 +407,7 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Validates a browser-completed resumable upload lands inside the authorized tree, records it, and returns the stored file. The session already pinned the parent — this is the server-side backstop.
+   * Validates a browser-completed resumable upload lands inside the authorized tree, records it, and returns the stored file.
    **/
   async finalizeUpload(fileId: string): Promise<UploadResultEntity> {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();

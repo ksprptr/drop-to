@@ -79,7 +79,6 @@ export default function AccountSidebar({
 
   return (
     <aside className='hidden w-72 shrink-0 flex-col overflow-hidden rounded-2xl border border-zinc-300 bg-zinc-50 md:flex dark:border-zinc-700 dark:bg-zinc-800'>
-      {/* Brand */}
       <div className='flex h-16 shrink-0 items-center gap-x-2.5 border-b border-zinc-300 px-5 dark:border-zinc-700'>
         <div className='inline-flex h-8 w-8 items-center justify-center rounded-lg bg-green-600 text-white'>
           <Icon icon='CloudArrowUp' className='h-5 w-5' />
@@ -92,9 +91,7 @@ export default function AccountSidebar({
         </div>
       </div>
 
-      {/* Categories + storage switcher */}
       <div className='flex min-h-0 flex-1 flex-col gap-y-5 overflow-y-auto p-4'>
-        {/* Google account */}
         <div>
           <SectionLabel>Google account</SectionLabel>
 
@@ -133,7 +130,6 @@ export default function AccountSidebar({
                 </div>
               </div>
 
-              {/* Storage usage — bar under the account card; amber ≥ 75%, red > 95%. */}
               {driveStatus.quota && driveStatus.quota.limit !== null && (
                 <StorageMeter usage={driveStatus.quota.usage} limit={driveStatus.quota.limit} />
               )}
@@ -161,7 +157,6 @@ export default function AccountSidebar({
           )}
         </div>
 
-        {/* S3 storage */}
         <div>
           <SectionLabel>S3 storage</SectionLabel>
 
@@ -200,7 +195,6 @@ export default function AccountSidebar({
           )}
         </div>
 
-        {/* Storage switcher */}
         {!loading && connectedStorages.length > 0 && (
           <div className='min-h-0'>
             <SectionLabel>Browse</SectionLabel>
@@ -237,7 +231,6 @@ export default function AccountSidebar({
         )}
       </div>
 
-      {/* Footer */}
       <div className='flex items-center justify-between gap-x-2 border-t border-zinc-300 p-3 dark:border-zinc-700'>
         <div className='flex min-w-0 items-center gap-x-2'>
           <div className='inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-600/15 text-xs font-semibold text-green-600 uppercase'>

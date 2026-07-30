@@ -27,7 +27,9 @@ export interface PrismaMock {
   uploadLog: { create: jest.Mock };
 }
 
-/** A live (non-revoked, unexpired) refresh-token row — the default `findUnique` result. */
+/**
+ * A live (non-revoked, unexpired) refresh-token row — the default `findUnique` result.
+ **/
 const liveRefreshRow = () => ({
   id: 'refresh-row-1',
   tokenHash: 'hash-1',

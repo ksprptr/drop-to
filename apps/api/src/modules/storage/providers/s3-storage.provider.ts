@@ -129,7 +129,7 @@ function guessMimeType(name: string): string {
 }
 
 /**
- * StorageProvider over S3: each configured bucket is a browse root, "folders" are key prefixes, every op asserts the bucket is configured.
+ * StorageProvider over S3: each configured bucket is a browse root; folders are key prefixes.
  **/
 @Injectable()
 export class S3StorageProvider implements StorageProvider {

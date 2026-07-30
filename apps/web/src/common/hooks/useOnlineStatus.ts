@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 /**
- * Tracks the browser's connectivity via the `online`/`offline` events and `navigator.onLine`. Returns `true` if the browser is online, `false` if offline.
+ * Tracks browser connectivity via `online`/`offline` events and `navigator.onLine`.
  **/
 export function useOnlineStatus(): boolean {
   const [online, setOnline] = useState(true);

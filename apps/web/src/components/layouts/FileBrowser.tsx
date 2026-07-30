@@ -36,8 +36,7 @@ const MENU_MOTION = {
   transition: { duration: 0.08, ease: 'easeOut' },
 } as const;
 
-// Popup-menu geometry (px): fixed widths, an estimated row-menu height for the flip-up decision,
-// and the gap between the anchor and the menu.
+// Popup-menu geometry (px): widths, estimated row-menu height for the flip-up decision, anchor gap.
 const TOOLBAR_MENU_WIDTH = 176;
 const ROW_MENU_WIDTH = 200;
 const ROW_MENU_EST_HEIGHT = 200;
@@ -281,8 +280,7 @@ export default function FileBrowser({
     };
   }, [menu, toolbarMenu]);
 
-  // Instant client-side filter of the loaded rows (Drive also filters server-side; this is a superset,
-  // so it never hides server results — and it handles roots + S3, which aren't searched server-side).
+  // Instant client-side filter (superset of Drive's server-side filter; also covers roots + S3).
   const query = searchQuery.trim().toLowerCase();
   const sorted = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1;
@@ -452,7 +450,6 @@ export default function FileBrowser({
 
   return (
     <section className='flex min-h-0 flex-1 flex-col'>
-      {/* Toolbar */}
       <header className='flex h-12 shrink-0 items-center justify-between gap-x-4 px-2'>
         <Breadcrumb
           crumbs={path}
@@ -540,7 +537,6 @@ export default function FileBrowser({
         )}
       </AnimatePresence>
 
-      {/* Content / drop zone */}
       <div
         ref={scrollRef}
         onClick={onDeselect}
@@ -616,7 +612,6 @@ export default function FileBrowser({
           </div>
         ) : (
           <div className='px-1'>
-            {/* Column headers */}
             <div
               className={`sticky top-0 z-1 grid ${gridCols} items-center gap-x-3 border-b border-zinc-300 bg-zinc-100 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900`}>
               {canModify && (
@@ -656,7 +651,6 @@ export default function FileBrowser({
               {showActions && <span />}
             </div>
 
-            {/* Rows */}
             <ul className='py-1'>
               {sorted.map((entry) => {
                 const selected = entry.id === selectedId;
@@ -820,7 +814,6 @@ export default function FileBrowser({
         )}
       </div>
 
-      {/* Bulk selection bar — below the list, styled like the sidebar */}
       <AnimatePresence initial={false}>
         {canModify && selectedIds.size > 0 && (
           <motion.div
@@ -855,7 +848,6 @@ export default function FileBrowser({
       <input ref={fileInputRef} type='file' multiple className='hidden' onChange={handleInput} />
       <input ref={folderInputRef} type='file' className='hidden' onChange={handleInput} />
 
-      {/* Toolbar actions menu (upload / new folder / split), same style as row menu */}
       <AnimatePresence>
         {toolbarMenu && (
           <motion.div

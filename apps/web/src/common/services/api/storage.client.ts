@@ -11,8 +11,7 @@ import {
 const DEFAULT_OFFLINE_TIMEOUT_MS = 30_000;
 
 /**
- * Resolves once back online; rejects with a CanceledError on user-abort, or with "Connection lost."
- * after `timeoutMs` still offline.
+ * Resolves once back online; rejects on user-abort, or with "Connection lost." after `timeoutMs` still offline.
  **/
 const waitForOnline = (timeoutMs: number, signal?: AbortSignal): Promise<void> => {
   if (typeof navigator === 'undefined' || navigator.onLine) {
@@ -82,9 +81,7 @@ export const folderDownloadUrl = (backend: StorageBackend, id: string): string =
   `/api/storage/${backend}/folders/${id}/download`;
 
 /**
- * Drive direct upload: our API opens a resumable session server-side (the access token never reaches
- * the browser — only the one-file session URL does), the browser PUTs the bytes to Google, then the
- * API validates + records it. The file lands in the authorized folder, owned by the connected account.
+ * Drive direct upload: API opens a resumable session (access token never reaches the browser, only the session URL), the browser PUTs bytes to Google, then the API validates + records it.
  **/
 const uploadToDriveDirect = async (
   folderId: string,
@@ -111,10 +108,7 @@ const uploadToDriveDirect = async (
   let recheck = false; // after a drop: ask the server how far it got, then resume from there
   let fileId: string | undefined;
 
-  // Resumable loop: a connection drop aborts the in-flight PUT (upload pauses); we wait up to
-  // OFFLINE_TIMEOUT_MS, then ask the server how many bytes the session confirmed and resume from
-  // exactly there (no re-upload of received bytes, no lost bytes). Still offline after the timeout →
-  // fail without leaving a partial file.
+  // Resumable loop: a drop pauses the PUT; wait up to OFFLINE_TIMEOUT_MS, then resume from the server-confirmed offset, else fail without a partial file.
   for (;;) {
     if (signal?.aborted) {
       throw new CanceledError();
@@ -145,8 +139,7 @@ const uploadToDriveDirect = async (
     signal?.addEventListener('abort', abortAttempt);
 
     try {
-      // PUT the (remaining) bytes straight to the Google session URL — no auth header (the URL is the
-      // capability), no cookies to Google. Progress is offset by what's already confirmed.
+      // PUT the remaining bytes to the Google session URL (the URL is the capability — no auth header/cookies); progress offset by confirmed bytes.
       // eslint-disable-next-line no-await-in-loop -- deliberate: one (resumable) attempt per loop turn
       const res = await axios.put<{ id?: string }>(uploadUrl, offset > 0 ? file.slice(offset) : file, {
         signal: attempt.signal,
@@ -198,9 +191,7 @@ const uploadToDriveDirect = async (
 };
 
 /**
- * Uploads a file. Drive uses a resumable session and streams the bytes **straight to Google**
- * (bypasses the app server + any CDN body-size cap, e.g. Cloudflare's 100 MB); S3 streams through the
- * same-origin route. Progress + ETA come from the actual byte transfer in both cases.
+ * Uploads a file — Drive streams straight to Google via a resumable session, S3 through the same-origin route.
  **/
 export const uploadFile = async (
   backend: StorageBackend,

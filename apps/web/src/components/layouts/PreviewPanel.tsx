@@ -82,7 +82,6 @@ export default function PreviewPanel({
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.1, ease: 'easeOut' }}
             className='flex min-h-0 flex-1 flex-col overflow-y-auto p-5'>
-            {/* Preview */}
             <div className='flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-900'>
               {isImage && !imageFailed ? (
                 <img

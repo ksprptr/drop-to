@@ -163,8 +163,7 @@ export class GoogleAuthService {
   }
 
   /**
-   * Signs a proof that `email` was just verified via Google, unlocking account management in the
-   * browser that completed OAuth. Opaque and tamper-proof (AES-256-GCM), self-expiring via `exp`.
+   * Signs a tamper-proof, self-expiring proof that `email` was just verified via Google.
    **/
   issueOwnerToken(email: string): string {
     return this.cryptoService.encrypt(

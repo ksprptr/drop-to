@@ -65,48 +65,73 @@ export interface StorageProvider {
   /** The backend key this provider serves ('drive' | 's3'). */
   readonly backend: StorageBackend;
 
-  /** Backend usability + browse roots for the sidebar; never throws (returns `connected: false`). */
+  /**
+   * Backend usability + browse roots for the sidebar; never throws (returns `connected: false`).
+   **/
   status(): Promise<StorageStatusEntity>;
 
-  /** Lists the authorized root folders (the ones picked during setup). */
+  /**
+   * Lists the authorized root folders (the ones picked during setup).
+   **/
   listRoots(): Promise<AllowedFolderEntity[]>;
 
-  /** Lists one page of the files and subfolders directly inside an authorized folder. */
+  /**
+   * Lists one page of the files and subfolders directly inside an authorized folder.
+   **/
   listContents(folderId: string, options?: ListContentsOptions): Promise<ContentsPage>;
 
-  /** Resolves the display names of ids (for rebuilding a breadcrumb from a deep link). */
+  /**
+   * Resolves the display names of ids (for rebuilding a breadcrumb from a deep link).
+   **/
   resolveNames(ids: string[]): Promise<ResolvedNameEntity[]>;
 
-  /** Creates a subfolder inside an authorized folder. */
+  /**
+   * Creates a subfolder inside an authorized folder.
+   **/
   createFolder(parentId: string, name: string): Promise<DriveEntryEntity>;
 
-  /** Uploads a file into an authorized folder (server-streamed; used by S3 and as the small-file path). */
+  /**
+   * Uploads a file into an authorized folder (server-streamed; used by S3 and as the small-file path).
+   **/
   uploadFile(folderId: string, upload: StorageUpload): Promise<UploadResultEntity>;
 
   /**
-   * Opens a resumable upload session into an authorized folder and returns the session URL the browser
-   * PUTs the bytes to directly (never through the app server / CDN). The access token stays server-side.
-   */
+   * Opens a resumable upload session; browser PUTs bytes directly to the returned URL (token stays server-side).
+   **/
   createResumableUpload(folderId: string, init: ResumableUploadInit): Promise<{ uploadUrl: string }>;
 
-  /** Validates + records a resumable upload once the browser finished it; returns the stored file. */
+  /**
+   * Validates + records a resumable upload once the browser finished it; returns the stored file.
+   **/
   finalizeUpload(fileId: string): Promise<UploadResultEntity>;
 
-  /** How far a resumable session got, so a dropped upload can resume from there (server-side, no CORS). */
+  /**
+   * How far a resumable session got, so a dropped upload can resume from there (server-side, no CORS).
+   **/
   getUploadStatus(uploadUrl: string, size: number): Promise<UploadStatusEntity>;
 
-  /** Deletes a file or subfolder inside the authorized tree (never a root). */
+  /**
+   * Deletes a file or subfolder inside the authorized tree (never a root).
+   **/
   deleteItem(itemId: string): Promise<void>;
 
-  /** Renames a file or subfolder inside the authorized scope (never a root). */
+  /**
+   * Renames a file or subfolder inside the authorized scope (never a root).
+   **/
   renameItem(itemId: string, name: string): Promise<DriveEntryEntity>;
 
-  /** Moves an item into another folder inside the authorized scope (never a root itself). */
+  /**
+   * Moves an item into another folder inside the authorized scope (never a root itself).
+   **/
   moveItem(itemId: string, targetFolderId: string): Promise<DriveEntryEntity>;
 
-  /** Opens a readable stream of a single file's contents. */
+  /**
+   * Opens a readable stream of a single file's contents.
+   **/
   downloadFile(fileId: string): Promise<StorageDownload>;
 
-  /** Builds a ZIP archive of a folder's entire subtree. */
+  /**
+   * Builds a ZIP archive of a folder's entire subtree.
+   **/
   createFolderArchive(folderId: string): Promise<StorageArchive>;
 }

@@ -8,7 +8,9 @@ import { useDebouncedValue } from '@/common/hooks/useDebouncedValue';
 import type { Crumb, SortDir, SortKey, ViewEntry } from '@/common/types/workspace.types';
 import { toViewEntries } from '@/common/utils/view-entry.functions';
 
-/** Drive filters by name server-side; S3 lists a whole level and is filtered client-side. */
+/**
+ * Drive filters by name server-side; S3 lists a whole level and is filtered client-side.
+ **/
 const serverSearch = (backend: StorageBackend | null, term: string): string | undefined =>
   backend === 'drive' && term ? term : undefined;
 

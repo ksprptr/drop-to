@@ -1278,7 +1278,6 @@ function WorkspaceInner({
 
       <UploadDock />
 
-      {/* Duplicate name modal */}
       <Modal
         open={duplicate !== null}
         onClose={() => resolveDuplicate('cancel')}
@@ -1310,7 +1309,6 @@ function WorkspaceInner({
         </div>
       </Modal>
 
-      {/* New folder modal */}
       <Modal open={newFolderOpen} onClose={() => setNewFolderOpen(false)} title='New folder'>
         <form onSubmit={handleCreateFolder} className='flex flex-col gap-y-4'>
           <Input
@@ -1335,7 +1333,6 @@ function WorkspaceInner({
         </form>
       </Modal>
 
-      {/* Rename modal */}
       <Modal
         open={renameTarget !== null}
         onClose={() => {
