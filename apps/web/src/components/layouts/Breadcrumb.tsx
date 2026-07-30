@@ -39,6 +39,11 @@ export default function Breadcrumb({
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const [overflowPos, setOverflowPos] = useState<{ top: number; left: number } | null>(null);
+  const overflowRef = useRef<HTMLSpanElement>(null);
+  const overflowMenuRef = useRef<HTMLDivElement>(null);
+
   const [isMobile, setIsMobile] = useState(false);
 
   // Below `md` the sidebar is hidden, so the root crumb becomes the storage switcher.
@@ -74,6 +79,48 @@ export default function Breadcrumb({
       window.removeEventListener('keydown', onKey);
     };
   }, [pickerOpen]);
+
+  useEffect(() => {
+    if (!overflowOpen) {
+      return;
+    }
+    const close = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!overflowRef.current?.contains(target) && !overflowMenuRef.current?.contains(target)) {
+        setOverflowOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOverflowOpen(false);
+    };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [overflowOpen]);
+
+  const renderCrumb = (crumb: Crumb, index: number) => (
+    <span key={crumb.id} className='flex min-w-0 items-center gap-x-1'>
+      <Icon
+        icon='ChevronRight'
+        className='h-3.5 w-3.5 shrink-0 text-zinc-600 dark:text-zinc-400'
+      />
+      <button
+        type='button'
+        onClick={() => onNavigate(index)}
+        className={`min-w-0 truncate hover:text-green-600 ${
+          index === crumbs.length - 1
+            ? 'font-medium text-zinc-950 dark:text-zinc-50'
+            : 'text-zinc-600 dark:text-zinc-400'
+        }`}>
+        {crumb.name || (
+          <span className='inline-block h-3 w-16 animate-pulse rounded bg-zinc-300 align-middle dark:bg-zinc-700' />
+        )}
+      </button>
+    </span>
+  );
 
   return (
     <nav className='flex min-w-0 items-center gap-x-1 text-sm'>
@@ -150,26 +197,65 @@ export default function Breadcrumb({
           )}
       </div>
 
-      {crumbs.map((crumb, index) => (
-        <span key={crumb.id} className='flex min-w-0 items-center gap-x-1'>
-          <Icon
-            icon='ChevronRight'
-            className='h-3.5 w-3.5 shrink-0 text-zinc-600 dark:text-zinc-400'
-          />
-          <button
-            type='button'
-            onClick={() => onNavigate(index)}
-            className={`min-w-0 truncate hover:text-green-600 ${
-              index === crumbs.length - 1
-                ? 'font-medium text-zinc-950 dark:text-zinc-50'
-                : 'text-zinc-600 dark:text-zinc-400'
-            }`}>
-            {crumb.name || (
-              <span className='inline-block h-3 w-16 animate-pulse rounded bg-zinc-300 align-middle dark:bg-zinc-700' />
+      {crumbs.length <= 4 ? (
+        crumbs.map((crumb, index) => renderCrumb(crumb, index))
+      ) : (
+        <>
+          {renderCrumb(crumbs[0], 0)}
+          <span ref={overflowRef} className='flex shrink-0 items-center gap-x-1'>
+            <Icon
+              icon='ChevronRight'
+              className='h-3.5 w-3.5 shrink-0 text-zinc-600 dark:text-zinc-400'
+            />
+            <button
+              type='button'
+              onClick={() => {
+                if (!overflowOpen && overflowRef.current) {
+                  const rect = overflowRef.current.getBoundingClientRect();
+                  setOverflowPos({ top: rect.bottom + 4, left: rect.left });
+                }
+                setOverflowOpen((open) => !open);
+              }}
+              title='Show hidden folders'
+              className='rounded px-1 font-medium text-zinc-600 hover:text-green-600 dark:text-zinc-400'>
+              …
+            </button>
+          </span>
+          {renderCrumb(crumbs[crumbs.length - 2], crumbs.length - 2)}
+          {renderCrumb(crumbs[crumbs.length - 1], crumbs.length - 1)}
+        </>
+      )}
+
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <AnimatePresence>
+            {overflowOpen && overflowPos && (
+              <motion.div
+                ref={overflowMenuRef}
+                initial={{ opacity: 0, scale: 0.96, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: -4 }}
+                transition={{ duration: 0.08, ease: 'easeOut' }}
+                style={{ transformOrigin: 'top left', top: overflowPos.top, left: overflowPos.left }}
+                className='fixed z-50 flex max-h-72 w-56 flex-col gap-y-0.5 overflow-y-auto rounded-xl border border-zinc-300 bg-zinc-50 p-1.5 text-sm shadow-xl dark:border-zinc-700 dark:bg-zinc-800'>
+                {crumbs.slice(1, crumbs.length - 2).map((crumb, i) => (
+                  <button
+                    key={crumb.id}
+                    type='button'
+                    onClick={() => {
+                      onNavigate(i + 1);
+                      setOverflowOpen(false);
+                    }}
+                    className='flex items-center gap-x-2 rounded-lg px-3 py-2 text-left text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700'>
+                    <Icon icon='Folder' className='h-4 w-4 shrink-0 text-green-600' />
+                    <span className='truncate'>{crumb.name || 'Loading…'}</span>
+                  </button>
+                ))}
+              </motion.div>
             )}
-          </button>
-        </span>
-      ))}
+          </AnimatePresence>,
+          document.body,
+        )}
     </nav>
   );
 }

@@ -39,7 +39,12 @@ import type {
 } from '@/common/types/workspace.types';
 import { extractApiErrorMessage, isCanceledError } from '@/common/utils/error.functions';
 import { buildWorkspaceUrl, slugify } from '@/common/utils/storage-url';
-import { isTopLevelFolder, topLevelName, uniqueName } from '@/common/utils/upload.functions';
+import {
+  isIgnoredUploadName,
+  isTopLevelFolder,
+  topLevelName,
+  uniqueName,
+} from '@/common/utils/upload.functions';
 import { toViewEntries } from '@/common/utils/view-entry.functions';
 import Button from '@/components/common/Button';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -624,7 +629,8 @@ function WorkspaceInner({
   }, []);
 
   const handleUpload = useCallback(
-    async (items: UploadItem[], pane: 0 | 1 = 0) => {
+    async (droppedItems: UploadItem[], pane: 0 | 1 = 0) => {
+      const items = droppedItems.filter((item) => !isIgnoredUploadName(item.relativePath));
       const targetFolderId = pane === 0 ? currentFolderId : paneB.currentFolderId;
       const existing = pane === 0 ? entries : paneB.entries;
       if (targetFolderId === null || activeBackend === null || items.length === 0) {
