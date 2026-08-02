@@ -86,10 +86,12 @@ describe('Drive (integration)', () => {
       expect(res.body).toEqual([]);
     });
 
-    it('resolves the display name for each requested id', async () => {
+    it('resolves the display name + Drive link for each requested id', async () => {
       connectAccountWithRoots('root-1');
       driveFilesMock.get.mockImplementation(({ fileId }: { fileId: string }) =>
-        Promise.resolve({ data: { id: fileId, name: `folder-${fileId}` } }),
+        Promise.resolve({
+          data: { id: fileId, name: `folder-${fileId}`, webViewLink: `http://view/${fileId}` },
+        }),
       );
 
       const res = await request(app.getHttpServer())
@@ -99,8 +101,8 @@ describe('Drive (integration)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual([
-        { id: 'a', name: 'folder-a' },
-        { id: 'b', name: 'folder-b' },
+        { id: 'a', name: 'folder-a', webViewLink: 'http://view/a' },
+        { id: 'b', name: 'folder-b', webViewLink: 'http://view/b' },
       ]);
     });
   });

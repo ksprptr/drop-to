@@ -18,6 +18,7 @@ interface Props {
   onDelete: (entry: ViewEntry) => void;
   onDownload: (entry: ViewEntry) => void;
   onRename: (entry: ViewEntry) => void;
+  onCopyLink: (entry: ViewEntry) => void;
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -40,6 +41,7 @@ export default function PreviewPanel({
   onDelete,
   onDownload,
   onRename,
+  onCopyLink,
 }: Props) {
   // Per-entry image-failure, so switching items retries fresh.
   const [failedId, setFailedId] = useState<string | null>(null);
@@ -117,7 +119,19 @@ export default function PreviewPanel({
                   {entry.isFolder ? 'Download as ZIP' : 'Download'}
                 </Button>
               )}
-              {entry.webViewLink && !entry.isFolder && (
+              {!isRoot && (
+                <Button variant='normal' fullWidth onClick={() => onRename(entry)}>
+                  <Icon icon='Pencil' className='h-4 w-4' />
+                  Rename
+                </Button>
+              )}
+              {entry.webViewLink && (
+                <Button variant='normal' fullWidth onClick={() => onCopyLink(entry)}>
+                  <Icon icon='LinkIcon' className='h-4 w-4' />
+                  Copy link
+                </Button>
+              )}
+              {entry.webViewLink && (
                 <a
                   href={entry.webViewLink}
                   target='_blank'
@@ -126,12 +140,6 @@ export default function PreviewPanel({
                   <Icon icon='ArrowTopRightOnSquare' className='h-4 w-4' />
                   Open in Drive
                 </a>
-              )}
-              {!isRoot && (
-                <Button variant='normal' fullWidth onClick={() => onRename(entry)}>
-                  <Icon icon='Pencil' className='h-4 w-4' />
-                  Rename
-                </Button>
               )}
               {!isRoot && (
                 <Button variant='danger' fullWidth onClick={() => onDelete(entry)}>

@@ -264,14 +264,14 @@ export class GoogleDriveProvider implements StorageProvider {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
     const drive = await this.getDrive(driveAccountId);
 
-    // Breadcrumb names only — one parallel files.get per id, no ancestor walk (data access still validates the full tree).
+    // Breadcrumb names + Drive links only — one parallel files.get per id, no ancestor walk (data access still validates the full tree).
     return Promise.all(
       ids.map(async (id) => {
         try {
-          const res = await drive.files.get({ fileId: id, fields: 'id, name' });
-          return { id, name: res.data.name ?? '' };
+          const res = await drive.files.get({ fileId: id, fields: 'id, name, webViewLink' });
+          return { id, name: res.data.name ?? '', webViewLink: res.data.webViewLink ?? null };
         } catch {
-          return { id, name: '' };
+          return { id, name: '', webViewLink: null };
         }
       }),
     );

@@ -251,32 +251,34 @@ describe('GoogleDriveProvider', () => {
   });
 
   describe('resolveNames', () => {
-    it('resolves each id to its name with a single parallel files.get (no ancestor walk)', async () => {
+    it('resolves each id to its name + Drive link with a single parallel files.get (no ancestor walk)', async () => {
       files.get.mockImplementation(({ fileId }: { fileId: string }) =>
-        Promise.resolve({ data: { id: fileId, name: `name-${fileId}` } }),
+        Promise.resolve({
+          data: { id: fileId, name: `name-${fileId}`, webViewLink: `http://view/${fileId}` },
+        }),
       );
 
       const result = await service.resolveNames(['a', 'b']);
 
       expect(result).toEqual([
-        { id: 'a', name: 'name-a' },
-        { id: 'b', name: 'name-b' },
+        { id: 'a', name: 'name-a', webViewLink: 'http://view/a' },
+        { id: 'b', name: 'name-b', webViewLink: 'http://view/b' },
       ]);
-      // One lookup per id, fetching only id + name — never the parents walk.
+      // One lookup per id, fetching only id + name + link — never the parents walk.
       expect(files.get).toHaveBeenCalledTimes(2);
-      expect(files.get).toHaveBeenCalledWith({ fileId: 'a', fields: 'id, name' });
+      expect(files.get).toHaveBeenCalledWith({ fileId: 'a', fields: 'id, name, webViewLink' });
     });
 
-    it('falls back to an empty name for ids the app cannot see', async () => {
+    it('falls back to an empty name / null link for ids the app cannot see', async () => {
       files.get
-        .mockResolvedValueOnce({ data: { id: 'ok', name: 'Visible' } })
+        .mockResolvedValueOnce({ data: { id: 'ok', name: 'Visible', webViewLink: 'http://view' } })
         .mockRejectedValueOnce(new Error('404 Not Found'));
 
       const result = await service.resolveNames(['ok', 'hidden']);
 
       expect(result).toEqual([
-        { id: 'ok', name: 'Visible' },
-        { id: 'hidden', name: '' },
+        { id: 'ok', name: 'Visible', webViewLink: 'http://view' },
+        { id: 'hidden', name: '', webViewLink: null },
       ]);
     });
   });
