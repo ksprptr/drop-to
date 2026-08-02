@@ -75,8 +75,12 @@ interface Props {
   onUnselectRoot?: (entry: ViewEntry) => void;
   split?: boolean;
   onToggleSplit?: () => void;
-  /** Copies the current folder's shareable URL (main pane only). */
+  /** Copies the current folder's Drive link (toolbar; omitted at roots / for S3). */
   onCopyLink?: () => void;
+  /** Opens the current folder in Drive (toolbar; omitted at roots / for S3). */
+  onOpenInDrive?: () => void;
+  /** Copies a specific entry's Drive link (row menu); only shown when the entry has a link. */
+  onCopyEntryLink?: (entry: ViewEntry) => void;
   /** Whether this pane can accept an in-progress drag-to-move. */
   acceptMove?: boolean;
   onMoveDragStart?: (ids: string[]) => void;
@@ -207,6 +211,8 @@ export default function FileBrowser({
   split = false,
   onToggleSplit,
   onCopyLink,
+  onOpenInDrive,
+  onCopyEntryLink,
   acceptMove = false,
   onMoveDragStart,
   onMoveDragEnd,
@@ -481,7 +487,7 @@ export default function FileBrowser({
               <Icon icon='MagnifyingGlass' className='h-5 w-5' />
             </button>
           )}
-          {(canUpload || onToggleSplit || onCopyLink) && (
+          {(canUpload || onToggleSplit || onCopyLink || onOpenInDrive) && (
             <button
               type='button'
               onClick={openToolbarMenu}
@@ -902,6 +908,13 @@ export default function FileBrowser({
                 onClick={() => runToolbarAction(onCopyLink)}
               />
             )}
+            {onOpenInDrive && (
+              <MenuItem
+                icon='ArrowTopRightOnSquare'
+                label='Open in Drive'
+                onClick={() => runToolbarAction(onOpenInDrive)}
+              />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -948,7 +961,19 @@ export default function FileBrowser({
                   label={menu.entry.isFolder ? 'Download as ZIP' : 'Download'}
                   onClick={() => runMenuAction(onDownload, menu.entry)}
                 />
-                {menu.entry.webViewLink && !menu.entry.isFolder && (
+                <MenuItem
+                  icon='Pencil'
+                  label='Rename'
+                  onClick={() => runMenuAction(onRename, menu.entry)}
+                />
+                {menu.entry.webViewLink && onCopyEntryLink && (
+                  <MenuItem
+                    icon='LinkIcon'
+                    label='Copy link'
+                    onClick={() => runMenuAction(onCopyEntryLink, menu.entry)}
+                  />
+                )}
+                {menu.entry.webViewLink && (
                   <MenuItem
                     icon='ArrowTopRightOnSquare'
                     label='Open in Drive'
@@ -959,11 +984,6 @@ export default function FileBrowser({
                     }}
                   />
                 )}
-                <MenuItem
-                  icon='Pencil'
-                  label='Rename'
-                  onClick={() => runMenuAction(onRename, menu.entry)}
-                />
                 <MenuItem
                   icon='Trash'
                   label='Delete'

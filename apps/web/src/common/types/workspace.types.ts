@@ -16,6 +16,8 @@ export type SortDir = 'asc' | 'desc';
 export interface Crumb {
   id: string;
   name: string;
+  /** Link to open this folder in its native backend (Drive web view); null for roots / S3. */
+  webViewLink: string | null;
 }
 
 /** A file queued for upload, with its path relative to the drop/selection root. */

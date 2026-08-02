@@ -269,7 +269,7 @@ export class S3StorageProvider implements StorageProvider {
       ids.map((id) => {
         const ref = this.resolve(id);
 
-        return { id, name: ref.key === '' ? ref.bucket : baseName(ref.key) };
+        return { id, name: ref.key === '' ? ref.bucket : baseName(ref.key), webViewLink: null };
       }),
     );
   }

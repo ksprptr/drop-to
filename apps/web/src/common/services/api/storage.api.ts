@@ -53,11 +53,12 @@ export const listContents = async (
 export const resolveNames = async (
   backend: StorageBackend,
   ids: string[],
-): Promise<{ id: string; name: string }[]> => {
+): Promise<{ id: string; name: string; webViewLink: string | null }[]> => {
   const http = await getHttp();
-  const { data } = await http.get<{ id: string; name: string }[]>(`/storage/${backend}/names`, {
-    params: { ids: ids.join(',') },
-  });
+  const { data } = await http.get<{ id: string; name: string; webViewLink: string | null }[]>(
+    `/storage/${backend}/names`,
+    { params: { ids: ids.join(',') } },
+  );
 
   return data;
 };

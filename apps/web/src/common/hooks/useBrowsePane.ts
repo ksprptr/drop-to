@@ -141,7 +141,10 @@ export function useBrowsePane(
   }, [nextPageToken, backend, currentFolderId, loadingMore, debouncedSearch, sortKey, sortDir, onError]);
 
   const openFolder = useCallback((entry: ViewEntry) => {
-    setPath((current) => [...current, { id: entry.id, name: entry.name }]);
+    setPath((current) => [
+      ...current,
+      { id: entry.id, name: entry.name, webViewLink: entry.webViewLink },
+    ]);
   }, []);
 
   const navigate = useCallback((index: number) => {

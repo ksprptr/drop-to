@@ -49,7 +49,7 @@ export async function listContentsAction(
 export async function resolvePathAction(
   backend: StorageBackend,
   ids: string[],
-): Promise<ActionResult<{ id: string; name: string }[]>> {
+): Promise<ActionResult<{ id: string; name: string; webViewLink: string | null }[]>> {
   return runAction(() => resolveNames(backend, ids));
 }
 

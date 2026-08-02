@@ -270,8 +270,8 @@ describe('S3StorageProvider', () => {
       const result = await make().resolveNames([idOf(BUCKET, ''), idOf(BUCKET, 'dir/sub/')]);
 
       expect(result).toEqual([
-        { id: idOf(BUCKET, ''), name: BUCKET },
-        { id: idOf(BUCKET, 'dir/sub/'), name: 'sub' },
+        { id: idOf(BUCKET, ''), name: BUCKET, webViewLink: null },
+        { id: idOf(BUCKET, 'dir/sub/'), name: 'sub', webViewLink: null },
       ]);
     });
 

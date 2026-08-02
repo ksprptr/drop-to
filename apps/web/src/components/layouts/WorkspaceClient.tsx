@@ -168,6 +168,10 @@ function WorkspaceInner({
   const nameCache = useRef<Map<string, string>>(
     new Map((initialPath ?? []).map((crumb) => [crumb.id, crumb.name])),
   );
+  // id → Drive web-view link, so the breadcrumb / toolbar "Copy link" always points at the real folder.
+  const linkCache = useRef<Map<string, string | null>>(
+    new Map((initialPath ?? []).map((crumb) => [crumb.id, crumb.webViewLink])),
+  );
 
   const driveStatus = statuses.find((status) => status.backend === 'drive') ?? null;
   const activeStatus = activeBackend
@@ -268,16 +272,20 @@ function WorkspaceInner({
       return;
     }
 
-    // Names come from the cache so the breadcrumb paints instantly; any gap is filled once below.
+    // Names/links come from the cache so the breadcrumb paints instantly; any gap is filled once below.
     const restIds = folderSegs.slice(1);
     setActiveBackend(backend);
     setPath([
-      { id: root.id, name: root.name },
-      ...restIds.map((id) => ({ id, name: nameCache.current.get(id) ?? '' })),
+      { id: root.id, name: root.name, webViewLink: null },
+      ...restIds.map((id) => ({
+        id,
+        name: nameCache.current.get(id) ?? '',
+        webViewLink: linkCache.current.get(id) ?? null,
+      })),
     ]);
     setSelected(null);
 
-    const missing = restIds.filter((id) => !nameCache.current.has(id));
+    const missing = restIds.filter((id) => !nameCache.current.has(id) || !linkCache.current.has(id));
     if (missing.length === 0) {
       return;
     }
@@ -290,9 +298,14 @@ function WorkspaceInner({
       }
       for (const pair of result.data ?? []) {
         nameCache.current.set(pair.id, pair.name);
+        linkCache.current.set(pair.id, pair.webViewLink);
       }
       setPath((current) =>
-        current.map((crumb) => ({ ...crumb, name: nameCache.current.get(crumb.id) ?? crumb.name })),
+        current.map((crumb) => ({
+          ...crumb,
+          name: nameCache.current.get(crumb.id) ?? crumb.name,
+          webViewLink: linkCache.current.get(crumb.id) ?? crumb.webViewLink,
+        })),
       );
     })();
     return () => {
@@ -413,7 +426,11 @@ function WorkspaceInner({
         return;
       }
       nameCache.current.set(entry.id, entry.name);
-      const url = buildWorkspaceUrl(activeBackend, [...path, { id: entry.id, name: entry.name }]);
+      linkCache.current.set(entry.id, entry.webViewLink);
+      const url = buildWorkspaceUrl(activeBackend, [
+        ...path,
+        { id: entry.id, name: entry.name, webViewLink: entry.webViewLink },
+      ]);
       window.history.pushState(null, '', url);
     },
     [activeBackend, path],
@@ -434,10 +451,54 @@ function WorkspaceInner({
     window.history.pushState(null, '', `/${backend}`);
   }, []);
 
-  const handleCopyLink = useCallback(() => {
-    void navigator.clipboard.writeText(window.location.href);
-    toast.success('Link copied to clipboard.');
-  }, [toast]);
+  // The Drive link of the folder currently open in the main pane (null at roots / for S3).
+  const currentFolderLink = path.length > 0 ? path[path.length - 1].webViewLink : null;
+
+  // Copies a Drive link to the clipboard (toolbar = current folder, row/preview = a specific item).
+  const copyDriveLink = useCallback(
+    (link: string | null) => {
+      if (!link) {
+        return;
+      }
+      void navigator.clipboard.writeText(link);
+      toast.success('Link copied to clipboard.');
+    },
+    [toast],
+  );
+
+  // Opens a Drive link in a new tab (null-safe, so a missing link is a no-op).
+  const openDriveLink = useCallback((link: string | null) => {
+    if (link) {
+      window.open(link, '_blank');
+    }
+  }, []);
+
+  const handleCopyLink = useCallback(
+    () => copyDriveLink(currentFolderLink),
+    [copyDriveLink, currentFolderLink],
+  );
+
+  const handleOpenInDrive = useCallback(
+    () => openDriveLink(currentFolderLink),
+    [openDriveLink, currentFolderLink],
+  );
+
+  const handleCopyEntryLink = useCallback(
+    (entry: ViewEntry) => copyDriveLink(entry.webViewLink),
+    [copyDriveLink],
+  );
+
+  // Split pane's current folder link + its toolbar "Copy link" / "Open in Drive" handlers.
+  const paneBFolderLink =
+    paneB.path.length > 0 ? paneB.path[paneB.path.length - 1].webViewLink : null;
+  const handleCopyPaneBLink = useCallback(
+    () => copyDriveLink(paneBFolderLink),
+    [copyDriveLink, paneBFolderLink],
+  );
+  const handleOpenPaneBInDrive = useCallback(
+    () => openDriveLink(paneBFolderLink),
+    [openDriveLink, paneBFolderLink],
+  );
 
   const handleToggleSort = useCallback(
     (key: SortKey) => {
@@ -1195,7 +1256,9 @@ function WorkspaceInner({
             sortKey={sortKey}
             sortDir={sortDir}
             onToggleSort={handleToggleSort}
-            onCopyLink={handleCopyLink}
+            onCopyLink={currentFolderLink ? handleCopyLink : undefined}
+            onOpenInDrive={currentFolderLink ? handleOpenInDrive : undefined}
+            onCopyEntryLink={handleCopyEntryLink}
             searchQuery={search}
             onSearchChange={setSearch}
             hasMore={nextPageToken !== null}
@@ -1265,6 +1328,9 @@ function WorkspaceInner({
                 hasMore={paneB.hasMore}
                 loadingMore={paneB.loadingMore}
                 onLoadMore={paneB.loadMore}
+                onCopyLink={paneBFolderLink ? handleCopyPaneBLink : undefined}
+                onOpenInDrive={paneBFolderLink ? handleOpenPaneBInDrive : undefined}
+                onCopyEntryLink={handleCopyEntryLink}
                 onMoveIntoFolder={handleMoveIntoFolder}
               />
             </div>
@@ -1279,6 +1345,7 @@ function WorkspaceInner({
           onDelete={setConfirmTarget}
           onDownload={handleDownload}
           onRename={openRename}
+          onCopyLink={handleCopyEntryLink}
         />
       </main>
 

@@ -35,7 +35,7 @@ export default async function WorkspaceBrowsePage({ params }: Props) {
     getStatuses().catch((): StorageStatus[] => []),
     restIds.length > 0
       ? resolveNames(backend, restIds).catch(() => [])
-      : Promise.resolve([] as { id: string; name: string }[]),
+      : Promise.resolve([] as { id: string; name: string; webViewLink: string | null }[]),
   ]);
 
   const isConnected = statuses.some((status) => status.backend === backend && status.connected);
@@ -54,10 +54,14 @@ export default async function WorkspaceBrowsePage({ params }: Props) {
     .find((status) => status.backend === backend)
     ?.roots.find((candidate) => ids && slugify(candidate.name) === ids[0]);
   if (isConnected && root) {
-    const nameMap = new Map(resolvedNames.map((entry) => [entry.id, entry.name]));
+    const resolvedMap = new Map(resolvedNames.map((entry) => [entry.id, entry]));
     initialPath = [
-      { id: root.id, name: root.name },
-      ...restIds.map((id) => ({ id, name: nameMap.get(id) ?? '' })),
+      { id: root.id, name: root.name, webViewLink: null },
+      ...restIds.map((id) => ({
+        id,
+        name: resolvedMap.get(id)?.name ?? '',
+        webViewLink: resolvedMap.get(id)?.webViewLink ?? null,
+      })),
     ];
   }
 
