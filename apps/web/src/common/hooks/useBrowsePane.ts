@@ -71,6 +71,10 @@ export function useBrowsePane(
   const atRoots = path.length === 0;
   const debouncedSearch = useDebouncedValue(search.trim(), 250);
 
+  // Bumped on every listing read; a resolved request whose id no longer matches is stale (the pane
+  // navigated away mid-flight) and must not paint over the current folder.
+  const listSeq = useRef(0);
+
   useEffect(() => {
     setPath([]);
   }, [backend]);
@@ -94,9 +98,12 @@ export function useBrowsePane(
   }, []);
 
   const reload = useCallback(async () => {
+    const seq = ++listSeq.current;
+
     if (currentFolderId === null || backend === null) {
       setEntries(roots);
       setNextPageToken(null);
+      setLoading(false);
       return;
     }
 
@@ -106,6 +113,12 @@ export function useBrowsePane(
       sortKey,
       sortDir,
     });
+
+    // Superseded while in flight — a newer read owns the pane now.
+    if (seq !== listSeq.current) {
+      return;
+    }
+
     if (result.ok) {
       setEntries(toViewEntries(result.data?.entries ?? []));
       setNextPageToken(result.data?.nextPageToken ?? null);
@@ -124,6 +137,7 @@ export function useBrowsePane(
       return;
     }
 
+    const seq = listSeq.current;
     setLoadingMore(true);
     const result = await listContentsAction(backend, currentFolderId, {
       pageToken: nextPageToken,
@@ -131,6 +145,13 @@ export function useBrowsePane(
       sortKey,
       sortDir,
     });
+
+    // The folder changed under us — appending this page would mix two listings.
+    if (seq !== listSeq.current) {
+      setLoadingMore(false);
+      return;
+    }
+
     if (result.ok) {
       setEntries((current) => [...current, ...toViewEntries(result.data?.entries ?? [])]);
       setNextPageToken(result.data?.nextPageToken ?? null);

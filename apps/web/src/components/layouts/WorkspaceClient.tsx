@@ -164,6 +164,9 @@ function WorkspaceInner({
 
   const handledParams = useRef(false);
   const duplicateResolve = useRef<((choice: 'replace' | 'keep' | 'cancel') => void) | null>(null);
+  // Bumped on every listing read; a resolved request whose id no longer matches is stale (the
+  // operator navigated away mid-flight) and must not paint over the current folder.
+  const listSeq = useRef(0);
   // id → display name, so navigating (and rebuilding a deep-linked breadcrumb) shows real names.
   const nameCache = useRef<Map<string, string>>(
     new Map((initialPath ?? []).map((crumb) => [crumb.id, crumb.name])),
@@ -349,9 +352,12 @@ function WorkspaceInner({
   }, [currentFolderId, activeBackend]);
 
   const loadEntries = useCallback(async () => {
+    const seq = ++listSeq.current;
+
     if (currentFolderId === null || activeBackend === null) {
       setEntries(roots);
       setNextPageToken(null);
+      setLoadingEntries(false);
       return;
     }
 
@@ -362,6 +368,12 @@ function WorkspaceInner({
       sortKey,
       sortDir,
     });
+
+    // Superseded while in flight — a newer read owns the view now.
+    if (seq !== listSeq.current) {
+      return;
+    }
+
     if (result.ok) {
       setEntries(toViewEntries(result.data?.entries ?? []));
       setNextPageToken(result.data?.nextPageToken ?? null);
@@ -389,6 +401,7 @@ function WorkspaceInner({
       return;
     }
 
+    const seq = listSeq.current;
     setLoadingMore(true);
     const result = await listContentsAction(activeBackend, currentFolderId, {
       pageToken: nextPageToken,
@@ -396,6 +409,13 @@ function WorkspaceInner({
       sortKey,
       sortDir,
     });
+
+    // The folder changed under us — appending this page would mix two listings.
+    if (seq !== listSeq.current) {
+      setLoadingMore(false);
+      return;
+    }
+
     if (result.ok) {
       // Append (never replace) so the scroll position is preserved during infinite scroll.
       setEntries((current) => [...current, ...toViewEntries(result.data?.entries ?? [])]);
