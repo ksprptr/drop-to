@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Logger,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { google } from 'googleapis';
@@ -66,15 +67,37 @@ describe('GoogleDriveProvider', () => {
   });
 
   describe('assertItemAllowed (via listContents)', () => {
-    it('allows an authorized root folder directly, without walking ancestors', async () => {
+    it('allows an authorized root folder without walking ancestors', async () => {
       withAllowedRoots('root-1');
+      files.get.mockResolvedValue({ data: { id: 'root-1', parents: [] } });
       files.list.mockResolvedValue({ data: { files: [] } });
 
       await expect(service.listContents('root-1')).resolves.toEqual({
         entries: [],
         nextPageToken: null,
       });
-      expect(files.get).not.toHaveBeenCalled();
+      // Only the existence probe on the root itself — no ancestor lookups.
+      expect(files.get).toHaveBeenCalledTimes(1);
+      expect(files.get).toHaveBeenCalledWith({
+        fileId: 'root-1',
+        fields: 'id, parents, trashed',
+      });
+    });
+
+    it('rejects an authorized root that was deleted in Drive (404)', async () => {
+      withAllowedRoots('root-1');
+      files.get.mockRejectedValue(Object.assign(new Error('File not found'), { code: 404 }));
+
+      await expect(service.listContents('root-1')).rejects.toBeInstanceOf(NotFoundException);
+      expect(files.list).not.toHaveBeenCalled();
+    });
+
+    it('rejects an item that is in the trash (404)', async () => {
+      withAllowedRoots('root-1');
+      files.get.mockResolvedValue({ data: { id: 'child', parents: ['root-1'], trashed: true } });
+
+      await expect(service.listContents('child')).rejects.toBeInstanceOf(NotFoundException);
+      expect(files.list).not.toHaveBeenCalled();
     });
 
     it('allows an item whose ancestor is an authorized root', async () => {
@@ -86,7 +109,7 @@ describe('GoogleDriveProvider', () => {
         entries: [],
         nextPageToken: null,
       });
-      expect(files.get).toHaveBeenCalledWith({ fileId: 'child', fields: 'id, parents' });
+      expect(files.get).toHaveBeenCalledWith({ fileId: 'child', fields: 'id, parents, trashed' });
     });
 
     it('rejects an item whose ancestry never reaches an authorized root', async () => {

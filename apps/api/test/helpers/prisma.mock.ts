@@ -16,6 +16,7 @@ export interface PrismaMock {
   allowedFolder: {
     findMany: jest.Mock;
     upsert: jest.Mock;
+    deleteMany: jest.Mock;
   };
   refreshToken: {
     create: jest.Mock;
@@ -65,6 +66,7 @@ export const createPrismaMock = (): PrismaMock => {
     allowedFolder: {
       findMany: jest.fn(),
       upsert: jest.fn(),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     // Default: issuing a session creates a row; lookups find a live row unless a test scripts otherwise.
     refreshToken: {
@@ -99,6 +101,7 @@ export const resetPrismaMock = (mock: PrismaMock): void => {
   mock.driveAccount.delete.mockReset();
   mock.allowedFolder.findMany.mockReset();
   mock.allowedFolder.upsert.mockReset();
+  mock.allowedFolder.deleteMany.mockReset().mockResolvedValue({ count: 0 });
   mock.refreshToken.create.mockReset().mockResolvedValue({ id: 'refresh-row-2' });
   mock.refreshToken.findUnique.mockReset().mockResolvedValue(liveRefreshRow());
   mock.refreshToken.update.mockReset().mockResolvedValue(undefined);
