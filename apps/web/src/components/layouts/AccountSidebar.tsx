@@ -1,8 +1,9 @@
 'use client';
 
 import type { StorageBackend, StorageStatus } from '@dropto/types';
-import { motion } from 'framer-motion';
-import type { ReactNode } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import Image from 'next/image';
+import { type ReactNode, useEffect, useState } from 'react';
 
 import { getGoogleAuthUrl } from '@/common/services/api/auth.client';
 import { formatBytes } from '@/common/utils/format.functions';
@@ -53,6 +54,91 @@ function StorageMeter({ usage, limit }: { usage: number; limit: number }) {
       <p className='mt-2 text-xs font-medium text-zinc-600 dark:text-zinc-400'>
         {formatBytes(usage, 2)} of {formatBytes(limit, 2)} used
       </p>
+    </div>
+  );
+}
+
+/** Directions (in px) the sparks fly out to on a click. */
+const SPARKS = [
+  { x: -14, y: -22 },
+  { x: -6, y: -34 },
+  { x: 14, y: -34 },
+  { x: 30, y: -20 },
+  { x: 36, y: 2 },
+  { x: -12, y: 14 },
+];
+
+/**
+ * Easter egg: the session avatar. Clicking it shouts an ever-longer "Pikachuuuu!" and throws a few sparks around.
+ **/
+function PikachuAvatar({ username }: { username: string }) {
+  const [burst, setBurst] = useState<{ id: number; clicks: number } | null>(null);
+
+  useEffect(() => {
+    if (!burst) return;
+
+    const timeout = setTimeout(() => setBurst(null), 1400);
+
+    return () => clearTimeout(timeout);
+  }, [burst]);
+
+  return (
+    <div className='relative flex shrink-0 items-center'>
+      <AnimatePresence>
+        {burst && (
+          <motion.div
+            key={burst.id}
+            initial={{ opacity: 0, y: 4, scale: 0.4, rotate: -8 }}
+            animate={{ opacity: 1, y: -26, scale: 1, rotate: 0 }}
+            exit={{ opacity: 0, y: -40, scale: 0.8 }}
+            transition={{
+              type: 'spring',
+              stiffness: 500,
+              damping: 16,
+              opacity: { type: 'tween', duration: 0.2, ease: 'easeOut' },
+            }}
+            className='pointer-events-none absolute -top-1 left-0 z-10 text-sm font-extrabold text-nowrap text-yellow-400 drop-shadow-[0_1px_0_rgba(0,0,0,0.35)] dark:text-yellow-300'>
+            Pikach{'u'.repeat(Math.min(2 + burst.clicks, 12))}!
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {burst &&
+          SPARKS.map((spark, index) => (
+            <motion.span
+              key={`${burst.id}-${index}`}
+              initial={{ opacity: 0, x: 0, y: 0, scale: 0.4 }}
+              animate={{ opacity: [0, 1, 0], x: spark.x, y: spark.y, scale: 1, rotate: 180 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.7, delay: index * 0.03 }}
+              className='pointer-events-none absolute top-2 left-2.5 z-10 text-xs select-none'>
+              ⚡
+            </motion.span>
+          ))}
+      </AnimatePresence>
+
+      <motion.button
+        type='button'
+        onClick={() =>
+          setBurst((prev) => ({ id: (prev?.id ?? 0) + 1, clicks: prev ? prev.clicks + 1 : 0 }))
+        }
+        whileHover={{ rotate: [0, -12, 12, -8, 8, 0], scale: 1.1 }}
+        whileTap={{ scale: 0.85 }}
+        animate={{
+          boxShadow: burst ? '0 0 0 4px rgba(250,204,21,0.45)' : '0 0 0 0px rgba(250,204,21,0)',
+        }}
+        transition={{ duration: 0.6 }}
+        title='Pika pika!'
+        className='inline-flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-green-600/15'>
+        <Image
+          src='/assets/pikachu.jpg'
+          alt={username}
+          width={32}
+          height={32}
+          className='h-full w-full object-cover'
+        />
+      </motion.button>
     </div>
   );
 }
@@ -233,9 +319,7 @@ export default function AccountSidebar({
 
       <div className='flex items-center justify-between gap-x-2 border-t border-zinc-300 p-3 dark:border-zinc-700'>
         <div className='flex min-w-0 items-center gap-x-2'>
-          <div className='inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-600/15 text-xs font-semibold text-green-600 uppercase'>
-            {username.slice(0, 1)}
-          </div>
+          <PikachuAvatar username={username} />
           <span className='truncate text-xs font-medium'>{username}</span>
         </div>
         <div className='flex shrink-0 items-center gap-x-1'>
