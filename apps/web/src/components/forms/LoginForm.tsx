@@ -79,7 +79,6 @@ export default function LoginForm() {
             name='password'
             type='password'
             label='Password'
-            placeholder='••••••••'
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             autoComplete='current-password'
