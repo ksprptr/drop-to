@@ -76,8 +76,7 @@ describe('S3StorageProvider', () => {
 
   describe('guards (resolve / ensureEnabled)', () => {
     it('rejects any browse op when S3 is disabled (404)', async () => {
-      // listRoots guards synchronously; listContents guards inside its async body.
-      expect(() => make({ enabled: false }).listRoots()).toThrow(NotFoundException);
+      await expect(make({ enabled: false }).listRoots()).rejects.toBeInstanceOf(NotFoundException);
       await expect(make({ enabled: false }).listContents(idOf(BUCKET, ''))).rejects.toBeInstanceOf(
         NotFoundException,
       );
@@ -125,6 +124,27 @@ describe('S3StorageProvider', () => {
         roots: [],
       });
     });
+
+    it('hides a bucket that no longer exists and keeps the others', async () => {
+      send
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce({ name: 'NoSuchBucket', $metadata: { httpStatusCode: 404 } });
+
+      const status = await make({ buckets: ['b1', 'b2'] }).status();
+
+      expect(status.connected).toBe(true);
+      expect(status.roots.map((root) => root.name)).toEqual(['b1']);
+    });
+
+    it('reports disconnected when every configured bucket is gone', async () => {
+      send.mockRejectedValue({ name: 'NoSuchBucket', $metadata: { httpStatusCode: 404 } });
+
+      await expect(make({ buckets: ['b1', 'b2'] }).status()).resolves.toMatchObject({
+        connected: false,
+        error: S3_UNAVAILABLE_MESSAGE,
+        roots: [],
+      });
+    });
   });
 
   describe('listRoots', () => {
@@ -133,6 +153,16 @@ describe('S3StorageProvider', () => {
 
       expect(roots.map((root) => root.name)).toEqual(['b1', 'b2']);
       expect(roots[0].folderId).toBe(idOf('b1', ''));
+    });
+
+    it('leaves out a bucket that no longer exists', async () => {
+      send
+        .mockRejectedValueOnce({ name: 'NoSuchBucket', $metadata: { httpStatusCode: 404 } })
+        .mockResolvedValueOnce({});
+
+      const roots = await make({ buckets: ['b1', 'b2'] }).listRoots();
+
+      expect(roots.map((root) => root.name)).toEqual(['b2']);
     });
   });
 
@@ -168,8 +198,14 @@ describe('S3StorageProvider', () => {
       );
     });
 
-    it('rethrows a non-backend (per-item) error as-is', async () => {
-      send.mockRejectedValue({ name: 'NoSuchKey' });
+    it('maps a deleted bucket to a 404 (not a whole-backend failure)', async () => {
+      send.mockRejectedValue({ name: 'NoSuchBucket', $metadata: { httpStatusCode: 404 } });
+
+      await expect(make().listContents(idOf(BUCKET, ''))).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('rethrows an unclassified error as-is', async () => {
+      send.mockRejectedValue({ name: 'SomethingElse' });
 
       await expect(make().listContents(idOf(BUCKET, ''))).rejects.not.toBeInstanceOf(
         StorageDisconnectedException,
@@ -178,6 +214,14 @@ describe('S3StorageProvider', () => {
   });
 
   describe('createFolder', () => {
+    it('maps a write into a deleted bucket to a 404 instead of an unhandled error', async () => {
+      send.mockRejectedValue({ name: 'NoSuchBucket', $metadata: { httpStatusCode: 404 } });
+
+      await expect(make().createFolder(idOf(BUCKET, 'dir/'), 'New')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
     it('writes a zero-byte prefix marker and returns the folder entry', async () => {
       const result = await make().createFolder(idOf(BUCKET, 'dir/'), 'New');
 

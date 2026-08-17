@@ -44,11 +44,20 @@ export function isNotFoundError(error: unknown): boolean {
   }
 
   const candidate = error as {
+    name?: unknown;
     code?: unknown;
     status?: unknown;
     response?: { status?: unknown };
     $metadata?: { httpStatusCode?: unknown };
   };
+
+  // S3 reports a deleted bucket/object by name as well as by status.
+  if (
+    typeof candidate.name === 'string' &&
+    ['NoSuchBucket', 'NoSuchKey'].includes(candidate.name)
+  ) {
+    return true;
+  }
 
   return (
     candidate.code === 404 ||

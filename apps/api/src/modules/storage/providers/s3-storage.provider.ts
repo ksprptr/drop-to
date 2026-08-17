@@ -42,6 +42,7 @@ import {
   StorageUpload,
 } from '../interfaces/storage-provider.interface';
 import {
+  isNotFoundError,
   isS3Unavailable,
   S3_UNAVAILABLE_MESSAGE,
   StorageDisconnectedException,
@@ -52,6 +53,8 @@ import { logUploadFailure, logUploadSuccess } from '../upload-log.functions';
 /** Marker used for zero-byte "folder" objects (a prefix ending in a slash). */
 const FOLDER_SUFFIX = '/';
 const LABEL = 'S3 Storage';
+/** Shown when the target bucket/object was deleted outside the app. */
+const ITEM_MISSING_MESSAGE = 'This item no longer exists in the S3 storage.';
 
 // Cache the probed status; the sidebar polls often and we don't want to re-probe/re-log every request.
 const STATUS_CACHE_TTL_MS = 30_000;
@@ -140,6 +143,8 @@ export class S3StorageProvider implements StorageProvider {
   private client: S3Client | null = null;
   private statusCache: { entity: StorageStatusEntity; expiresAt: number } | null = null;
   private loggedUnavailable = false;
+  // Buckets already reported as gone, so the warning is logged once per disappearance.
+  private readonly missingBuckets = new Set<string>();
 
   constructor(
     @Inject(s3Config.KEY) private readonly cfg: S3Config,
@@ -164,20 +169,19 @@ export class S3StorageProvider implements StorageProvider {
     let entity: StorageStatusEntity;
 
     try {
-      const client = this.getClient();
-      // Buckets are independent — probe them in parallel.
-      await Promise.all(
-        this.cfg.buckets.map((bucket) =>
-          client.send(new ListObjectsV2Command({ Bucket: bucket, MaxKeys: 1 })),
-        ),
-      );
+      const buckets = await this.liveBuckets();
+
+      // Every configured bucket is gone — nothing to browse, so report it like a dead backend.
+      if (buckets.length === 0) {
+        throw new Error('no configured bucket exists');
+      }
 
       entity = {
         backend: this.backend,
         label: LABEL,
         connected: true,
         email: null,
-        roots: this.cfg.buckets.map((bucket) => ({
+        roots: buckets.map((bucket) => ({
           id: encodeId({ bucket, key: '' }),
           name: bucket,
         })),
@@ -205,17 +209,17 @@ export class S3StorageProvider implements StorageProvider {
     return entity;
   }
 
-  listRoots(): Promise<AllowedFolderEntity[]> {
+  async listRoots(): Promise<AllowedFolderEntity[]> {
     this.ensureEnabled();
 
-    return Promise.resolve(
-      this.cfg.buckets.map((bucket) => ({
-        id: encodeId({ bucket, key: '' }),
-        folderId: encodeId({ bucket, key: '' }),
-        name: bucket,
-        createdAt: new Date(0),
-      })),
-    );
+    const buckets = await this.liveBuckets();
+
+    return buckets.map((bucket) => ({
+      id: encodeId({ bucket, key: '' }),
+      folderId: encodeId({ bucket, key: '' }),
+      name: bucket,
+      createdAt: new Date(0),
+    }));
   }
 
   async listContents(folderId: string, _options: ListContentsOptions = {}): Promise<ContentsPage> {
@@ -254,11 +258,8 @@ export class S3StorageProvider implements StorageProvider {
         token = res.IsTruncated ? res.NextContinuationToken : undefined;
       } while (token);
     } catch (error) {
-      // Whole-backend failure → clean 424 so the client can prompt a reconnect.
-      if (isS3Unavailable(error)) {
-        throw new StorageDisconnectedException(S3_UNAVAILABLE_MESSAGE);
-      }
-      throw error;
+      // Deleted bucket → 404, whole-backend failure → 424 (so the client can prompt a reconnect).
+      this.toHttpError(error);
     }
 
     return { entries: [...folders, ...files], nextPageToken: null };
@@ -282,7 +283,9 @@ export class S3StorageProvider implements StorageProvider {
     const client = this.getClient();
     const key = `${ref.key}${name}${FOLDER_SUFFIX}`;
 
-    await client.send(new PutObjectCommand({ Bucket: ref.bucket, Key: key, Body: '' }));
+    await this.guard(() =>
+      client.send(new PutObjectCommand({ Bucket: ref.bucket, Key: key, Body: '' })),
+    );
 
     return this.toFolderEntry(ref.bucket, key);
   }
@@ -318,7 +321,7 @@ export class S3StorageProvider implements StorageProvider {
       };
     } catch (error) {
       await logUploadFailure(this.prismaService, { fileName, folderId, error, signal });
-      throw error;
+      throw this.toHttpError(error);
     } finally {
       signal?.removeEventListener('abort', onAbort);
     }
@@ -360,9 +363,11 @@ export class S3StorageProvider implements StorageProvider {
     }
 
     if (ref.key.endsWith(FOLDER_SUFFIX)) {
-      await this.deletePrefix(ref.bucket, ref.key);
+      await this.guard(() => this.deletePrefix(ref.bucket, ref.key));
     } else {
-      await client.send(new DeleteObjectCommand({ Bucket: ref.bucket, Key: ref.key }));
+      await this.guard(() =>
+        client.send(new DeleteObjectCommand({ Bucket: ref.bucket, Key: ref.key })),
+      );
     }
 
     this.logger.log(`Deleted ${ref.bucket}/${ref.key}.`);
@@ -385,7 +390,7 @@ export class S3StorageProvider implements StorageProvider {
       const slash = parent.lastIndexOf('/');
       const newKey = `${slash === -1 ? '' : parent.slice(0, slash + 1)}${name}${FOLDER_SUFFIX}`;
 
-      await this.renamePrefix(ref.bucket, ref.key, newKey);
+      await this.guard(() => this.renamePrefix(ref.bucket, ref.key, newKey));
       this.logger.log(`Renamed ${ref.bucket}/${ref.key} to ${newKey}.`);
 
       return this.toFolderEntry(ref.bucket, newKey);
@@ -394,14 +399,16 @@ export class S3StorageProvider implements StorageProvider {
     const slash = ref.key.lastIndexOf('/');
     const newKey = `${slash === -1 ? '' : ref.key.slice(0, slash + 1)}${name}`;
 
-    await client.send(
-      new CopyObjectCommand({
-        Bucket: ref.bucket,
-        CopySource: this.copySource(ref.bucket, ref.key),
-        Key: newKey,
-      }),
-    );
-    await client.send(new DeleteObjectCommand({ Bucket: ref.bucket, Key: ref.key }));
+    await this.guard(async () => {
+      await client.send(
+        new CopyObjectCommand({
+          Bucket: ref.bucket,
+          CopySource: this.copySource(ref.bucket, ref.key),
+          Key: newKey,
+        }),
+      );
+      await client.send(new DeleteObjectCommand({ Bucket: ref.bucket, Key: ref.key }));
+    });
     this.logger.log(`Renamed ${ref.bucket}/${ref.key} to ${newKey}.`);
 
     const size = await this.headSize(ref.bucket, newKey);
@@ -432,8 +439,10 @@ export class S3StorageProvider implements StorageProvider {
         throw new BadRequestException('Cannot move a folder into itself.');
       }
 
-      await this.copyPrefix(src.bucket, src.key, dest.bucket, newPrefix);
-      await this.deletePrefix(src.bucket, src.key);
+      await this.guard(async () => {
+        await this.copyPrefix(src.bucket, src.key, dest.bucket, newPrefix);
+        await this.deletePrefix(src.bucket, src.key);
+      });
       this.logger.log(`Moved ${src.bucket}/${src.key} to ${dest.bucket}/${newPrefix}.`);
 
       return this.toFolderEntry(dest.bucket, newPrefix);
@@ -445,14 +454,16 @@ export class S3StorageProvider implements StorageProvider {
       throw new BadRequestException('The item is already in that folder.');
     }
 
-    await client.send(
-      new CopyObjectCommand({
-        Bucket: dest.bucket,
-        CopySource: this.copySource(src.bucket, src.key),
-        Key: newKey,
-      }),
-    );
-    await client.send(new DeleteObjectCommand({ Bucket: src.bucket, Key: src.key }));
+    await this.guard(async () => {
+      await client.send(
+        new CopyObjectCommand({
+          Bucket: dest.bucket,
+          CopySource: this.copySource(src.bucket, src.key),
+          Key: newKey,
+        }),
+      );
+      await client.send(new DeleteObjectCommand({ Bucket: src.bucket, Key: src.key }));
+    });
     this.logger.log(`Moved ${src.bucket}/${src.key} to ${dest.bucket}/${newKey}.`);
 
     const size = await this.headSize(dest.bucket, newKey);
@@ -468,7 +479,9 @@ export class S3StorageProvider implements StorageProvider {
       throw new BadRequestException('Use the folder download endpoint for folders.');
     }
 
-    const res = await client.send(new GetObjectCommand({ Bucket: ref.bucket, Key: ref.key }));
+    const res = await this.guard(() =>
+      client.send(new GetObjectCommand({ Bucket: ref.bucket, Key: ref.key })),
+    );
     const name = baseName(ref.key);
 
     return {
@@ -495,6 +508,67 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   // --- Internals ----------------------------------------------------------------
+
+  /**
+   * Probes every configured bucket in parallel and returns the ones that answered. A bucket that
+   * was deleted outside the app is dropped (never offered as a browse root); any other failure
+   * (bad credentials, unreachable endpoint, 5xx) is a whole-backend problem and propagates.
+   **/
+  private async liveBuckets(): Promise<string[]> {
+    const client = this.getClient();
+
+    const probed = await Promise.all(
+      this.cfg.buckets.map(async (bucket) => {
+        try {
+          await client.send(new ListObjectsV2Command({ Bucket: bucket, MaxKeys: 1 }));
+          this.missingBuckets.delete(bucket);
+
+          return bucket;
+        } catch (error) {
+          if (!isNotFoundError(error)) {
+            throw error;
+          }
+          if (!this.missingBuckets.has(bucket)) {
+            this.missingBuckets.add(bucket);
+            this.logger.warn(`S3 bucket "${bucket}" no longer exists; hiding it.`);
+          }
+
+          return null;
+        }
+      }),
+    );
+
+    return probed.filter((bucket): bucket is string => bucket !== null);
+  }
+
+  /**
+   * Turns an AWS error into a clean HTTP one: a deleted bucket/object → 404, a whole-backend
+   * failure → 424. The cached status is dropped so the next poll re-probes the buckets.
+   **/
+  private toHttpError(error: unknown): never {
+    if (isNotFoundError(error)) {
+      this.statusCache = null;
+      throw new NotFoundException(ITEM_MISSING_MESSAGE);
+    }
+
+    if (isS3Unavailable(error)) {
+      this.statusCache = null;
+      throw new StorageDisconnectedException(S3_UNAVAILABLE_MESSAGE);
+    }
+
+    throw error;
+  }
+
+  /**
+   * Runs an S3 operation with the error mapping above.
+   **/
+  private async guard<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      this.toHttpError(error);
+    }
+  }
 
   /**
    * Decodes an id and asserts its bucket is configured (else 403).
