@@ -48,10 +48,11 @@ describe('Drive (integration)', () => {
     });
 
     it('returns the authorized root folders for the active account', async () => {
-      prisma.driveAccount.findFirst.mockResolvedValue({ id: 'acc-1' });
+      connectAccountWithRoots();
       prisma.allowedFolder.findMany.mockResolvedValue([
         { id: 'f1', folderId: 'drive-1', name: 'Photos', createdAt: new Date() },
       ]);
+      driveFilesMock.get.mockResolvedValue({ data: { id: 'drive-1' } });
 
       const res = await request(app.getHttpServer())
         .get('/api/v1/storage/drive/folders')
@@ -60,6 +61,24 @@ describe('Drive (integration)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveLength(1);
       expect(res.body[0].folderId).toBe('drive-1');
+    });
+
+    it('drops (and unauthorizes) a root folder that was deleted in Drive', async () => {
+      connectAccountWithRoots();
+      prisma.allowedFolder.findMany.mockResolvedValue([
+        { id: 'f1', folderId: 'drive-1', name: 'Photos', createdAt: new Date() },
+      ]);
+      driveFilesMock.get.mockRejectedValue(Object.assign(new Error('File not found'), { code: 404 }));
+
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/storage/drive/folders')
+        .set('Cookie', accessCookie());
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+      expect(prisma.allowedFolder.deleteMany).toHaveBeenCalledWith({
+        where: { driveAccountId: 'acc-1', id: { in: ['f1'] } },
+      });
     });
 
     it('returns 404 when no Google account is connected', async () => {

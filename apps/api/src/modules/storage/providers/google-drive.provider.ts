@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { Archiver, ZipArchive } from 'archiver';
@@ -33,6 +34,7 @@ import {
 import {
   DRIVE_DISCONNECTED_MESSAGE,
   isInvalidGrant,
+  isNotFoundError,
   StorageDisconnectedException,
 } from '../storage.errors';
 import { finalizeArchiveInBackground, sanitizeZipEntryPath } from '../storage.functions';
@@ -41,6 +43,8 @@ import { logUploadFailure, logUploadSuccess } from '../upload-log.functions';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const MAX_ANCESTOR_DEPTH = 50;
 const LABEL = 'Google Drive';
+/** Shown when the target was deleted (or trashed) in Drive outside the app. */
+const ITEM_MISSING_MESSAGE = 'This item no longer exists in Google Drive.';
 // One network page. Small enough to keep first paint fast, big enough that most folders need one call.
 const PAGE_SIZE = 100;
 
@@ -67,11 +71,18 @@ export class GoogleDriveProvider implements StorageProvider {
 
     // Probe the token so a dead one shows "reconnect" instead of a false "connected".
     let quota: { usage: number; limit: number | null } | null = null;
+    let folders = status.allowedFolders;
     try {
       const accountId = await this.googleAuthService.getActiveAccountId();
       const auth = await this.googleAuthService.getAuthorizedClient(accountId);
       await auth.getAccessToken();
       quota = await this.fetchQuota(auth);
+      // The owner can delete an authorized folder in Drive; don't offer it as a browse root.
+      folders = await this.pruneMissingRoots(
+        google.drive({ version: 'v3', auth }),
+        accountId,
+        folders,
+      );
     } catch (error) {
       if (isInvalidGrant(error)) {
         return {
@@ -91,7 +102,7 @@ export class GoogleDriveProvider implements StorageProvider {
       label: LABEL,
       connected: true,
       email: status.email,
-      roots: status.allowedFolders.map((folder) => ({ id: folder.folderId, name: folder.name })),
+      roots: folders.map((folder) => ({ id: folder.folderId, name: folder.name })),
       quota,
     };
   }
@@ -151,45 +162,65 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Passes if the id is an authorized root or has one as an ancestor; else 403.
+   * Reads the target's parents. Gone in Drive (deleted/trashed) → 404; unreadable for any other
+   * reason → null, letting the ancestor walk end in the usual 403.
+   **/
+  private async getItemParents(drive: drive_v3.Drive, itemId: string): Promise<string[] | null> {
+    try {
+      const res = await drive.files.get({ fileId: itemId, fields: 'id, parents, trashed' });
+
+      if (res.data.trashed) {
+        throw new NotFoundException(ITEM_MISSING_MESSAGE);
+      }
+
+      return res.data.parents ?? [];
+    } catch (error) {
+      if (error instanceof NotFoundException || isNotFoundError(error)) {
+        throw new NotFoundException(ITEM_MISSING_MESSAGE);
+      }
+
+      return null;
+    }
+  }
+
+  /**
+   * Passes if the id is an authorized root or has one as an ancestor; else 403. Authorized roots are
+   * still verified against Drive — the owner can delete one there, and the stale id would otherwise
+   * reach the API and blow up as an unhandled 404.
    **/
   private async assertItemAllowed(
     drive: drive_v3.Drive,
     itemId: string,
     allowedIds: Set<string>,
   ): Promise<void> {
+    const itemParents = await this.getItemParents(drive, itemId);
+
     if (allowedIds.has(itemId)) {
       return;
     }
 
-    const visited = new Set<string>();
-    let frontier = [itemId];
+    const visited = new Set<string>([itemId]);
+    let frontier = itemParents ?? [];
     let depth = 0;
 
     while (frontier.length > 0 && depth < MAX_ANCESTOR_DEPTH) {
       const next: string[] = [];
 
       for (const id of frontier) {
+        if (allowedIds.has(id)) {
+          return;
+        }
         if (visited.has(id)) {
           continue;
         }
         visited.add(id);
 
-        let parents: string[];
-
         try {
           const res = await drive.files.get({ fileId: id, fields: 'id, parents' });
-          parents = res.data.parents ?? [];
+          next.push(...(res.data.parents ?? []));
         } catch {
           // Not reachable (deleted / no access) — treat as not allowed.
           continue;
-        }
-
-        for (const parent of parents) {
-          if (allowedIds.has(parent)) {
-            return;
-          }
-          next.push(parent);
         }
       }
 
@@ -200,14 +231,53 @@ export class GoogleDriveProvider implements StorageProvider {
     throw new ForbiddenException('This folder is outside the authorized folders.');
   }
 
+  /**
+   * Drops authorized roots that are gone from Drive so the sidebar never offers a folder every
+   * later call would 404 on. A hard 404 means gone for good → the authorization is pruned too;
+   * trashed folders are only hidden (restoring one in Drive brings it back).
+   **/
+  private async pruneMissingRoots(
+    drive: drive_v3.Drive,
+    driveAccountId: string,
+    folders: AllowedFolderEntity[],
+  ): Promise<AllowedFolderEntity[]> {
+    const checked = await Promise.all(
+      folders.map(async (folder) => {
+        try {
+          const res = await drive.files.get({ fileId: folder.folderId, fields: 'id, trashed' });
+
+          return { folder, live: !res.data.trashed, gone: false };
+        } catch (error) {
+          // Only a hard 404 is proof; a transient failure must never hide a working root.
+          const gone = isNotFoundError(error);
+
+          return { folder, live: !gone, gone };
+        }
+      }),
+    );
+
+    const gone = checked.filter((entry) => entry.gone).map((entry) => entry.folder.id);
+
+    if (gone.length > 0) {
+      await this.prismaService.allowedFolder.deleteMany({
+        where: { driveAccountId, id: { in: gone } },
+      });
+      this.logger.log(`Dropped ${gone.length} authorized folder(s) deleted from Drive.`);
+    }
+
+    return checked.filter((entry) => entry.live).map((entry) => entry.folder);
+  }
+
   async listRoots(): Promise<AllowedFolderEntity[]> {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
-
-    return this.prismaService.allowedFolder.findMany({
+    const drive = await this.getDrive(driveAccountId);
+    const folders = await this.prismaService.allowedFolder.findMany({
       where: { driveAccountId },
       select: { id: true, folderId: true, name: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     });
+
+    return this.pruneMissingRoots(drive, driveAccountId, folders);
   }
 
   async listContents(folderId: string, options: ListContentsOptions = {}): Promise<ContentsPage> {

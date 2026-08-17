@@ -35,6 +35,29 @@ export function isInvalidGrant(error: unknown): boolean {
   return data?.error === 'invalid_grant';
 }
 
+/**
+ * Detects a 404 from the backend — the item was deleted outside the app, or access to it was lost.
+ **/
+export function isNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as {
+    code?: unknown;
+    status?: unknown;
+    response?: { status?: unknown };
+    $metadata?: { httpStatusCode?: unknown };
+  };
+
+  return (
+    candidate.code === 404 ||
+    candidate.status === 404 ||
+    candidate.response?.status === 404 ||
+    candidate.$metadata?.httpStatusCode === 404
+  );
+}
+
 // True only for whole-backend failures (missing bucket, bad creds, 5xx); per-item 4xx excluded.
 export function isS3Unavailable(error: unknown): boolean {
   if (!error || typeof error !== 'object') {

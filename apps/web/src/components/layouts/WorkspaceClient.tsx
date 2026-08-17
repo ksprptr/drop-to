@@ -223,8 +223,9 @@ function WorkspaceInner({
   const onPaneError = useCallback(
     (error: { error?: string; status?: number }) => {
       toast.error(error.error ?? 'Failed to open the folder.');
-      // The active storage went away mid-session (revoked Drive token / dead S3).
-      if (error.status === 424) {
+      // The storage went away mid-session (revoked Drive token / dead S3), or the folder itself was
+      // deleted outside the app — either way the roots in the sidebar may be stale.
+      if (error.status === 424 || error.status === 404) {
         void loadStatus();
       }
     },
@@ -379,8 +380,8 @@ function WorkspaceInner({
       setNextPageToken(result.data?.nextPageToken ?? null);
     } else {
       toast.error(result.error ?? 'Failed to open the folder.');
-      // Storage disconnected mid-session — refresh so the sidebar reflects it.
-      if (result.status === 424) {
+      // Storage disconnected, or the folder was deleted in Drive — refresh so the sidebar reflects it.
+      if (result.status === 424 || result.status === 404) {
         void loadStatus();
       }
     }
@@ -420,7 +421,7 @@ function WorkspaceInner({
       // Append (never replace) so the scroll position is preserved during infinite scroll.
       setEntries((current) => [...current, ...toViewEntries(result.data?.entries ?? [])]);
       setNextPageToken(result.data?.nextPageToken ?? null);
-    } else if (result.status === 424) {
+    } else if (result.status === 424 || result.status === 404) {
       void loadStatus();
     }
     setLoadingMore(false);
@@ -937,6 +938,10 @@ function WorkspaceInner({
         const result = await createFolderAction(activeBackend, targetFolderId, name);
         if (!result.ok) {
           toast.error(result.error ?? 'Something went wrong.');
+          // The parent is gone (deleted outside the app) — drop it from the sidebar roots.
+          if (result.status === 424 || result.status === 404) {
+            void loadStatus();
+          }
           return;
         }
         await reloadPanes();
@@ -958,6 +963,7 @@ function WorkspaceInner({
       creating,
       reloadPanes,
       toast,
+      loadStatus,
     ],
   );
 
