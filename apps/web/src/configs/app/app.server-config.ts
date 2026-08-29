@@ -1,6 +1,8 @@
 import 'server-only';
 
 interface AppServerConfig {
+  /** Display name of this instance — the wordmarks, the titles, the manifest and the OG image. */
+  name: string;
   nodeEnv: {
     isProduction: boolean;
   };
@@ -15,7 +17,11 @@ interface AppServerConfig {
 }
 
 // Server-side config. apiUrl prefers a server-only API_URL, else the public one.
+// `name` is read here (server, per request) and handed to client components as a prop — never a
+// NEXT_PUBLIC_*, which the client inlines at build while the server reads it at runtime: if the two
+// values disagree the wordmark hydrates with a mismatch.
 export const appServerConfig: AppServerConfig = {
+  name: process.env.APP_NAME?.trim() || 'DropTo',
   nodeEnv: {
     isProduction: process.env.NODE_ENV === 'production',
   },

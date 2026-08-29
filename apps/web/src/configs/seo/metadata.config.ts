@@ -1,3 +1,5 @@
+import { appServerConfig } from '@/configs/app/app.server-config';
+
 interface MetadataConfig {
   title: string;
   shortTitle: string;
@@ -11,15 +13,15 @@ interface MetadataConfig {
   };
 }
 
-// Static site metadata for the layout, manifest and robots.
+// Site metadata for the layout, manifest, robots and the OG image (name from the env).
 export const metadataConfig: MetadataConfig = {
-  title: 'DropTo',
-  shortTitle: 'DropTo',
+  title: appServerConfig.name,
+  shortTitle: appServerConfig.name,
   tagline: 'Self-hosted file uploader',
   description:
     'Self-hosted file uploader that streams your uploads straight into your own storage — Google Drive or S3-compatible buckets — from a fast, Finder-like workspace.',
   keywords: [
-    'DropTo',
+    appServerConfig.name,
     'self-hosted file uploader',
     'file uploader',
     'file manager',

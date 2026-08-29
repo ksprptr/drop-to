@@ -8,6 +8,7 @@ import type { Crumb } from '@/common/types/workspace.types';
 import { slugify } from '@/common/utils/storage-url';
 import NotFoundContent from '@/components/layouts/NotFoundContent';
 import WorkspaceClient from '@/components/layouts/WorkspaceClient';
+import { appServerConfig } from '@/configs/app/app.server-config';
 
 export const metadata: Metadata = {
   title: 'Workspace',
@@ -72,6 +73,7 @@ export default async function WorkspaceBrowsePage({ params }: Props) {
 
   return (
     <WorkspaceClient
+      appName={appServerConfig.name}
       username={user.username}
       initialStatuses={statuses}
       initialBackend={isConnected ? (backend as StorageBackend) : null}

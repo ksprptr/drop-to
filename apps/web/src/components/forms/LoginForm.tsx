@@ -10,10 +10,15 @@ import Icon from '@/components/common/Icon';
 import Input from '@/components/common/Input';
 import { useToast } from '@/components/providers/ToastProvider';
 
+interface Props {
+  /** Instance name, resolved on the server so the wordmark hydrates identically. */
+  appName: string;
+}
+
 /**
  * Login screen — posts credentials via the `login` action, then navigates to `/`.
  **/
-export default function LoginForm() {
+export default function LoginForm({ appName }: Props) {
   const router = useRouter();
   const toast = useToast();
 
@@ -59,7 +64,7 @@ export default function LoginForm() {
           <div className='mb-3 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-green-600 text-white shadow-sm'>
             <Icon icon='CloudArrowUp' className='h-6 w-6' />
           </div>
-          <h1 className='text-lg font-semibold'>DropTo</h1>
+          <h1 className='text-lg font-semibold'>{appName}</h1>
           <p className='mt-1 text-sm text-zinc-600 dark:text-zinc-400'>Sign in to continue</p>
         </div>
 

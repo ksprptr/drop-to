@@ -56,7 +56,9 @@ import { UploadProvider, useUploadActions } from '@/components/providers/UploadP
 import { STORAGE_ICON } from '@/configs/storage.config';
 
 import AccountSidebar from './AccountSidebar';
+import type { AccountSidebarProps } from './AccountSidebarContent';
 import FileBrowser from './FileBrowser';
+import MobileMenu from './mobile/MobileMenu';
 import PreviewPanel from './PreviewPanel';
 import UploadDock from './UploadDock';
 
@@ -64,6 +66,8 @@ const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const DOWNLOAD_PREPARING_MS = 6000;
 
 interface Props {
+  /** Instance name, resolved on the server so the wordmark hydrates identically. */
+  appName: string;
   username: string;
   /** Statuses fetched server-side, for first paint. */
   initialStatuses: StorageStatus[];
@@ -108,6 +112,7 @@ interface ExtensionWarning {
  * Main workspace: sidebar + file browser + preview, with uploads and account management.
  **/
 function WorkspaceInner({
+  appName,
   username,
   initialStatuses,
   initialBackend,
@@ -1205,22 +1210,27 @@ function WorkspaceInner({
   const rootIcon = activeBackend ? STORAGE_ICON[activeBackend] : 'Home';
   const bulkCount = bulkPane === 0 ? selectedIds.size : paneB.selectedIds.size;
 
+  // One set of props for both sidebar shells: the desktop rail and the mobile swipe-open drawer.
+  const sidebarProps: AccountSidebarProps = {
+    appName,
+    statuses,
+    driveStatus,
+    activeBackend,
+    loading: loadingStatus,
+    username,
+    saving,
+    isOwner: driveStatus?.isOwner ?? false,
+    onSelectStorage: selectStorage,
+    onManageFolders: handleManageFolders,
+    onDisconnect: handleDisconnect,
+    onLogout: handleLogout,
+    loggingOut,
+  };
+
   return (
     <div className='flex h-screen gap-3 overflow-hidden p-3'>
-      <AccountSidebar
-        statuses={statuses}
-        driveStatus={driveStatus}
-        activeBackend={activeBackend}
-        loading={loadingStatus}
-        username={username}
-        saving={saving}
-        isOwner={driveStatus?.isOwner ?? false}
-        onSelectStorage={selectStorage}
-        onManageFolders={handleManageFolders}
-        onDisconnect={handleDisconnect}
-        onLogout={handleLogout}
-        loggingOut={loggingOut}
-      />
+      <AccountSidebar {...sidebarProps} />
+      <MobileMenu {...sidebarProps} />
 
       <main className='flex min-w-0 flex-1 gap-3'>
         {/* Both panes share a grid whose second column animates 1fr↔0fr for a smooth resize. */}

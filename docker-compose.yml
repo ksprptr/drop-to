@@ -88,6 +88,7 @@ services:
     environment:
       NODE_ENV: 'production'
       PORT: '3000'
+      APP_NAME: '${APP_NAME:-DropTo}'
       API_URL: 'http://dropto-api:4000/api/v1'
       COOKIE_DOMAIN: '${COOKIE_DOMAIN:-localhost}'
     ports:
