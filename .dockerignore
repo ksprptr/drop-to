@@ -1,22 +1,32 @@
 # deps
 **/node_modules
+.pnpm-store
 
 # builds
 apps/api/dist
-apps/cdn/dist
-apps/socials/.next
-apps/api-assets/.next
+apps/web/.next
+**/out
+**/build
+**/*.tsbuildinfo
 
 # turbo
 **/.turbo
-**/tsconfig.build.tsbuildinfo
 
-# env
+# env — the images ship only the examples (the API validates its env against .env.example)
 **/.env
 **/.env.*
 !**/.env.example
 
+# vcs / tooling
+.git
+.github
+.husky
+.claude
+
+# reference material (not part of the app)
+example
+
 # misc
 **/coverage
 **/*.md
-**/.claude
+**/.DS_Store
