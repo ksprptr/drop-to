@@ -34,8 +34,9 @@
   cancel), per-file progress and ETA in a floating upload dock, and abortable transfers sized by
   `MAX_UPLOAD_BYTES`
 - **Storage switcher** — browse Google Drive and S3 side by side and move between them in one click
-- **Scoped Drive access** — the OAuth scope is `drive.file` only; the owner authorizes specific
-  folders through the Google Picker and every call is validated server-side to stay inside that tree
+- **Folder-scoped Drive access** — the owner authorizes specific folders through the Google Picker,
+  and every single Drive call is validated server-side (ancestor walk) to stay inside that tree;
+  the authorized roots themselves cannot be deleted
 - **Single-operator auth** — username/password from the env, JWT access tokens plus rotating,
   DB-backed refresh tokens in httpOnly cookies, with reuse detection
 - **Secrets stay encrypted** — the Drive refresh token is AES-256-GCM encrypted in Postgres and the
@@ -191,8 +192,8 @@ network directly — for example to open the workspace from your phone.
 1. Create a Google Cloud project — note the **project number**, it is the Picker `App ID`
    (`NEXT_PUBLIC_GOOGLE_APP_ID`).
 2. Enable the **Google Drive API** and the **Google Picker API**.
-3. Configure the OAuth consent screen (External), add the scope `.../auth/drive.file` and add the
-   Drive owner's email as a test user.
+3. Configure the OAuth consent screen (External), add the scope
+   `https://www.googleapis.com/auth/drive` and add the Drive owner's email as a test user.
 4. Create an **OAuth client ID** (Web application):
    - Authorized redirect URI: `<API URL>/api/v1/google-auth/google/callback`
    - Authorized JavaScript origin: the web app's URL
@@ -201,10 +202,23 @@ network directly — for example to open the workspace from your phone.
 
 5. Create an **API key** restricted to the Picker API → `NEXT_PUBLIC_GOOGLE_API_KEY`.
 6. Start the app, log in, and use **Connect Drive** in the sidebar. The owner picks the folders to
-   share; those become the only folders the app can ever see.
+   share; those become the only folders the app will touch.
 
-> While the consent screen is in **Testing** mode Google expires the refresh token after 7 days.
-> Publish the app to **Production** for permanent use (`drive.file` needs only light verification).
+> **A note on the scope.** DropTo asks for the full `.../auth/drive` scope rather than the
+> per-file `drive.file`, because `drive.file` cannot see files that were added to a folder
+> _directly in Drive_ — only ones the app created or the Picker handed it, which makes a shared
+> folder look half-empty. The trade-off is that the grant covers the owner's whole Drive and the
+> confinement to the authorized folders is enforced by the API alone, on every request.
+
+> **Publish the app, or Drive keeps disconnecting.** While the consent screen sits in **Testing**,
+> Google expires the refresh token after **7 days** and the workspace shows "Your Google Drive was
+> disconnected". Hit **Publish app** (publishing status → _In production_) and the expiry is gone.
+> Verification is **not** needed for this: it is only mandatory for _public_ apps using
+> sensitive/restricted scopes. Staying unverified in production costs a one-time "Google hasn't
+> verified this app" screen (→ _Advanced_ → _Go to app_), a cap of 100 users and no app name/logo on
+> the consent screen — all irrelevant for a single-owner instance. Chasing verified status is not
+> worth it: `.../auth/drive` is a _restricted_ scope, which pulls in an annual third-party CASA
+> security assessment.
 
 ### S3 / S3-compatible
 
