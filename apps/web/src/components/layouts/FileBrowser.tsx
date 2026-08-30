@@ -12,6 +12,8 @@ import {
   useState,
 } from 'react';
 
+import { DESKTOP_QUERY } from '@/common/constants/layout.constants';
+import { useMediaQuery } from '@/common/hooks/useMediaQuery';
 import type {
   Crumb,
   SortDir,
@@ -228,6 +230,9 @@ export default function FileBrowser({
   onLoadMore,
   onMoveIntoFolder,
 }: Props) {
+  // The split view is desktop-only; the toolbar menu is client-rendered, so gating it on a media
+  // query touches no server markup.
+  const canSplit = useMediaQuery(DESKTOP_QUERY);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   // Anchor row for Shift-click range selection.
@@ -894,7 +899,7 @@ export default function FileBrowser({
                 onClick={() => runToolbarAction(onNewFolder)}
               />
             )}
-            {onToggleSplit && (
+            {onToggleSplit && canSplit && (
               <MenuItem
                 icon={split ? 'XMark' : 'ViewColumns'}
                 label={split ? 'Close split view' : 'Split view'}

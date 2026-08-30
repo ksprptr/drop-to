@@ -20,8 +20,10 @@ import {
   resolvePathAction,
   statusesAction,
 } from '@/actions/storage/storage.actions';
+import { DESKTOP_QUERY } from '@/common/constants/layout.constants';
 import { useBrowsePane } from '@/common/hooks/useBrowsePane';
 import { useDebouncedValue } from '@/common/hooks/useDebouncedValue';
+import { useMediaQuery } from '@/common/hooks/useMediaQuery';
 import {
   fileDownloadUrl,
   folderDownloadUrl,
@@ -151,6 +153,7 @@ function WorkspaceInner({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const canSplit = useMediaQuery(DESKTOP_QUERY);
   const [split, setSplit] = useState(false);
   const [activePane, setActivePane] = useState<0 | 1>(0);
   const [bulkPane, setBulkPane] = useState<0 | 1>(0);
@@ -563,6 +566,16 @@ function WorkspaceInner({
     }
   }, [activeBackend]);
 
+  // Below `md` two panes have no usable width, and moving items between them is a drag & drop
+  // gesture touch never fires — so the split collapses back to one pane on a narrow viewport.
+  useEffect(() => {
+    if (!canSplit) {
+      setSplit(false);
+      setDragMove(null);
+      setActivePane(0);
+    }
+  }, [canSplit]);
+
   // Keyboard shortcut (Cmd/Ctrl + \) to toggle the split view.
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -571,8 +584,8 @@ function WorkspaceInner({
         if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
           return;
         }
-        // Only open the split from inside a folder; closing is always allowed.
-        if (!split && currentFolderId === null) {
+        // Only open the split from inside a folder, and only where it fits; closing is always allowed.
+        if (!split && (currentFolderId === null || !canSplit)) {
           return;
         }
         event.preventDefault();
@@ -581,7 +594,7 @@ function WorkspaceInner({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [split, currentFolderId, toggleSplit]);
+  }, [split, currentFolderId, canSplit, toggleSplit]);
 
   // Move the given ids into a target folder (Finder-style drop onto a folder row, same pane).
   const handleMoveIntoFolder = useCallback(
