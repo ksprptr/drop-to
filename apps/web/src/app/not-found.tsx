@@ -4,6 +4,7 @@ import NotFoundContent from '@/components/layouts/NotFoundContent';
 
 export const metadata: Metadata = {
   title: 'Page not found',
+  robots: { index: false, follow: true },
 };
 
 /**
