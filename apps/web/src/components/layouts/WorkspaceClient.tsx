@@ -1,7 +1,7 @@
 'use client';
 
 import type { StorageBackend, StorageStatus } from '@dropto/types';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -10,11 +10,7 @@ import {
   revokeDriveOwnerAction,
   saveFoldersAction,
 } from '@/actions/auth/auth.actions';
-import {
-  moveItemAction,
-  resolvePathAction,
-  statusesAction,
-} from '@/actions/storage/storage.actions';
+import { statusesAction } from '@/actions/storage/storage.actions';
 import { DESKTOP_QUERY } from '@/common/constants/layout.constants';
 import { useBrowsePane } from '@/common/hooks/useBrowsePane';
 import { useDebouncedValue } from '@/common/hooks/useDebouncedValue';
@@ -22,12 +18,13 @@ import { useEntryListing } from '@/common/hooks/useEntryListing';
 import { useEntryOperations } from '@/common/hooks/useEntryOperations';
 import { useEntrySelection } from '@/common/hooks/useEntrySelection';
 import { useMediaQuery } from '@/common/hooks/useMediaQuery';
+import { useSplitPanes } from '@/common/hooks/useSplitPanes';
 import { useUploadQueue } from '@/common/hooks/useUploadQueue';
+import { useWorkspaceLocation } from '@/common/hooks/useWorkspaceLocation';
 import { fileDownloadUrl, folderDownloadUrl } from '@/common/services/api/storage.client';
 import { type PickedFolder, usePicker } from '@/common/services/picker/usePicker';
-import type { Crumb, SortDir, SortKey, ViewEntry } from '@/common/types/workspace.types';
+import type { Crumb, ViewEntry } from '@/common/types/workspace.types';
 import { extractApiErrorMessage } from '@/common/utils/error.functions';
-import { buildWorkspaceUrl, slugify } from '@/common/utils/storage-url';
 import { useToast } from '@/components/providers/ToastProvider';
 import { UploadProvider, useUploadActions } from '@/components/providers/UploadProvider';
 import { STORAGE_ICON } from '@/configs/storage.config';
@@ -58,12 +55,6 @@ interface Props {
 }
 
 /**
- * First connected backend (or null) — used to auto-select a storage.
- **/
-const pickDefaultBackend = (statuses: StorageStatus[]): StorageBackend | null =>
-  statuses.find((status) => status.connected)?.backend ?? null;
-
-/**
  * Main workspace: sidebar + file browser + preview, with uploads and account management.
  **/
 function WorkspaceInner({
@@ -74,53 +65,48 @@ function WorkspaceInner({
   initialPath,
   initialNotFound,
 }: Props) {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const pathname = usePathname();
   const toast = useToast();
   const { openPicker } = usePicker();
   const { setDownloads } = useUploadActions();
 
   const [statuses, setStatuses] = useState<StorageStatus[]>(initialStatuses);
   const [loadingStatus, setLoadingStatus] = useState(false);
-  const [activeBackend, setActiveBackend] = useState<StorageBackend | null>(initialBackend ?? null);
-  const [path, setPath] = useState<Crumb[]>(initialPath ?? []);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<ViewEntry | null>(null);
   const canSplit = useMediaQuery(DESKTOP_QUERY);
-  const [split, setSplit] = useState(false);
-  const [activePane, setActivePane] = useState<0 | 1>(0);
-  const [dragMove, setDragMove] = useState<{ ids: string[]; sourcePane: 0 | 1 } | null>(null);
   const [saving, setSaving] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const handledParams = useRef(false);
-  // id → display name, so navigating (and rebuilding a deep-linked breadcrumb) shows real names.
-  const nameCache = useRef<Map<string, string>>(
-    new Map((initialPath ?? []).map((crumb) => [crumb.id, crumb.name])),
-  );
-  // id → Drive web-view link, so the breadcrumb / toolbar "Copy link" always points at the real folder.
-  const linkCache = useRef<Map<string, string | null>>(
-    new Map((initialPath ?? []).map((crumb) => [crumb.id, crumb.webViewLink])),
-  );
+
+  // The browse location (backend, path, sort) is derived from the URL.
+  const {
+    activeBackend,
+    path,
+    currentFolderId,
+    atRoots,
+    notFound,
+    sortKey,
+    sortDir,
+    openFolder,
+    navigate,
+    selectStorage,
+    toggleSort: handleToggleSort,
+  } = useWorkspaceLocation({
+    statuses,
+    initialBackend,
+    initialPath,
+    initialNotFound,
+    onLocationChange: () => setSelected(null),
+  });
 
   const driveStatus = statuses.find((status) => status.backend === 'drive') ?? null;
   const activeStatus = activeBackend
     ? (statuses.find((status) => status.backend === activeBackend) ?? null)
     : null;
 
-  const currentFolderId = path.length > 0 ? path[path.length - 1].id : null;
-  const atRoots = path.length === 0;
   const debouncedSearch = useDebouncedValue(search.trim(), 250);
-
-  // Server-detected 404 (bad folder URL): shown in the file area until the operator navigates away.
-  const notFoundPathname = useRef(initialNotFound ? pathname : null);
-  const notFound = notFoundPathname.current !== null && notFoundPathname.current === pathname;
-
-  // Sort lives in the URL query (?sort=&dir=) so it's shareable; the main pane is controlled by it.
-  const sortParam = searchParams.get('sort');
-  const sortKey: SortKey = sortParam === 'modified' || sortParam === 'size' ? sortParam : 'name';
-  const sortDir: SortDir = searchParams.get('dir') === 'desc' ? 'desc' : 'asc';
 
   const roots = useMemo<ViewEntry[]>(
     () =>
@@ -196,90 +182,6 @@ function WorkspaceInner({
   // The second (split) pane: an independent browser over the same backend.
   const paneB = useBrowsePane(activeBackend, roots, onPaneError);
 
-  // Derive the browse location from the URL; navigation updates it via window.history (no server round-trip).
-  useEffect(() => {
-    const segments = pathname.split('/').filter(Boolean).map(decodeURIComponent);
-    const paramBackend = segments[0] === 'drive' || segments[0] === 's3' ? segments[0] : null;
-    const connected = statuses.filter((status) => status.connected).map((status) => status.backend);
-
-    // Server-detected 404: keep the sidebar (select the backend) but don't load the bad folder.
-    if (notFound) {
-      if (paramBackend && connected.includes(paramBackend)) {
-        setActiveBackend(paramBackend);
-      }
-      setPath([]);
-      return;
-    }
-
-    // Only connected backends are browsable; redirect away from an unknown/disconnected URL.
-    if (paramBackend === null || !connected.includes(paramBackend)) {
-      const fallback = pickDefaultBackend(statuses);
-      if (fallback === null) {
-        setActiveBackend(null);
-        setPath([]);
-        setSelected(null);
-        return;
-      }
-      router.replace(`/${fallback}`);
-      return;
-    }
-
-    const backend = paramBackend;
-    const backendRoots = statuses.find((status) => status.backend === backend)?.roots ?? [];
-    const folderSegs = segments.slice(1);
-    const root =
-      folderSegs.length > 0 && backendRoots.find((r) => slugify(r.name) === folderSegs[0]);
-
-    if (!root) {
-      setActiveBackend(backend);
-      setPath([]);
-      setSelected(null);
-      return;
-    }
-
-    // Names/links come from the cache so the breadcrumb paints instantly; any gap is filled once below.
-    const restIds = folderSegs.slice(1);
-    setActiveBackend(backend);
-    setPath([
-      { id: root.id, name: root.name, webViewLink: null },
-      ...restIds.map((id) => ({
-        id,
-        name: nameCache.current.get(id) ?? '',
-        webViewLink: linkCache.current.get(id) ?? null,
-      })),
-    ]);
-    setSelected(null);
-
-    const missing = restIds.filter(
-      (id) => !nameCache.current.has(id) || !linkCache.current.has(id),
-    );
-    if (missing.length === 0) {
-      return;
-    }
-
-    let cancelled = false;
-    void (async () => {
-      const result = await resolvePathAction(backend, missing);
-      if (cancelled || !result.ok) {
-        return;
-      }
-      for (const pair of result.data ?? []) {
-        nameCache.current.set(pair.id, pair.name);
-        linkCache.current.set(pair.id, pair.webViewLink);
-      }
-      setPath((current) =>
-        current.map((crumb) => ({
-          ...crumb,
-          name: nameCache.current.get(crumb.id) ?? crumb.name,
-          webViewLink: linkCache.current.get(crumb.id) ?? crumb.webViewLink,
-        })),
-      );
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname, statuses, router]);
-
   useEffect(() => {
     if (handledParams.current) {
       return;
@@ -310,41 +212,14 @@ function WorkspaceInner({
     setSearch('');
   }, [currentFolderId, activeBackend]);
 
+  // Read through a ref: `split` is owned by useSplitPanes, which in turn needs reloadPanes — the
+  // ref breaks that cycle without making the reload depend on the split's identity.
+  const splitRef = useRef(false);
+
   // Reload both panes after a mutation so the source and destination both refresh.
   const reloadPanes = useCallback(async () => {
-    await Promise.all([loadEntries(), split ? paneB.reload() : Promise.resolve()]);
-  }, [loadEntries, split, paneB]);
-
-  const openFolder = useCallback(
-    (entry: ViewEntry) => {
-      if (activeBackend === null) {
-        return;
-      }
-      nameCache.current.set(entry.id, entry.name);
-      linkCache.current.set(entry.id, entry.webViewLink);
-      const url = buildWorkspaceUrl(activeBackend, [
-        ...path,
-        { id: entry.id, name: entry.name, webViewLink: entry.webViewLink },
-      ]);
-      window.history.pushState(null, '', url);
-    },
-    [activeBackend, path],
-  );
-
-  const navigate = useCallback(
-    (index: number) => {
-      if (activeBackend === null) {
-        return;
-      }
-      const url = buildWorkspaceUrl(activeBackend, index < 0 ? [] : path.slice(0, index + 1));
-      window.history.pushState(null, '', url);
-    },
-    [activeBackend, path],
-  );
-
-  const selectStorage = useCallback((backend: StorageBackend) => {
-    window.history.pushState(null, '', `/${backend}`);
-  }, []);
+    await Promise.all([loadEntries(), splitRef.current ? paneB.reload() : Promise.resolve()]);
+  }, [loadEntries, paneB]);
 
   // The Drive link of the folder currently open in the main pane (null at roots / for S3).
   const currentFolderLink = path.length > 0 ? path[path.length - 1].webViewLink : null;
@@ -395,158 +270,32 @@ function WorkspaceInner({
     [openDriveLink, paneBFolderLink],
   );
 
-  const handleToggleSort = useCallback(
-    (key: SortKey) => {
-      const nextDir: SortDir = key === sortKey ? (sortDir === 'asc' ? 'desc' : 'asc') : 'asc';
-      const base = activeBackend
-        ? buildWorkspaceUrl(activeBackend, path)
-        : window.location.pathname;
-      // Default (name/asc) stays out of the URL to keep it clean.
-      const query = key === 'name' && nextDir === 'asc' ? '' : `?sort=${key}&dir=${nextDir}`;
-      window.history.replaceState(null, '', `${base}${query}`);
-    },
-    [sortKey, sortDir, activeBackend, path],
-  );
-
-  // --- Split view + drag-to-move ------------------------------------------------
-
-  const toggleSplit = useCallback(() => {
-    setSplit((current) => {
-      const next = !current;
-      if (next) {
-        // Open the second pane at the same location as the primary one.
-        paneB.goTo(path);
-      } else {
-        setDragMove(null);
-        setActivePane(0);
-      }
-      return next;
-    });
-  }, [paneB, path]);
-
-  // Close the split (and any drag) if the storage disconnects entirely.
-  useEffect(() => {
-    if (activeBackend === null) {
-      setSplit(false);
-      setDragMove(null);
-    }
-  }, [activeBackend]);
-
-  // Below `md` two panes have no usable width, and moving items between them is a drag & drop
-  // gesture touch never fires — so the split collapses back to one pane on a narrow viewport.
-  useEffect(() => {
-    if (!canSplit) {
-      setSplit(false);
-      setDragMove(null);
-      setActivePane(0);
-    }
-  }, [canSplit]);
-
-  // Keyboard shortcut (Cmd/Ctrl + \) to toggle the split view.
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === '\\') {
-        const target = event.target as HTMLElement | null;
-        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-          return;
-        }
-        // Only open the split from inside a folder, and only where it fits; closing is always allowed.
-        if (!split && (currentFolderId === null || !canSplit)) {
-          return;
-        }
-        event.preventDefault();
-        toggleSplit();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [split, currentFolderId, canSplit, toggleSplit]);
-
-  // Move the given ids into a target folder (Finder-style drop onto a folder row, same pane).
-  const handleMoveIntoFolder = useCallback(
-    async (targetFolderId: string, ids: string[]) => {
-      if (activeBackend === null) {
-        return;
-      }
-      // Can't move a folder into itself.
-      const moveIds = ids.filter((id) => id !== targetFolderId);
-      if (moveIds.length === 0) {
-        return;
-      }
-      const backend = activeBackend;
-
-      const count = `${moveIds.length} item${moveIds.length === 1 ? '' : 's'}`;
-      const toastId = toast.loading(`Moving ${count}…`);
-
-      const results = await Promise.all(
-        moveIds.map((id) => moveItemAction(backend, id, targetFolderId)),
-      );
-      const failed = results.filter((result) => !result.ok).length;
-
-      await reloadPanes();
+  // The second pane and moving items between panes.
+  const {
+    split,
+    activePane,
+    setActivePane,
+    dragMove,
+    setDragMove,
+    toggleSplit,
+    moveIntoFolder: handleMoveIntoFolder,
+    moveDrop: handleMoveDrop,
+  } = useSplitPanes({
+    canSplit,
+    backend: activeBackend,
+    currentFolderId,
+    path,
+    paneB,
+    reloadPanes,
+    // A move empties both selections and drops the preview if it was one of the moved items.
+    onMoved: (ids) => {
       clearSelection();
       paneB.clearSelection();
-      if (selected && moveIds.includes(selected.id)) {
-        setSelected(null);
-      }
-
-      toast.update(toastId, {
-        variant: failed > 0 ? 'error' : 'success',
-        message:
-          failed > 0
-            ? `Failed to move ${failed} item${failed === 1 ? '' : 's'}.`
-            : `Moved ${count}.`,
-      });
+      setSelected((current) => (current && ids.includes(current.id) ? null : current));
     },
-    [activeBackend, toast, reloadPanes, paneB, selected],
-  );
+  });
 
-  const handleMoveDrop = useCallback(
-    async (targetPane: 0 | 1) => {
-      if (!dragMove || activeBackend === null || dragMove.sourcePane === targetPane) {
-        return;
-      }
-      const backend = activeBackend;
-      const { ids } = dragMove;
-      const sourceFolderId = dragMove.sourcePane === 0 ? currentFolderId : paneB.currentFolderId;
-      const targetFolderId = targetPane === 0 ? currentFolderId : paneB.currentFolderId;
-      setDragMove(null);
-
-      if (targetFolderId === null) {
-        return;
-      }
-      if (sourceFolderId === targetFolderId) {
-        toast.error('Items are already in that folder.');
-        return;
-      }
-
-      const count = `${ids.length} item${ids.length === 1 ? '' : 's'}`;
-      // A move can take a while (S3 copies whole folders), so show a live toast.
-      const toastId = toast.loading(`Moving ${count}…`);
-
-      const results = await Promise.all(
-        ids.map((id) => moveItemAction(backend, id, targetFolderId)),
-      );
-      const failed = results.filter((result) => !result.ok).length;
-
-      await reloadPanes();
-      clearSelection();
-      paneB.clearSelection();
-      if (selected && ids.includes(selected.id)) {
-        setSelected(null);
-      }
-
-      if (failed > 0) {
-        toast.update(toastId, {
-          variant: 'error',
-          message: `Failed to move ${failed} item${failed === 1 ? '' : 's'}.`,
-        });
-      } else {
-        toast.update(toastId, { variant: 'success', message: `Moved ${count}.` });
-      }
-    },
-    [dragMove, activeBackend, currentFolderId, paneB, reloadPanes, selected, toast],
-  );
+  splitRef.current = split;
 
   // Uploads (duplicate prompt, folder creation, progress, rollback) live in their own hook.
   const paneAccess = useMemo(
