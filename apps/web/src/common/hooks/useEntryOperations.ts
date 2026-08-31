@@ -62,8 +62,7 @@ const splitExtension = (name: string): { base: string; ext: string } => {
 /**
  * Every mutation on an entry, together with the dialog state that confirms it.
  **/
-// Lifted out of WorkspaceClient: creating, renaming, deleting and unauthorizing all follow the same
-// shape (guard → act → reload both panes → forget the id → close), so they belong together.
+// All four mutations follow the same shape (guard → act → reload → forget → close), so they belong together.
 export function useEntryOperations({
   backend,
   panes,

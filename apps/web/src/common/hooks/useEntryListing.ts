@@ -47,8 +47,7 @@ const serverSearch = (backend: StorageBackend | null, term: string): string | un
 /**
  * Loads one pane's entries, with cursor pagination and stale-response protection.
  **/
-// Shared by both panes. They differ only in where the folder and sort come from (the URL for the
-// main pane, local state for the split pane), never in how a listing is read.
+// Shared by both panes; they differ only in where the folder and sort come from, never in how a listing is read.
 export function useEntryListing({
   backend,
   currentFolderId,
@@ -63,8 +62,7 @@ export function useEntryListing({
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // Bumped on every listing read; a resolved request whose id no longer matches is stale (the pane
-  // navigated away mid-flight) and must not paint over the current folder.
+  // A resolved request whose id no longer matches is stale and must not paint over the current folder.
   const listSeq = useRef(0);
 
   const reload = useCallback(async () => {

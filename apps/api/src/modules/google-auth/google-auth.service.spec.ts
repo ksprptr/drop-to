@@ -266,8 +266,7 @@ describe('GoogleAuthService', () => {
     });
   });
 
-  // The owner token is the whole basis of DriveOwnerGuard: it is what separates "the operator is
-  // logged in" from "the operator proved control of the connected Google account".
+  // The owner token is what separates "the operator is logged in" from "the operator controls the account".
   describe('issueOwnerToken / isVerifiedOwner', () => {
     /**
      * Makes `decrypt` return the given owner-token payload verbatim.

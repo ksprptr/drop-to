@@ -4,8 +4,7 @@ import path from 'node:path';
 const monorepoRoot = path.join(__dirname, '../..');
 const isDevelopment = process.env.NODE_ENV === 'development';
 
-// HSTS on https origins only. Sent from a local http build it would pin `localhost` to https for
-// two years — and localhost is shared by every dev server on this machine.
+// https only: from a local http build this would pin `localhost` to https for two years.
 const servesHttps = (process.env.APP_URL ?? '').startsWith('https://');
 
 // Google origins (Picker/OAuth scripts, frames, XHRs, images) allowed by the CSP.

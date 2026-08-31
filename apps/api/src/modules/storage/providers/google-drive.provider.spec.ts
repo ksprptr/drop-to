@@ -328,7 +328,6 @@ describe('GoogleDriveProvider', () => {
       await expect(service.createFolderArchive('root-1')).rejects.toBeInstanceOf(
         BadRequestException,
       );
-      // Rejected before any metadata lookup or archive stream is opened.
       expect(files.get).not.toHaveBeenCalled();
     });
 
@@ -382,8 +381,7 @@ describe('GoogleDriveProvider', () => {
 
     it('keeps a root when the liveness check fails transiently', async () => {
       withRootRows();
-      // Only a hard 404 is proof the folder is gone. Treating a 500 or a timeout as proof would
-      // silently revoke a working authorization the operator would then have to re-pick.
+      // Only a hard 404 is proof; treating a 500 as proof would revoke a working authorization.
       files.get.mockRejectedValue(Object.assign(new Error('backend error'), { code: 500 }));
 
       await expect(service.listRoots()).resolves.toEqual([entity]);
@@ -416,7 +414,6 @@ describe('GoogleDriveProvider', () => {
       await expect(service.renameItem('root-1', 'Renamed')).rejects.toBeInstanceOf(
         ConflictException,
       );
-      // Rejected before Drive is touched at all.
       expect(files.update).not.toHaveBeenCalled();
     });
 
@@ -467,8 +464,7 @@ describe('GoogleDriveProvider', () => {
 
     it('validates the destination too, not just the item (403)', async () => {
       withAllowedRoots('root-1');
-      // The item is inside the tree; the target is not. Checking only the source would let an
-      // operator move an authorized file out into the rest of the owner's Drive.
+      // Checking only the source would let an operator move an authorized file out into the rest of the Drive.
       files.get.mockImplementation(({ fileId }: { fileId: string }) =>
         Promise.resolve({
           data: { id: fileId, parents: fileId === 'doc' ? ['root-1'] : [] },
@@ -523,9 +519,7 @@ describe('GoogleDriveProvider', () => {
     });
   });
 
-  // These two are the only places the provider talks to Google over raw `fetch` rather than the
-  // mocked `google.drive()` client, so `global.fetch` is stubbed per test. test/setup-env.ts makes
-  // an unstubbed call throw, which is what keeps this suite from ever reaching googleapis.com.
+  // The only paths reaching Google over raw `fetch`; test/setup-env.ts makes an unstubbed call throw.
   describe('createResumableUpload', () => {
     const init = {
       name: 'big.bin',
@@ -612,8 +606,7 @@ describe('GoogleDriveProvider', () => {
       global.fetch = fetchMock as unknown as typeof fetch;
     });
 
-    // The URL arrives in the request body, so this prefix check is the only thing stopping the
-    // endpoint from being a server-side request forgery primitive into the internal network.
+    // The URL is request-supplied, so this prefix check is all that stops an SSRF into the internal network.
     it.each([
       ['an unrelated host', 'https://evil.example.com/upload/drive/v3/files'],
       ['plain http', 'http://www.googleapis.com/upload/drive/v3/files'],

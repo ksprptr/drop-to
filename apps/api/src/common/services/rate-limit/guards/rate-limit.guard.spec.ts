@@ -9,8 +9,7 @@ import { SkipRateLimit } from '../decorators/skip-rate-limit.decorator';
 import type { RateLimitHelpers } from '../helpers/rate-limit.helpers';
 import { RateLimitGuard } from './rate-limit.guard';
 
-// Real decorators on real classes, read back through a real Reflector: mocking the reflector would
-// pass even if the guard looked up the wrong metadata key, which is the mistake worth catching.
+// Real decorators through a real Reflector: a mocked one would pass even on the wrong metadata key.
 class PlainController {
   plain(): void {}
 

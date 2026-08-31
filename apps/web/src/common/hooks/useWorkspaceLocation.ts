@@ -29,8 +29,7 @@ const pickDefaultBackend = (statuses: StorageStatus[]): StorageBackend | null =>
 /**
  * The browse location, derived from the URL: which backend, which folder path, and the sort.
  **/
-// The URL is the source of truth. Navigation writes to window.history (no server round-trip) and
-// this hook reads it back, so the back button and a shared deep link behave identically.
+// The URL is the source of truth, so the back button and a shared deep link behave identically.
 export function useWorkspaceLocation({
   statuses,
   initialBackend,

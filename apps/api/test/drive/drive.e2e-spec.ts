@@ -12,8 +12,7 @@ jest.mock('googleapis', () => require('../helpers/googleapis.mock').createGoogle
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
-// Read from the environment: .env.test.example keeps this deliberately small so the size-limit
-// path is reachable, but a local .env.test that drifted must not turn into a false failure.
+// From the environment: a drifted local .env.test must not turn into a false failure.
 const MAX_UPLOAD_BYTES = Number(process.env['MAX_UPLOAD_BYTES']);
 
 describe('Drive (integration)', () => {
@@ -531,8 +530,7 @@ describe('Drive (integration)', () => {
 
     it('rejects a file over MAX_UPLOAD_BYTES (400)', async () => {
       connectAccountWithRoots('root-1');
-      // Drain like a real upload would (otherwise backpressure stalls the request), but never
-      // settle: the 400 has to come from busboy's own limit, not from whatever the upstream answers.
+      // Drain like a real upload (backpressure would stall it) but never settle: the 400 must come from busboy's limit.
       driveFilesMock.create.mockImplementation(({ media }: { media?: { body?: Readable } }) => {
         media?.body?.resume();
 

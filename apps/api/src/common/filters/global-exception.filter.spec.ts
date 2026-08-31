@@ -29,7 +29,6 @@ describe('GlobalExceptionFilter', () => {
 
   beforeEach(() => {
     filter = new GlobalExceptionFilter();
-    // Silence the logger so test output stays clean.
     jest.spyOn(filter['logger'], 'warn').mockImplementation(() => undefined);
     jest.spyOn(filter['logger'], 'error').mockImplementation(() => undefined);
   });

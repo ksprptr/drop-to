@@ -4,9 +4,7 @@ import type { Request, Response } from 'express';
 /**
  * Query params whose values must never reach the logs.
  **/
-// The OAuth callback carries a single-use `code` and the redirect back to the web app carries an
-// `ownerToken`; both are bearer-grade. `state` is the CSRF nonce. Logs are the widest-read,
-// longest-lived surface in the app, so these are redacted rather than trusted to stay short-lived.
+// The callback's `code` and the redirect's `ownerToken` are bearer-grade, and logs outlive both.
 const REDACTED_QUERY_PARAMS = new Set(['code', 'state', 'ownertoken', 'token', 'access_token']);
 
 /**

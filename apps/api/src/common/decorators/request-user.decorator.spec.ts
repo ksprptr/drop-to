@@ -9,8 +9,7 @@ import { RequestUser } from './request-user.decorator';
 /**
  * Extracts the factory out of a param decorator by applying it to a throwaway handler.
  **/
-// `createParamDecorator` hands back a decorator, not the function it wraps; Nest stores the factory
-// in the route-args metadata, which is the only supported way to get at it for a direct unit test.
+// Nest stores the factory in route-args metadata — the only supported way to reach it directly.
 const factoryOf = (
   decorator: typeof RequestUser,
 ): ((data: unknown, ctx: ExecutionContext) => RequestUserType) => {
@@ -46,8 +45,7 @@ describe('RequestUser', () => {
   });
 
   it('throws 401 when no user is attached', () => {
-    // Reached only if a route is mounted without the guard; failing closed keeps a handler from
-    // running with an undefined user rather than letting it decide what that means.
+    // Failing closed keeps a handler from running with an undefined user if a route is ever mounted without the guard.
     expect(() => factory(undefined, buildContext(undefined))).toThrow(UnauthorizedException);
   });
 });

@@ -38,8 +38,7 @@ export interface UploadQueue {
 /**
  * Runs the upload queue: duplicate handling, folder creation, per-file progress and rollback.
  **/
-// Lifted out of WorkspaceClient, which had it inline. The panes are reached through
-// `getPaneTarget` so this never has to know how the workspace stores them.
+// The panes are reached through `getPaneTarget`, so this never has to know how the workspace stores them.
 export function useUploadQueue(
   activeBackend: StorageBackend | null,
   getPaneTarget: (pane: 0 | 1) => UploadTarget,

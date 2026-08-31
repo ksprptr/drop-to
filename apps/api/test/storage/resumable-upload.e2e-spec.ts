@@ -9,18 +9,14 @@ import { createTestApp } from '../helpers/test-app.helper';
 
 jest.mock('googleapis', () => require('../helpers/googleapis.mock').createGoogleApisMock());
 
-// Read from the environment rather than hardcoded: both are configurable, and a local .env.test
-// that drifts from .env.test.example must not turn into a false failure here.
+// From the environment: a drifted local .env.test must not turn into a false failure.
 const MAX_UPLOAD_BYTES = Number(process.env['MAX_UPLOAD_BYTES']);
 const OFFLINE_TIMEOUT_MS = Number(process.env['OFFLINE_TIMEOUT_MS']);
 
 /**
- * The resumable flow: the browser streams straight to Google, so the API only opens the session,
- * answers "how far did it get" and validates the finished file.
+ * The resumable flow: the API opens the session, reports progress and validates the finished file.
  **/
-// These three routes are the only ones that reach Google over raw `fetch` instead of the mocked
-// `google.drive()` client, so `global.fetch` is stubbed here. test/setup-env.ts turns an unstubbed
-// call into a loud failure, which is what guarantees this suite never dials googleapis.com.
+// These three reach Google over raw `fetch`; test/setup-env.ts turns an unstubbed call into a loud failure.
 describe('Resumable upload (integration)', () => {
   let app: INestApplication;
   let fetchMock: jest.Mock;
@@ -89,7 +85,6 @@ describe('Resumable upload (integration)', () => {
         });
 
       expect(res.status).toBe(400);
-      // Rejected before a session is opened at Google.
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
@@ -168,8 +163,7 @@ describe('Resumable upload (integration)', () => {
       expect(res.body).toEqual({ complete: true, receivedBytes: 500, fileId: 'file-1' });
     });
 
-    // The URL is request-supplied, so this endpoint would be a server-side request forgery
-    // primitive into the internal network if the host check were ever relaxed.
+    // The URL is request-supplied, so a relaxed host check would make this an SSRF primitive.
     it.each([
       ['an unrelated host', 'https://evil.example.com/upload/drive/v3/files'],
       ['plain http', 'http://www.googleapis.com/upload/drive/v3/files'],
@@ -230,8 +224,7 @@ describe('Resumable upload (integration)', () => {
       });
     });
 
-    // The browser completes the upload itself, so finalize is where a file that ended up outside
-    // the authorized tree has to be caught.
+    // The browser completes the upload itself, so finalize is where an out-of-tree file must be caught.
     it('refuses to finalize a file outside the authorized tree (403)', async () => {
       connectAccountWithRoots('root-1');
       driveFilesMock.get.mockResolvedValue({ data: { id: 'file-1', parents: ['elsewhere'] } });

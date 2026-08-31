@@ -166,8 +166,7 @@ export default function FileBrowser({
   onLoadMore,
   onMoveIntoFolder,
 }: Props) {
-  // The split view is desktop-only; the toolbar menu is client-rendered, so gating it on a media
-  // query touches no server markup.
+  // Desktop-only, and the toolbar menu is client-rendered, so the media query touches no server markup.
   const canSplit = useMediaQuery(DESKTOP_QUERY);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -186,14 +185,12 @@ export default function FileBrowser({
   // Folder row currently hovered as a move drop target (Finder-style same-pane move).
   const [dropFolderId, setDropFolderId] = useState<string | null>(null);
 
-  // The row handlers below must keep a stable identity for `FileRow`'s memo to hold, so the values
-  // that change on every selection or drag tick are read through refs instead of closed over.
+  // Read through refs so the row handlers keep the stable identity `FileRow`'s memo needs.
   const selectedIdsRef = useRef(selectedIds);
   selectedIdsRef.current = selectedIds;
   const dropFolderIdRef = useRef(dropFolderId);
   dropFolderIdRef.current = dropFolderId;
 
-  // Close the search box and drop its filter.
   const closeSearch = useCallback(() => {
     setShowSearch(false);
     onSearchChange?.('');
@@ -234,9 +231,7 @@ export default function FileBrowser({
     };
   }, [menu, toolbarMenu]);
 
-  // Client-side filter (superset of Drive's server-side filter; also covers roots + S3). Debounced
-  // so a keystroke only re-renders the input: without it every character re-filtered, re-sorted and
-  // re-rendered the whole list, in both panes.
+  // Debounced: without it every keystroke re-filtered, re-sorted and re-rendered both panes' lists.
   const query = useDebouncedValue(searchQuery.trim().toLowerCase(), FILTER_DEBOUNCE_MS);
   const sorted = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1;
@@ -327,7 +322,6 @@ export default function FileBrowser({
   const openToolbarMenu = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
-    // Opening the toolbar menu closes any open row menu.
     setMenu(null);
     setToolbarMenu((current) => (current ? null : rect));
   };
@@ -465,7 +459,6 @@ export default function FileBrowser({
           return;
         }
       }
-      // Cmd/Ctrl-click: toggle this row in the multi-selection.
       if ((event.metaKey || event.ctrlKey) && canModify) {
         onToggleSelect(entry.id);
         selectionAnchor.current = entry.id;

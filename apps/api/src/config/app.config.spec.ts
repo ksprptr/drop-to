@@ -54,9 +54,7 @@ describe('appConfig', () => {
     ]);
   });
 
-  // Security-relevant: `trust proxy` decides which X-Forwarded-For entry becomes `req.ip`, and
-  // `req.ip` is the rate-limit key. A wrong hop count either trusts a client-supplied address or
-  // buckets every request under the proxy's own IP.
+  // Security-relevant: the hop count decides which X-Forwarded-For entry becomes `req.ip`, the rate-limit key.
   it('defaults the trusted proxy hop count to 1', () => {
     expect(appConfig().trustProxyHops).toBe(1);
   });

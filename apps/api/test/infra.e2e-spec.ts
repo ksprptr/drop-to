@@ -12,9 +12,7 @@ const ALLOWED_ORIGIN = 'http://localhost:3000';
 /**
  * The cross-cutting HTTP setup itself: prefix, security headers and the CORS allowlist.
  **/
-// These come from `configureApp`, the same call `main.ts` makes. They used to be re-declared by the
-// test harness (and helmet/CORS were simply left out), so nothing here was covered — a change to
-// the allowlist could not fail a test.
+// From `configureApp`; the harness used to re-declare these and omit helmet/CORS, so nothing covered them.
 describe('App setup (integration)', () => {
   let app: INestApplication;
   const prisma: PrismaMock = createPrismaMock();

@@ -45,8 +45,7 @@ describe('DriveOwnerGuard', () => {
   });
 
   it('rejects when no cookies were parsed at all', async () => {
-    // cookie-parser not reached (or a request with no Cookie header) must not throw a TypeError —
-    // that would surface as a 500 and hide the authorization decision.
+    // A missing cookies object must not throw a TypeError — a 500 would hide the authorization decision.
     await expect(guard.canActivate(buildContext(undefined))).rejects.toBeInstanceOf(
       ForbiddenException,
     );

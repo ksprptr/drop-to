@@ -8,11 +8,7 @@ import { type AppConfig, appConfig } from './config/app.config';
 /**
  * Applies every request-shaping concern the app needs, in the order they must run.
  **/
-// Shared by `main.ts` and the e2e harness so the two cannot drift: a test app that skips a
-// middleware silently stops covering it, which is how helmet and CORS went untested here. Only
-// Swagger (development-only, and irrelevant to a request) and `listen` stay with the caller.
-// The config is read out of the container rather than passed in, so there is no argument to keep
-// in sync either.
+// Shared with the e2e harness so the two cannot drift; a middleware the test app skips stops being covered.
 export function configureApp(app: NestExpressApplication): void {
   const appCfg = app.get<AppConfig>(appConfig.KEY);
 

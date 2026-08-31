@@ -37,9 +37,7 @@ interface Props {
 /**
  * One row of the file list: icon, name, modified date, size and the action menu.
  **/
-// Every interaction is decided by the browser above — this only reports events and paints state,
-// which keeps the list markup readable on its own. Memoized: every prop is either a scalar or a
-// callback the browser keeps stable, so selecting one row re-renders that row, not the whole list.
+// Memoized: every prop is a scalar or a browser-stable callback, so selecting a row re-renders only that row.
 function FileRow({
   entry,
   selected,

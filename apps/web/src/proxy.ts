@@ -99,12 +99,10 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
-  // No refresh token at all → not logged in.
   if (!refreshToken) {
     return redirectToLogin(request, false);
   }
 
-  // Access token still valid → no work.
   if (accessFresh) {
     return NextResponse.next();
   }

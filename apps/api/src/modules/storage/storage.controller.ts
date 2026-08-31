@@ -56,8 +56,7 @@ import { StorageRegistry } from './storage.registry';
 /**
  * Cap on `GET :backend/names?ids=` — each id costs an authorization walk plus a metadata read.
  **/
-// The only caller resolves one breadcrumb, so the real request is a handful of ids and this never
-// binds; it exists so a crafted `ids=` can't fan one request out into unbounded upstream calls.
+// Never binds in practice; it exists so a crafted `ids=` cannot fan out into unbounded upstream calls.
 const MAX_RESOLVE_IDS = 50;
 
 /**

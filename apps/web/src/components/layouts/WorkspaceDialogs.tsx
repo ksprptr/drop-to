@@ -14,11 +14,9 @@ interface Props {
 }
 
 /**
- * Every workspace dialog: duplicate uploads, new folder, rename (plus its extension warning),
- * delete, bulk delete and removing an authorized root.
+ * Every workspace dialog: duplicate uploads, new folder, rename, delete, bulk delete and root removal.
  **/
-// Purely presentational — all the state and handlers live in useEntryOperations / useUploadQueue,
-// so this file stays a readable list of dialogs instead of thirty drilled props.
+// Purely presentational — state and handlers live in useEntryOperations / useUploadQueue.
 export default function WorkspaceDialogs({ ops, uploads }: Props) {
   return (
     <>

@@ -16,10 +16,7 @@ interface AppServerConfig {
   cookieDomain: string;
 }
 
-// Server-side config. apiUrl prefers a server-only API_URL, else the public one.
-// `name` is read here (server, per request) and handed to client components as a prop — never a
-// NEXT_PUBLIC_*, which the client inlines at build while the server reads it at runtime: if the two
-// values disagree the wordmark hydrates with a mismatch.
+// `name` is read per request and passed as a prop — a NEXT_PUBLIC_* would inline at build and hydrate mismatched.
 export const appServerConfig: AppServerConfig = {
   name: process.env.APP_NAME?.trim() || 'DropTo',
   nodeEnv: {

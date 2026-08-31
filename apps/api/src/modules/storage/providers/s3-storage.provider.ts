@@ -503,9 +503,7 @@ export class S3StorageProvider implements StorageProvider {
   // --- Internals ----------------------------------------------------------------
 
   /**
-   * Probes every configured bucket in parallel and returns the ones that answered. A bucket that
-   * was deleted outside the app is dropped (never offered as a browse root); any other failure
-   * (bad credentials, unreachable endpoint, 5xx) is a whole-backend problem and propagates.
+   * Probes every configured bucket in parallel; a deleted one is dropped, any other failure propagates.
    **/
   private async liveBuckets(): Promise<string[]> {
     const client = this.getClient();
@@ -535,8 +533,7 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Turns an AWS error into a clean HTTP one: a deleted bucket/object → 404, a whole-backend
-   * failure → 424. The cached status is dropped so the next poll re-probes the buckets.
+   * Turns an AWS error into a clean HTTP one: deleted bucket/object → 404, whole-backend failure → 424.
    **/
   private toHttpError(error: unknown): never {
     if (isNotFoundError(error)) {

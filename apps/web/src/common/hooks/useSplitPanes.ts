@@ -53,7 +53,6 @@ export function useSplitPanes({
       const next = !current;
 
       if (next) {
-        // Open the second pane at the same location as the primary one.
         paneB.goTo(path);
       } else {
         setDragMove(null);
@@ -72,8 +71,7 @@ export function useSplitPanes({
     }
   }, [backend]);
 
-  // Below `md` two panes have no usable width, and moving items between them is a drag & drop
-  // gesture touch never fires — so the split collapses back to one pane on a narrow viewport.
+  // Two panes have no usable width below `md`, and moving between them is a gesture touch never fires.
   useEffect(() => {
     if (!canSplit) {
       setSplit(false);
@@ -141,7 +139,6 @@ export function useSplitPanes({
         return;
       }
 
-      // Can't move a folder into itself.
       const moveIds = ids.filter((id) => id !== targetFolderId);
 
       if (moveIds.length === 0) {

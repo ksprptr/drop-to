@@ -29,9 +29,7 @@ describe('cryptoConfig', () => {
     expect(cryptoConfig().tokenEncryptionKey).toHaveLength(32);
   });
 
-  // The guard is what stops a short or malformed key from silently becoming a weak one: Buffer.from
-  // with 'hex' truncates at the first invalid pair instead of throwing, so without this check a
-  // 4-character key would boot fine and encrypt every refresh token with 2 bytes of entropy.
+  // Buffer.from('hex') truncates at the first invalid pair instead of throwing, so a short key would silently be a weak one.
   it.each([
     ['too short', 'abcd'],
     ['too long', '0'.repeat(65)],

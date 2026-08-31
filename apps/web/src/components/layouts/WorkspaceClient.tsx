@@ -80,7 +80,6 @@ function WorkspaceInner({
 
   const handledParams = useRef(false);
 
-  // The browse location (backend, path, sort) is derived from the URL.
   const {
     activeBackend,
     path,
@@ -137,8 +136,7 @@ function WorkspaceInner({
   const onPaneError = useCallback(
     (error: { error?: string; status?: number }) => {
       toast.error(error.error ?? 'Failed to open the folder.');
-      // The storage went away mid-session (revoked Drive token / dead S3), or the folder itself was
-      // deleted outside the app — either way the roots in the sidebar may be stale.
+      // The storage or the folder went away mid-session, so the sidebar's roots may be stale.
       if (error.status === 424 || error.status === 404) {
         void loadStatus();
       }
@@ -146,8 +144,7 @@ function WorkspaceInner({
     [toast, loadStatus],
   );
 
-  // The main pane's listing and selection — the same primitives the split pane runs on. Only the
-  // location differs: this pane reads it from the URL, the split pane from local state.
+  // Same primitives the split pane runs on; only the location differs (URL here, local state there).
   const {
     entries,
     loading: loadingEntries,
@@ -222,11 +219,9 @@ function WorkspaceInner({
     setSearch('');
   }, [currentFolderId, activeBackend]);
 
-  // Read through a ref: `split` is owned by useSplitPanes, which in turn needs reloadPanes — the
-  // ref breaks that cycle without making the reload depend on the split's identity.
+  // Read through a ref: `split` needs reloadPanes, so this breaks the cycle without depending on its identity.
   const splitRef = useRef(false);
 
-  // Reload both panes after a mutation so the source and destination both refresh.
   const reloadPanes = useCallback(async () => {
     await Promise.all([loadEntries(), splitRef.current ? paneB.reload() : Promise.resolve()]);
   }, [loadEntries, paneB]);
@@ -280,7 +275,6 @@ function WorkspaceInner({
     [openDriveLink, paneBFolderLink],
   );
 
-  // The second pane and moving items between panes.
   const {
     split,
     activePane,
@@ -300,8 +294,7 @@ function WorkspaceInner({
     onMoved: handleMoved,
   });
 
-  // Stable identities: FileRow is memoized, and its handlers close over these. Inline arrows here
-  // would change on every render and make the memo a no-op.
+  // Stable identities: FileRow is memoized, and inline arrows here would make the memo a no-op.
   const selectInPane = useMemo(
     () =>
       [0, 1].map((pane) => (entry: ViewEntry) => {

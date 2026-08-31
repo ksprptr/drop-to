@@ -5,8 +5,7 @@ import { useCallback, useSyncExternalStore } from 'react';
 /**
  * Reports whether a media query currently matches.
  **/
-// An external store, not state in an effect: only the browser knows the viewport width, so the
-// server snapshot is `false` and the client has the real answer on its first render — no flash.
+// An external store, not state in an effect: the server snapshot is `false` and the client is right on first render.
 export function useMediaQuery(query: string): boolean {
   const subscribe = useCallback(
     (onChange: () => void) => {

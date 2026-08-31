@@ -58,7 +58,6 @@ describe('CryptoService', () => {
 
     it('rejects a tampered ciphertext (GCM auth tag mismatch)', () => {
       const [iv, authTag, data] = service.encrypt('tamper-me').split(':');
-      // Flip the first byte of the ciphertext.
       const flipped = (data[0] === 'a' ? 'b' : 'a') + data.slice(1);
 
       expect(() => service.decrypt(`${iv}:${authTag}:${flipped}`)).toThrow();

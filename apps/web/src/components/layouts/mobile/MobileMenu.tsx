@@ -15,8 +15,7 @@ const HINT_STORAGE_KEY = 'dropto:menu-hint-seen';
 /**
  * Owns the mobile sidebar drawer and its first-visit swipe hint.
  **/
-// The media query is the single gate: below `md` there is no rail, so the sidebar is a gesture.
-// Above it the drawer, the swipe listener and the hint are never mounted at all.
+// The media query is the single gate: above `md` the drawer, listener and hint never mount at all.
 export default function MobileMenu(sidebar: AccountSidebarProps) {
   const hasSidebar = useMediaQuery(DESKTOP_QUERY);
   const [menuOpen, setMenuOpen] = useState(false);

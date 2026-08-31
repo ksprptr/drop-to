@@ -63,8 +63,7 @@ const ANCESTOR_CACHE_MAX = 500;
 export class GoogleDriveProvider implements StorageProvider {
   readonly backend: StorageBackend = 'drive';
 
-  // Ancestry of *intermediate* folders only — the target item is always re-read, so a deleted item
-  // still 404s. Keyed by folder id; a moved folder is at worst one TTL stale.
+  // Intermediate folders only — the target item is always re-read, so a deleted item still 404s.
   private readonly ancestorCache = new TtlCache<string[]>(ANCESTOR_CACHE_TTL_MS, ANCESTOR_CACHE_MAX);
 
   private readonly logger = new Logger(GoogleDriveProvider.name);
@@ -174,8 +173,7 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Reads the target's parents. Gone in Drive (deleted/trashed) → 404; unreadable for any other
-   * reason → null, letting the ancestor walk end in the usual 403.
+   * Reads the target's parents; gone in Drive → 404, unreadable for any other reason → null.
    **/
   private async getItemParents(drive: drive_v3.Drive, itemId: string): Promise<string[] | null> {
     try {
@@ -196,9 +194,7 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Passes if the id is an authorized root or has one as an ancestor; else 403. Authorized roots are
-   * still verified against Drive — the owner can delete one there, and the stale id would otherwise
-   * reach the API and blow up as an unhandled 404.
+   * Passes if the id is an authorized root or has one as an ancestor; else 403 (roots re-verified against Drive).
    **/
   private async assertItemAllowed(
     drive: drive_v3.Drive,
@@ -254,9 +250,7 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Drops authorized roots that are gone from Drive so the sidebar never offers a folder every
-   * later call would 404 on. A hard 404 means gone for good → the authorization is pruned too;
-   * trashed folders are only hidden (restoring one in Drive brings it back).
+   * Drops roots gone from Drive: a hard 404 unauthorizes them, a trashed folder is only hidden.
    **/
   private async pruneMissingRoots(
     drive: drive_v3.Drive,
@@ -299,9 +293,7 @@ export class GoogleDriveProvider implements StorageProvider {
       orderBy: { createdAt: 'asc' },
     });
 
-    // Deliberately uncached: this call's whole job is to tell the sidebar which roots are still
-    // live in Drive, and it is already one parallel files.get per root. Caching it made a root
-    // deleted in Drive linger in the list (an e2e test caught exactly that).
+    // Deliberately uncached: reporting which roots are still live is the whole job (an e2e caught a cached one lingering).
     return this.pruneMissingRoots(drive, driveAccountId, folders.map(toAllowedFolderEntity));
   }
 
@@ -360,10 +352,7 @@ export class GoogleDriveProvider implements StorageProvider {
     const drive = await this.getDrive(driveAccountId);
     const allowedIds = await this.getAllowedFolderIds(driveAccountId);
 
-    // Breadcrumb names + Drive links. Each id is validated against the authorized tree first: the
-    // OAuth grant covers the owner's whole Drive, so without this an operator could read the name
-    // and link of any file whose id they know. Ids outside the tree resolve to the same empty
-    // placeholder as unreachable ones, so a denied lookup is indistinguishable from a missing one.
+    // Validated first: the grant covers the whole Drive, so an unchecked id would leak any file's name and link.
     return Promise.all(
       ids.map(async (id) => {
         const empty = { id, name: '', webViewLink: null };

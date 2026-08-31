@@ -7,9 +7,7 @@ interface Entry<T> {
 /**
  * A tiny in-process cache with a per-entry TTL and a hard size cap.
  **/
-// In-process on purpose: the app runs as a single API container, so a Redis round-trip would add a
-// dependency (and a failure mode) to a hot path for no gain. Entries are cheap to recompute, so a
-// restart losing them costs nothing.
+// In-process on purpose: one API container, and entries are cheap enough that a restart losing them costs nothing.
 export class TtlCache<T> {
   private readonly entries = new Map<string, Entry<T>>();
 

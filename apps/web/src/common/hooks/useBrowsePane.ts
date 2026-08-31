@@ -42,8 +42,7 @@ export interface BrowsePane {
 /**
  * Owns one browsing pane's state (path, entries, loading, multi-selection).
  **/
-// The split pane keeps its location in local state; the main pane keeps it in the URL. Everything
-// below the location — listing, pagination, selection — is shared with it via the two primitives.
+// Location lives in local state here (the main pane uses the URL); everything below it is shared.
 export function useBrowsePane(
   backend: StorageBackend | null,
   roots: ViewEntry[],
