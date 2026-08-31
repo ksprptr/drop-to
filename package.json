@@ -4,12 +4,12 @@
   "description": "Self-hosted file uploader that lets you route uploads through your own storage backends (Google Drive, S3, and more) instead of your app server's disk.",
   "private": true,
   "author": {
-    "name": "Petr Kašpar",
+    "name": "Petr Ka\u0161par",
     "url": "https://github.com/ksprptr"
   },
   "packageManager": "pnpm@10.34.4",
   "engines": {
-    "node": ">=22",
+    "node": ">=22.12",
     "pnpm": ">=10"
   },
   "scripts": {
@@ -21,15 +21,13 @@
     "prepare": "husky || true"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^8.65.0",
-    "@typescript-eslint/parser": "^8.65.0",
-    "eslint-plugin-import": "^2.32.0",
+    "@typescript-eslint/eslint-plugin": "^8.68.0",
+    "@typescript-eslint/parser": "^8.68.0",
     "eslint-plugin-simple-import-sort": "^14.0.0",
     "eslint-plugin-unused-imports": "^4.4.1",
     "husky": "^9.1.7",
     "prettier": "^3.9.6",
-    "prettier-plugin-tailwindcss": "^0.8.1",
-    "turbo": "^2.10.7",
+    "turbo": "^2.10.12",
     "typescript": "^6.0.3"
   }
 }

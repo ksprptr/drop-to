@@ -1,7 +1,7 @@
 'use client';
 
 import type { StorageBackend, StorageStatus } from '@dropto/types';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
 import { type ReactNode, useEffect, useState } from 'react';
 

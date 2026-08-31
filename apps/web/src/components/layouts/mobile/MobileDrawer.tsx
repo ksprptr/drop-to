@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import { useEffect } from 'react';
 
 import AccountSidebarContent, { type AccountSidebarProps } from '../AccountSidebarContent';

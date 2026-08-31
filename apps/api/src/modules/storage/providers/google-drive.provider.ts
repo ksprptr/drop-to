@@ -12,7 +12,11 @@ import { Archiver, ZipArchive } from 'archiver';
 import { Auth, drive_v3, google } from 'googleapis';
 import { Readable } from 'node:stream';
 
-import { AllowedFolderEntity } from '@/modules/google-auth/entities/allowed-folder.entity';
+import { TtlCache } from '@/common/utils/ttl-cache.functions';
+import {
+  AllowedFolderEntity,
+  toAllowedFolderEntity,
+} from '@/modules/google-auth/entities/allowed-folder.entity';
 import { GoogleAuthService } from '@/modules/google-auth/google-auth.service';
 import { PrismaService } from '@/prisma/prisma.service';
 
@@ -48,12 +52,21 @@ const ITEM_MISSING_MESSAGE = 'This item no longer exists in Google Drive.';
 // One network page. Small enough to keep first paint fast, big enough that most folders need one call.
 const PAGE_SIZE = 100;
 
+/** How long a folder's parent list stays trusted. Ancestry changes only when a folder is moved. */
+const ANCESTOR_CACHE_TTL_MS = 60_000;
+
+const ANCESTOR_CACHE_MAX = 500;
+
 /**
  * StorageProvider over the Drive API; every op is validated to stay inside the authorized folder tree.
  **/
 @Injectable()
 export class GoogleDriveProvider implements StorageProvider {
   readonly backend: StorageBackend = 'drive';
+
+  // Ancestry of *intermediate* folders only — the target item is always re-read, so a deleted item
+  // still 404s. Keyed by folder id; a moved folder is at worst one TTL stale.
+  private readonly ancestorCache = new TtlCache<string[]>(ANCESTOR_CACHE_TTL_MS, ANCESTOR_CACHE_MAX);
 
   private readonly logger = new Logger(GoogleDriveProvider.name);
 
@@ -215,9 +228,19 @@ export class GoogleDriveProvider implements StorageProvider {
         }
         visited.add(id);
 
+        const cached = this.ancestorCache.get(id);
+
+        if (cached) {
+          next.push(...cached);
+          continue;
+        }
+
         try {
           const res = await drive.files.get({ fileId: id, fields: 'id, parents' });
-          next.push(...(res.data.parents ?? []));
+          const parents = res.data.parents ?? [];
+
+          this.ancestorCache.set(id, parents);
+          next.push(...parents);
         } catch {
           // Not reachable (deleted / no access) — treat as not allowed.
           continue;
@@ -277,7 +300,10 @@ export class GoogleDriveProvider implements StorageProvider {
       orderBy: { createdAt: 'asc' },
     });
 
-    return this.pruneMissingRoots(drive, driveAccountId, folders);
+    // Deliberately uncached: this call's whole job is to tell the sidebar which roots are still
+    // live in Drive, and it is already one parallel files.get per root. Caching it made a root
+    // deleted in Drive linger in the list (an e2e test caught exactly that).
+    return this.pruneMissingRoots(drive, driveAccountId, folders.map(toAllowedFolderEntity));
   }
 
   async listContents(folderId: string, options: ListContentsOptions = {}): Promise<ContentsPage> {

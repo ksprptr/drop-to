@@ -1,7 +1,7 @@
 'use client';
 
 import type { StorageBackend } from '@dropto/types';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import { useState } from 'react';
 
 import { fileDownloadUrl } from '@/common/services/api/storage.client';

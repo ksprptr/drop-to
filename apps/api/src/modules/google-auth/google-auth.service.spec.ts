@@ -206,16 +206,21 @@ describe('GoogleAuthService', () => {
 
   describe('saveAllowedFolders', () => {
     it('upserts each selected folder in a transaction and returns the updated list', async () => {
+      // Prisma hands back a Date; the entity exposes the ISO string the wire contract declares.
       const saved = [
         { id: 'f1', folderId: 'drive-1', name: 'Photos', createdAt: new Date('2026-01-01') },
       ];
+      const expected = saved.map((folder) => ({
+        ...folder,
+        createdAt: folder.createdAt.toISOString(),
+      }));
       prisma.driveAccount.findFirst.mockResolvedValue({ id: 'acc-1' });
       prisma.$transaction.mockResolvedValue([]);
       prisma.allowedFolder.findMany.mockResolvedValue(saved);
 
       const dto = { folders: [{ folderId: 'drive-1', name: 'Photos' }] };
 
-      await expect(service.saveAllowedFolders(dto)).resolves.toEqual(saved);
+      await expect(service.saveAllowedFolders(dto)).resolves.toEqual(expected);
       expect(prisma.allowedFolder.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { driveAccountId_folderId: { driveAccountId: 'acc-1', folderId: 'drive-1' } },
@@ -240,6 +245,10 @@ describe('GoogleAuthService', () => {
       const allowedFolders = [
         { id: 'f1', folderId: 'drive-1', name: 'Photos', createdAt: new Date('2026-01-01') },
       ];
+      const expectedFolders = allowedFolders.map((folder) => ({
+        ...folder,
+        createdAt: folder.createdAt.toISOString(),
+      }));
       prisma.driveAccount.findFirst.mockResolvedValue({
         email: 'owner@gmail.com',
         allowedFolders,
@@ -248,7 +257,7 @@ describe('GoogleAuthService', () => {
       await expect(service.getStatus()).resolves.toEqual({
         connected: true,
         email: 'owner@gmail.com',
-        allowedFolders,
+        allowedFolders: expectedFolders,
       });
     });
   });

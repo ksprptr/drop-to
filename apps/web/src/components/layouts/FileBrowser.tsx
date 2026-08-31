@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   type ChangeEvent,
   type DragEvent,
@@ -13,6 +13,7 @@ import {
 } from 'react';
 
 import { DESKTOP_QUERY } from '@/common/constants/layout.constants';
+import { useDebouncedValue } from '@/common/hooks/useDebouncedValue';
 import { useMediaQuery } from '@/common/hooks/useMediaQuery';
 import type {
   Crumb,
@@ -29,6 +30,9 @@ import Breadcrumb, { type BreadcrumbStoragePicker } from './Breadcrumb';
 
 /** Custom DataTransfer type marking an internal drag-to-move (vs an OS file drop). */
 const MOVE_MIME = 'application/x-dropto-move';
+
+/** Delay before a typed query re-filters the list; the input itself stays instant. */
+const FILTER_DEBOUNCE_MS = 150;
 
 /** Dropdown-menu open/close animation (fade + zoom + slight slide), shadcn-style. */
 const MENU_MOTION = {
@@ -291,8 +295,10 @@ export default function FileBrowser({
     };
   }, [menu, toolbarMenu]);
 
-  // Instant client-side filter (superset of Drive's server-side filter; also covers roots + S3).
-  const query = searchQuery.trim().toLowerCase();
+  // Client-side filter (superset of Drive's server-side filter; also covers roots + S3). Debounced
+  // so a keystroke only re-renders the input: without it every character re-filtered, re-sorted and
+  // re-rendered the whole list, in both panes.
+  const query = useDebouncedValue(searchQuery.trim().toLowerCase(), FILTER_DEBOUNCE_MS);
   const sorted = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1;
     const list = query

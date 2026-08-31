@@ -50,7 +50,7 @@ export interface ResumableUploadSession {
 }
 
 /** How far a resumable session got — so a dropped upload resumes from `receivedBytes` (never re-uploads whole). */
-export interface UploadStatus {
+export interface ResumableUploadStatus {
   complete: boolean;
   receivedBytes: number;
   fileId: string | null;

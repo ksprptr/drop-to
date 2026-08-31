@@ -2,9 +2,9 @@ packages:
   - 'apps/*'
   - 'packages/*'
 overrides:
-  # googleapis 173 pulls google-auth-library ^10.2.0 (10.9.0) while its own
-  # googleapis-common pins 10.5.0 exactly — two copies make the OAuth2Client
-  # types incompatible. Dedupe to a single (latest) version.
+  # googleapis 176 and its googleapis-common both pin google-auth-library 10.5.0, but other
+  # dependents resolve 10.9.0 — without this override pnpm installs both copies and the two
+  # OAuth2Client types stop being assignable. Dedupe to a single (latest) version.
   google-auth-library: 10.9.0
   # Security: force patched transitive versions (advisories on the ranges Next
   # pulled). sharp < 0.35.0 = libvips CVEs (image optimization, production);

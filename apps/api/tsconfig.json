@@ -5,7 +5,7 @@
     "moduleResolution": "NodeNext",
     "ignoreDeprecations": "6.0",
     "target": "ES2025",
-    "types": ["node", "jest"],
+    "types": ["node"],
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
@@ -14,6 +14,7 @@
     "rootDir": "./src",
     "outDir": "./dist",
     "incremental": true,
+    "tsBuildInfoFile": "./dist/tsconfig.tsbuildinfo",
     "strictPropertyInitialization": false,
     "paths": {
       "@/*": ["./src/*"],

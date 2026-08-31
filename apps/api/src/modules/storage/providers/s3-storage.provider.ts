@@ -218,7 +218,8 @@ export class S3StorageProvider implements StorageProvider {
       id: encodeId({ bucket, key: '' }),
       folderId: encodeId({ bucket, key: '' }),
       name: bucket,
-      createdAt: new Date(0),
+      // Buckets carry no creation date of their own; the epoch keeps the shape uniform.
+      createdAt: new Date(0).toISOString(),
     }));
   }
 

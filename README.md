@@ -85,9 +85,9 @@ From here, either run everything in Docker ([Docker](#docker), recommended) or r
 Native development, with only the infrastructure in Docker:
 
 ```bash
-docker compose -f docker-compose.infra.yml up -d   # Postgres + Redis
-pnpm --filter api run prisma:migrate:deploy        # first run only
-pnpm dev                                           # api :4000, web :3000
+docker compose up -d dropto-pg dropto-redis   # infrastructure only — builds no app image
+pnpm --filter api run prisma:migrate:deploy   # first run only
+pnpm dev                                      # api :4000, web :3000
 ```
 
 Other scripts (run from the monorepo root):

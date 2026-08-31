@@ -1,6 +1,5 @@
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
-import importPlugin from 'eslint-plugin-import';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import unusedImports from 'eslint-plugin-unused-imports';
 
@@ -8,7 +7,6 @@ import unusedImports from 'eslint-plugin-unused-imports';
 export const parser = tsParser;
 
 export const plugins = {
-  import: importPlugin,
   'unused-imports': unusedImports,
   'simple-import-sort': simpleImportSort,
   '@typescript-eslint': tsPlugin,
@@ -41,5 +39,4 @@ export const rules = {
     { groups: [['^\\u0000', '^@?\\w'], ['^@/'], ['^\\.'], ['^.+\\.(css|scss)$']] },
   ],
   'simple-import-sort/exports': 'error',
-  'import/no-named-as-default-member': 'warn',
 };

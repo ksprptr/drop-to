@@ -12,7 +12,7 @@ import { type GoogleConfig, googleConfig } from '@/config/google.config';
 import { PrismaService } from '@/prisma/prisma.service';
 
 import { SaveFoldersDto } from './dto/save-folders.dto';
-import { AllowedFolderEntity } from './entities/allowed-folder.entity';
+import { AllowedFolderEntity, toAllowedFolderEntity } from './entities/allowed-folder.entity';
 import { DriveAccountStatusEntity } from './entities/drive-account-status.entity';
 import { DRIVE_OWNER_TTL_MS } from './google-auth.constants';
 
@@ -237,11 +237,13 @@ export class GoogleAuthService {
       ),
     );
 
-    return this.prismaService.allowedFolder.findMany({
+    const folders = await this.prismaService.allowedFolder.findMany({
       where: { driveAccountId },
       select: { id: true, folderId: true, name: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     });
+
+    return folders.map(toAllowedFolderEntity);
   }
 
   /**
@@ -265,7 +267,7 @@ export class GoogleAuthService {
     return {
       connected: true,
       email: account.email,
-      allowedFolders: account.allowedFolders,
+      allowedFolders: account.allowedFolders.map(toAllowedFolderEntity),
     };
   }
 
