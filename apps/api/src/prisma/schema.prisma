@@ -16,14 +16,6 @@ datasource db {
 }
 
 //
-// Enums
-//
-enum UploadStatus {
-  SUCCESS
-  FAILED
-}
-
-//
 // Models
 //
 
@@ -87,19 +79,4 @@ model RefreshToken {
   @@index([subject], map: "idx_refresh_token_subject")
   @@index([expiresAt], map: "idx_refresh_token_expires_at")
   @@map("refresh_tokens")
-}
-
-/// Audit trail of upload attempts for the history view.
-model UploadLog {
-  id        String       @id @default(uuid())
-  fileName  String       @map("file_name")
-  folderId  String       @map("folder_id")
-  fileId    String?      @map("file_id")
-  size      BigInt?
-  status    UploadStatus
-  error     String?
-  createdAt DateTime     @default(now()) @map("created_at")
-
-  @@index([createdAt], map: "idx_upload_log_created_at")
-  @@map("upload_logs")
 }

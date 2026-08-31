@@ -54,8 +54,7 @@ export const ModelName = {
   AuthState: 'AuthState',
   DriveAccount: 'DriveAccount',
   AllowedFolder: 'AllowedFolder',
-  RefreshToken: 'RefreshToken',
-  UploadLog: 'UploadLog'
+  RefreshToken: 'RefreshToken'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -117,20 +116,6 @@ export const RefreshTokenScalarFieldEnum = {
 } as const
 
 export type RefreshTokenScalarFieldEnum = (typeof RefreshTokenScalarFieldEnum)[keyof typeof RefreshTokenScalarFieldEnum]
-
-
-export const UploadLogScalarFieldEnum = {
-  id: 'id',
-  fileName: 'fileName',
-  folderId: 'folderId',
-  fileId: 'fileId',
-  size: 'size',
-  status: 'status',
-  error: 'error',
-  createdAt: 'createdAt'
-} as const
-
-export type UploadLogScalarFieldEnum = (typeof UploadLogScalarFieldEnum)[keyof typeof UploadLogScalarFieldEnum]
 
 
 export const SortOrder = {

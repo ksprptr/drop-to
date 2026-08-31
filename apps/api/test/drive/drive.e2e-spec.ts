@@ -107,10 +107,15 @@ describe('Drive (integration)', () => {
 
     it('resolves the display name + Drive link for each requested id', async () => {
       connectAccountWithRoots('root-1');
-      driveFilesMock.get.mockImplementation(({ fileId }: { fileId: string }) =>
-        Promise.resolve({
-          data: { id: fileId, name: `folder-${fileId}`, webViewLink: `http://view/${fileId}` },
-        }),
+      // "a" and "b" sit inside the authorized root; the walk runs before the metadata read.
+      driveFilesMock.get.mockImplementation(({ fileId, fields }: { fileId: string; fields: string }) =>
+        Promise.resolve(
+          fields === 'id, parents, trashed'
+            ? { data: { id: fileId, parents: ['root-1'], trashed: false } }
+            : {
+                data: { id: fileId, name: `folder-${fileId}`, webViewLink: `http://view/${fileId}` },
+              },
+        ),
       );
 
       const res = await request(app.getHttpServer())
@@ -123,6 +128,38 @@ describe('Drive (integration)', () => {
         { id: 'a', name: 'folder-a', webViewLink: 'http://view/a' },
         { id: 'b', name: 'folder-b', webViewLink: 'http://view/b' },
       ]);
+    });
+
+    it('returns an empty placeholder for an id outside the authorized tree', async () => {
+      connectAccountWithRoots('root-1');
+      // Parented somewhere else in the owner's Drive: reachable by the OAuth grant, not by the app.
+      driveFilesMock.get.mockImplementation(({ fileId, fields }: { fileId: string; fields: string }) =>
+        Promise.resolve(
+          fields === 'id, parents, trashed'
+            ? { data: { id: fileId, parents: ['someone-elses-folder'], trashed: false } }
+            : { data: { id: fileId, name: 'Tax return.pdf', webViewLink: 'http://view/secret' } },
+        ),
+      );
+
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/storage/drive/names')
+        .query({ ids: 'outsider' })
+        .set('Cookie', accessCookie());
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([{ id: 'outsider', name: '', webViewLink: null }]);
+    });
+
+    it('rejects more ids than the per-request cap (400)', async () => {
+      connectAccountWithRoots('root-1');
+
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/storage/drive/names')
+        .query({ ids: Array.from({ length: 51 }, (_, i) => `id-${i}`).join(',') })
+        .set('Cookie', accessCookie());
+
+      expect(res.status).toBe(400);
+      expect(driveFilesMock.get).not.toHaveBeenCalled();
     });
   });
 
@@ -183,9 +220,6 @@ describe('Drive (integration)', () => {
         size: 5,
         webViewLink: 'http://view/up-1',
       });
-      expect(prisma.uploadLog.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: 'SUCCESS' }) }),
-      );
     });
 
     it('returns 400 when no file is attached', async () => {

@@ -42,7 +42,6 @@ import {
   StorageDisconnectedException,
 } from '../storage.errors';
 import { finalizeArchiveInBackground, sanitizeZipEntryPath } from '../storage.functions';
-import { logUploadFailure, logUploadSuccess } from '../upload-log.functions';
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const MAX_ANCESTOR_DEPTH = 50;
@@ -359,15 +358,27 @@ export class GoogleDriveProvider implements StorageProvider {
   async resolveNames(ids: string[]): Promise<ResolvedNameEntity[]> {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
     const drive = await this.getDrive(driveAccountId);
+    const allowedIds = await this.getAllowedFolderIds(driveAccountId);
 
-    // Breadcrumb names + Drive links only — one parallel files.get per id, no ancestor walk (data access still validates the full tree).
+    // Breadcrumb names + Drive links. Each id is validated against the authorized tree first: the
+    // OAuth grant covers the owner's whole Drive, so without this an operator could read the name
+    // and link of any file whose id they know. Ids outside the tree resolve to the same empty
+    // placeholder as unreachable ones, so a denied lookup is indistinguishable from a missing one.
     return Promise.all(
       ids.map(async (id) => {
+        const empty = { id, name: '', webViewLink: null };
+
+        try {
+          await this.assertItemAllowed(drive, id, allowedIds);
+        } catch {
+          return empty;
+        }
+
         try {
           const res = await drive.files.get({ fileId: id, fields: 'id, name, webViewLink' });
           return { id, name: res.data.name ?? '', webViewLink: res.data.webViewLink ?? null };
         } catch {
-          return { id, name: '', webViewLink: null };
+          return empty;
         }
       }),
     );
@@ -396,32 +407,25 @@ export class GoogleDriveProvider implements StorageProvider {
 
     await this.assertItemAllowed(drive, folderId, allowedIds);
 
-    try {
-      const res = await drive.files.create(
-        {
-          requestBody: { name: fileName, parents: [folderId] },
-          media: { mimeType, body },
-          fields: 'id, name, size, webViewLink',
-        },
-        { signal },
-      );
+    const res = await drive.files.create(
+      {
+        requestBody: { name: fileName, parents: [folderId] },
+        media: { mimeType, body },
+        fields: 'id, name, size, webViewLink',
+      },
+      { signal },
+    );
 
-      const size = this.parseSize(res.data.size);
+    const size = this.parseSize(res.data.size);
 
-      await logUploadSuccess(this.prismaService, { fileName, folderId, fileId: res.data.id, size });
+    this.logger.log(`Uploaded "${fileName}" (${res.data.id}) into ${folderId}.`);
 
-      this.logger.log(`Uploaded "${fileName}" (${res.data.id}) into ${folderId}.`);
-
-      return {
-        fileId: res.data.id ?? '',
-        fileName: res.data.name ?? fileName,
-        size,
-        webViewLink: res.data.webViewLink ?? null,
-      };
-    } catch (error) {
-      await logUploadFailure(this.prismaService, { fileName, folderId, error, signal });
-      throw error;
-    }
+    return {
+      fileId: res.data.id ?? '',
+      fileName: res.data.name ?? fileName,
+      size,
+      webViewLink: res.data.webViewLink ?? null,
+    };
   }
 
   /**
@@ -519,13 +523,6 @@ export class GoogleDriveProvider implements StorageProvider {
 
     const size = this.parseSize(res.data.size);
     const fileName = res.data.name ?? '';
-
-    await logUploadSuccess(this.prismaService, {
-      fileName,
-      folderId: res.data.parents?.[0] ?? '',
-      fileId: res.data.id,
-      size,
-    });
 
     this.logger.log(`Finalized upload "${fileName}" (${res.data.id}).`);
 

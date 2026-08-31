@@ -9,6 +9,7 @@ import {
 } from '@/common/constants/auth.constants';
 import { refreshSession } from '@/common/services/auth/refresh.server';
 import { applyAuthCookies, type ParsedSetCookie } from '@/common/services/auth/tokens.server';
+import { forwardedForHeader } from '@/common/utils/client-ip.functions';
 import { isAccessTokenFresh } from '@/common/utils/jwt.functions';
 import { appServerConfig } from '@/configs/app/app.server-config';
 
@@ -77,9 +78,9 @@ export const apiAuthHeaders = async (
     result.set('cookie', cookieHeader);
   }
 
-  const clientIp = headersList.get('cf-connecting-ip') ?? headersList.get('x-forwarded-for');
-  if (clientIp) {
-    result.set('x-forwarded-for', clientIp);
+  const forwardedFor = forwardedForHeader(headersList);
+  if (forwardedFor) {
+    result.set('x-forwarded-for', forwardedFor);
   }
 
   return result;

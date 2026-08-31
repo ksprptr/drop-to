@@ -54,6 +54,13 @@ import { sanitizeUploadFilename } from './storage.functions';
 import { StorageRegistry } from './storage.registry';
 
 /**
+ * Cap on `GET :backend/names?ids=` — each id costs an authorization walk plus a metadata read.
+ **/
+// The only caller resolves one breadcrumb, so the real request is a handful of ids and this never
+// binds; it exists so a crafted `ids=` can't fan one request out into unbounded upstream calls.
+const MAX_RESOLVE_IDS = 50;
+
+/**
  * Documents the `:backend` path param (drive | s3) on the routes that carry it.
  **/
 const BackendParam = () =>
@@ -114,16 +121,18 @@ export class StorageController {
 
   @ApiOperation({ summary: 'Resolve display names for a set of ids (breadcrumb rebuild)' })
   @ApiOkResponse({ type: [ResolvedNameEntity], description: 'Id → name pairs' })
+  @ApiBadRequestResponse({ type: ResponseEntity, description: 'Too many ids' })
   @BackendParam()
   @Get(':backend/names')
   async resolveNames(
     @Param('backend') backend: string,
     @Query('ids') ids?: string,
   ): Promise<ResolvedNameEntity[]> {
-    const list = (ids ?? '')
-      .split(',')
-      .map((id) => id.trim())
-      .filter(Boolean);
+    const list = [...new Set((ids ?? '').split(',').map((id) => id.trim()).filter(Boolean))];
+
+    if (list.length > MAX_RESOLVE_IDS) {
+      throw new BadRequestException(`At most ${MAX_RESOLVE_IDS} ids can be resolved per request.`);
+    }
 
     return list.length === 0 ? [] : this.registry.resolve(backend).resolveNames(list);
   }

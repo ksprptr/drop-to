@@ -32,7 +32,6 @@ describe('GoogleDriveProvider', () => {
   let googleAuth: { getActiveAccountId: jest.Mock; getAuthorizedClient: jest.Mock };
   let prisma: {
     allowedFolder: { findMany: jest.Mock };
-    uploadLog: { create: jest.Mock };
   };
 
   /**
@@ -57,7 +56,6 @@ describe('GoogleDriveProvider', () => {
     };
     prisma = {
       allowedFolder: { findMany: jest.fn() },
-      uploadLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
 
     service = new GoogleDriveProvider(
@@ -246,14 +244,9 @@ describe('GoogleDriveProvider', () => {
         size: 1024,
         webViewLink: 'http://view',
       });
-      expect(prisma.uploadLog.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ status: 'SUCCESS', fileId: 'up-1' }),
-        }),
-      );
     });
 
-    it('logs a FAILED entry and rethrows when the Drive upload fails', async () => {
+    it('rethrows when the Drive upload fails', async () => {
       withAllowedRoots('root-1');
       files.create.mockRejectedValue(new Error('quota exceeded'));
 
@@ -264,44 +257,59 @@ describe('GoogleDriveProvider', () => {
           mimeType: 'image/jpeg',
         }),
       ).rejects.toThrow('quota exceeded');
-
-      expect(prisma.uploadLog.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ status: 'FAILED', error: 'quota exceeded' }),
-        }),
-      );
     });
   });
 
   describe('resolveNames', () => {
-    it('resolves each id to its name + Drive link with a single parallel files.get (no ancestor walk)', async () => {
-      files.get.mockImplementation(({ fileId }: { fileId: string }) =>
-        Promise.resolve({
-          data: { id: fileId, name: `name-${fileId}`, webViewLink: `http://view/${fileId}` },
-        }),
+    it('resolves each authorized id to its name + Drive link', async () => {
+      withAllowedRoots('a', 'b');
+      files.get.mockImplementation(({ fileId, fields }: { fileId: string; fields: string }) =>
+        Promise.resolve(
+          fields === 'id, parents, trashed'
+            ? { data: { id: fileId, parents: [] } }
+            : {
+                data: { id: fileId, name: `name-${fileId}`, webViewLink: `http://view/${fileId}` },
+              },
+        ),
       );
 
-      const result = await service.resolveNames(['a', 'b']);
-
-      expect(result).toEqual([
+      await expect(service.resolveNames(['a', 'b'])).resolves.toEqual([
         { id: 'a', name: 'name-a', webViewLink: 'http://view/a' },
         { id: 'b', name: 'name-b', webViewLink: 'http://view/b' },
       ]);
-      // One lookup per id, fetching only id + name + link — never the parents walk.
-      expect(files.get).toHaveBeenCalledTimes(2);
       expect(files.get).toHaveBeenCalledWith({ fileId: 'a', fields: 'id, name, webViewLink' });
     });
 
     it('falls back to an empty name / null link for ids the app cannot see', async () => {
-      files.get
-        .mockResolvedValueOnce({ data: { id: 'ok', name: 'Visible', webViewLink: 'http://view' } })
-        .mockRejectedValueOnce(new Error('404 Not Found'));
+      withAllowedRoots('ok');
+      files.get.mockImplementation(({ fileId, fields }: { fileId: string; fields: string }) => {
+        if (fields === 'id, parents, trashed') {
+          return Promise.resolve({ data: { id: fileId, parents: [] } });
+        }
+        return fileId === 'ok'
+          ? Promise.resolve({ data: { id: 'ok', name: 'Visible', webViewLink: 'http://view' } })
+          : Promise.reject(new Error('404 Not Found'));
+      });
 
-      const result = await service.resolveNames(['ok', 'hidden']);
-
-      expect(result).toEqual([
+      await expect(service.resolveNames(['ok', 'hidden'])).resolves.toEqual([
         { id: 'ok', name: 'Visible', webViewLink: 'http://view' },
         { id: 'hidden', name: '', webViewLink: null },
+      ]);
+    });
+
+    it('does not leak the name of a file outside the authorized tree', async () => {
+      withAllowedRoots('root-1');
+      // The id resolves in Drive (the grant covers the whole account) but hangs off another tree.
+      files.get.mockImplementation(({ fileId, fields }: { fileId: string; fields: string }) =>
+        Promise.resolve(
+          fields === 'id, parents, trashed'
+            ? { data: { id: fileId, parents: ['somewhere-else'] } }
+            : { data: { id: fileId, name: 'Tax return 2025.pdf', webViewLink: 'http://view' } },
+        ),
+      );
+
+      await expect(service.resolveNames(['outsider'])).resolves.toEqual([
+        { id: 'outsider', name: '', webViewLink: null },
       ]);
     });
   });

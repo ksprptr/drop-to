@@ -11,11 +11,16 @@ overrides:
   # postcss <= 8.5.17 = arbitrary file read / path traversal (build-time CSS).
   sharp: ^0.35.3
   postcss: ^8.5.23
-  # Build/dev-tooling transitives (Prisma dev, ajv, glob). Patched within-major
-  # (no breaking bump): fast-uri host confusion, brace-expansion 5.x DoS,
-  # @hono/node-server middleware bypass / path traversal, valibot flatten() throw.
-  fast-uri@3: 3.1.4
-  brace-expansion: 5.0.8
+  # Build/dev-tooling transitives (Prisma dev, ajv, glob, eslint). None sit in the running
+  # server's request path; they are pinned so `pnpm audit` stays clean and a vulnerable copy
+  # cannot sneak into a build. Patched within-major only (no breaking bump).
+  # Keep these at or above the advisory's patched version — a stale pin is worse than none,
+  # because it silently holds the vulnerable copy in place.
+  fast-uri@3: 3.1.5
+  brace-expansion: 5.0.9
+  # cross-spawn <7.0.5 ReDoS; tmp <0.2.6 path traversal via unsanitized prefix.
+  cross-spawn: ^7.0.6
+  tmp: ^0.2.6
   '@hono/node-server': ^1.19.17
   valibot: ^1.4.2
   # js-yaml 5.x flow-collection DoS (only the 5.x copy under @nestjs/swagger, dev-only);

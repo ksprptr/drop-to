@@ -25,7 +25,6 @@ export interface PrismaMock {
     updateMany: jest.Mock;
     deleteMany: jest.Mock;
   };
-  uploadLog: { create: jest.Mock };
 }
 
 /**
@@ -76,7 +75,6 @@ export const createPrismaMock = (): PrismaMock => {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
-    uploadLog: { create: jest.fn().mockResolvedValue(undefined) },
   };
 
   return mock;
@@ -107,5 +105,4 @@ export const resetPrismaMock = (mock: PrismaMock): void => {
   mock.refreshToken.update.mockReset().mockResolvedValue(undefined);
   mock.refreshToken.updateMany.mockReset().mockResolvedValue({ count: 1 });
   mock.refreshToken.deleteMany.mockReset().mockResolvedValue({ count: 0 });
-  mock.uploadLog.create.mockReset().mockResolvedValue(undefined);
 };

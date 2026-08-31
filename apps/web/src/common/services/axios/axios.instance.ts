@@ -8,6 +8,7 @@ import {
   REFRESH_TOKEN_COOKIE,
 } from '@/common/constants/auth.constants';
 import { ApiUnavailableError } from '@/common/services/axios/axios.errors';
+import { forwardedForHeader } from '@/common/utils/client-ip.functions';
 import { appServerConfig } from '@/configs/app/app.server-config';
 
 // Server-only axios for the API, scoped to the request's cookies; tokens never reach the browser.
@@ -37,9 +38,9 @@ export const getHttp = async (): Promise<AxiosInstance> => {
     }
 
     // Forward the real client IP so the API's IP-keyed rate limiter isn't blind.
-    const clientIp = headersList.get('cf-connecting-ip') ?? headersList.get('x-forwarded-for');
-    if (clientIp) {
-      config.headers.set('X-Forwarded-For', clientIp);
+    const forwardedFor = forwardedForHeader(headersList);
+    if (forwardedFor) {
+      config.headers.set('X-Forwarded-For', forwardedFor);
     }
 
     // Drop JSON content-type for multipart so the boundary is kept.

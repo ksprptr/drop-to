@@ -5,7 +5,9 @@ import { GlobalExceptionFilter } from './global-exception.filter';
 /**
  * Captures the response `status()`/`json()` calls a filter makes.
  **/
-const buildHost = (): {
+const buildHost = (
+  url = '/api/v1/x',
+): {
   host: ArgumentsHost;
   status: jest.Mock;
   json: jest.Mock;
@@ -15,7 +17,7 @@ const buildHost = (): {
   const host = {
     switchToHttp: () => ({
       getResponse: () => ({ status }),
-      getRequest: () => ({ method: 'GET', url: '/api/v1/x', ip: '127.0.0.1' }),
+      getRequest: () => ({ method: 'GET', url, ip: '127.0.0.1' }),
     }),
   } as unknown as ArgumentsHost;
 
@@ -74,5 +76,27 @@ describe('GlobalExceptionFilter', () => {
 
     filter.catch(new Error('unknown'), buildHost().host);
     expect(error).toHaveBeenCalledTimes(1);
+  });
+
+  it('redacts bearer-grade query values before logging the URL', () => {
+    const warn = jest.spyOn(filter['logger'], 'warn');
+    const { host } = buildHost('/google-auth/google/callback?code=4/secret&state=nonce&scope=drive');
+
+    filter.catch(new NotFoundException('nope'), host);
+
+    const logged = warn.mock.calls[0][0] as string;
+    expect(logged).not.toContain('4/secret');
+    expect(logged).not.toContain('nonce');
+    expect(logged).toContain('code=%5Bredacted%5D');
+    // Non-sensitive params survive, so the log is still useful for debugging.
+    expect(logged).toContain('scope=drive');
+  });
+
+  it('leaves a query-less URL untouched', () => {
+    const warn = jest.spyOn(filter['logger'], 'warn');
+
+    filter.catch(new NotFoundException('nope'), buildHost('/api/v1/storage/drive/folders').host);
+
+    expect(warn.mock.calls[0][0]).toContain('/api/v1/storage/drive/folders');
   });
 });

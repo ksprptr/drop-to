@@ -24,7 +24,6 @@ import { Readable } from 'node:stream';
 
 import { type S3Config, s3Config } from '@/config/s3.config';
 import { AllowedFolderEntity } from '@/modules/google-auth/entities/allowed-folder.entity';
-import { PrismaService } from '@/prisma/prisma.service';
 
 import { DriveEntryEntity } from '../entities/drive-entry.entity';
 import { ResolvedNameEntity } from '../entities/resolved-name.entity';
@@ -48,7 +47,6 @@ import {
   StorageDisconnectedException,
 } from '../storage.errors';
 import { finalizeArchiveInBackground, sanitizeZipEntryPath } from '../storage.functions';
-import { logUploadFailure, logUploadSuccess } from '../upload-log.functions';
 
 /** Marker used for zero-byte "folder" objects (a prefix ending in a slash). */
 const FOLDER_SUFFIX = '/';
@@ -146,10 +144,7 @@ export class S3StorageProvider implements StorageProvider {
   // Buckets already reported as gone, so the warning is logged once per disappearance.
   private readonly missingBuckets = new Set<string>();
 
-  constructor(
-    @Inject(s3Config.KEY) private readonly cfg: S3Config,
-    private readonly prismaService: PrismaService,
-  ) {
+  constructor(@Inject(s3Config.KEY) private readonly cfg: S3Config) {
     this.allowedBuckets = new Set(cfg.buckets);
   }
 
@@ -310,8 +305,6 @@ export class S3StorageProvider implements StorageProvider {
 
       const size = await this.headSize(ref.bucket, key);
 
-      await logUploadSuccess(this.prismaService, { fileName, folderId, fileId: key, size });
-
       this.logger.log(`Uploaded "${fileName}" into ${ref.bucket}/${key}.`);
 
       return {
@@ -321,7 +314,6 @@ export class S3StorageProvider implements StorageProvider {
         webViewLink: null,
       };
     } catch (error) {
-      await logUploadFailure(this.prismaService, { fileName, folderId, error, signal });
       throw this.toHttpError(error);
     } finally {
       signal?.removeEventListener('abort', onAbort);
