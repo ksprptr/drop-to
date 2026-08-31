@@ -2,20 +2,16 @@
 
 import type { StorageBackend, StorageStatus } from '@dropto/types';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   claimDriveOwnerAction,
   disconnectAction,
-  removeFolderAction,
   revokeDriveOwnerAction,
   saveFoldersAction,
 } from '@/actions/auth/auth.actions';
 import {
-  createFolderAction,
-  deleteItemAction,
   moveItemAction,
-  renameItemAction,
   resolvePathAction,
   statusesAction,
 } from '@/actions/storage/storage.actions';
@@ -23,27 +19,15 @@ import { DESKTOP_QUERY } from '@/common/constants/layout.constants';
 import { useBrowsePane } from '@/common/hooks/useBrowsePane';
 import { useDebouncedValue } from '@/common/hooks/useDebouncedValue';
 import { useEntryListing } from '@/common/hooks/useEntryListing';
+import { useEntryOperations } from '@/common/hooks/useEntryOperations';
 import { useEntrySelection } from '@/common/hooks/useEntrySelection';
 import { useMediaQuery } from '@/common/hooks/useMediaQuery';
 import { useUploadQueue } from '@/common/hooks/useUploadQueue';
-import {
-  fileDownloadUrl,
-  folderDownloadUrl,
-} from '@/common/services/api/storage.client';
+import { fileDownloadUrl, folderDownloadUrl } from '@/common/services/api/storage.client';
 import { type PickedFolder, usePicker } from '@/common/services/picker/usePicker';
-import type {
-  Crumb,
-  SortDir,
-  SortKey,
-  ViewEntry,
-} from '@/common/types/workspace.types';
+import type { Crumb, SortDir, SortKey, ViewEntry } from '@/common/types/workspace.types';
 import { extractApiErrorMessage } from '@/common/utils/error.functions';
 import { buildWorkspaceUrl, slugify } from '@/common/utils/storage-url';
-import Button from '@/components/common/Button';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
-import Icon from '@/components/common/Icon';
-import Input from '@/components/common/Input';
-import Modal from '@/components/common/Modal';
 import { useToast } from '@/components/providers/ToastProvider';
 import { UploadProvider, useUploadActions } from '@/components/providers/UploadProvider';
 import { STORAGE_ICON } from '@/configs/storage.config';
@@ -54,6 +38,7 @@ import FileBrowser from './FileBrowser';
 import MobileMenu from './mobile/MobileMenu';
 import PreviewPanel from './PreviewPanel';
 import UploadDock from './UploadDock';
+import WorkspaceDialogs from './WorkspaceDialogs';
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const DOWNLOAD_PREPARING_MS = 6000;
@@ -79,29 +64,6 @@ const pickDefaultBackend = (statuses: StorageStatus[]): StorageBackend | null =>
   statuses.find((status) => status.connected)?.backend ?? null;
 
 /**
- * Splits a name into base + extension (leading/trailing dot = no extension).
- **/
-const splitExtension = (name: string): { base: string; ext: string } => {
-  const dot = name.lastIndexOf('.');
-  if (dot <= 0 || dot === name.length - 1) {
-    return { base: name, ext: '' };
-  }
-  return { base: name.slice(0, dot), ext: name.slice(dot) };
-};
-
-/** A pending extension change awaiting confirmation (the "modal on a modal"). */
-interface ExtensionWarning {
-  /** The name exactly as typed (keeps the new extension). */
-  use: string;
-  /** The typed base name but with the original extension kept. */
-  keep: string;
-  /** The original extension (`''` when the file had none). */
-  fromExt: string;
-  /** The new extension (`''` when the new name has none). */
-  toExt: string;
-}
-
-/**
  * Main workspace: sidebar + file browser + preview, with uploads and account management.
  **/
 function WorkspaceInner({
@@ -125,26 +87,10 @@ function WorkspaceInner({
   const [path, setPath] = useState<Crumb[]>(initialPath ?? []);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<ViewEntry | null>(null);
-  const [confirmTarget, setConfirmTarget] = useState<ViewEntry | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [unselectTarget, setUnselectTarget] = useState<ViewEntry | null>(null);
-  const [unselecting, setUnselecting] = useState(false);
-  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
   const canSplit = useMediaQuery(DESKTOP_QUERY);
   const [split, setSplit] = useState(false);
   const [activePane, setActivePane] = useState<0 | 1>(0);
-  const [bulkPane, setBulkPane] = useState<0 | 1>(0);
   const [dragMove, setDragMove] = useState<{ ids: string[]; sourcePane: 0 | 1 } | null>(null);
-  const [renameTarget, setRenameTarget] = useState<ViewEntry | null>(null);
-  const [renameName, setRenameName] = useState('');
-  const [renaming, setRenaming] = useState(false);
-  const [pendingRename, setPendingRename] = useState<string | null>(null);
-  const [extWarning, setExtWarning] = useState<ExtensionWarning | null>(null);
-  const [newFolderOpen, setNewFolderOpen] = useState(false);
-  const [newFolderName, setNewFolderName] = useState('');
-  const [newFolderPane, setNewFolderPane] = useState<0 | 1>(0);
-  const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -304,7 +250,9 @@ function WorkspaceInner({
     ]);
     setSelected(null);
 
-    const missing = restIds.filter((id) => !nameCache.current.has(id) || !linkCache.current.has(id));
+    const missing = restIds.filter(
+      (id) => !nameCache.current.has(id) || !linkCache.current.has(id),
+    );
     if (missing.length === 0) {
       return;
     }
@@ -601,6 +549,15 @@ function WorkspaceInner({
   );
 
   // Uploads (duplicate prompt, folder creation, progress, rollback) live in their own hook.
+  const paneAccess = useMemo(
+    () => ({
+      folderId: (pane: 0 | 1) => (pane === 0 ? currentFolderId : paneB.currentFolderId),
+      selectedIds: (pane: 0 | 1) => [...(pane === 0 ? selectedIds : paneB.selectedIds)],
+      clearSelection: (pane: 0 | 1) => (pane === 0 ? clearSelection() : paneB.clearSelection()),
+    }),
+    [currentFolderId, paneB, selectedIds, clearSelection],
+  );
+
   const getPaneTarget = useCallback(
     (pane: 0 | 1) =>
       pane === 0
@@ -609,11 +566,30 @@ function WorkspaceInner({
     [currentFolderId, entries, paneB],
   );
 
-  const { duplicate, resolveDuplicate, handleUpload } = useUploadQueue(
-    activeBackend,
-    getPaneTarget,
-    reloadPanes,
+  const uploads = useUploadQueue(activeBackend, getPaneTarget, reloadPanes);
+
+  /**
+   * Drops ids from the preview and both panes' selection (after a delete or a changed id).
+   **/
+  const forgetEntries = useCallback(
+    (ids: string[]) => {
+      setSelected((current) => (current && ids.includes(current.id) ? null : current));
+      for (const id of ids) {
+        pruneSelection(id);
+        paneB.pruneSelection(id);
+      }
+    },
+    [paneB, pruneSelection],
   );
+
+  // Entry mutations (new folder, rename, delete, bulk delete, unauthorize) + their dialog state.
+  const ops = useEntryOperations({
+    backend: activeBackend,
+    panes: paneAccess,
+    reloadPanes,
+    loadStatus,
+    forgetEntries,
+  });
 
   const handleDownload = useCallback(
     (entry: ViewEntry) => {
@@ -639,188 +615,6 @@ function WorkspaceInner({
       }, DOWNLOAD_PREPARING_MS);
     },
     [activeBackend],
-  );
-
-  const handleCreateFolder = useCallback(
-    async (event: FormEvent) => {
-      event.preventDefault();
-      const name = newFolderName.trim();
-      const targetFolderId = newFolderPane === 0 ? currentFolderId : paneB.currentFolderId;
-      if (targetFolderId === null || activeBackend === null || !name || creating) {
-        return;
-      }
-
-      setCreating(true);
-      try {
-        const result = await createFolderAction(activeBackend, targetFolderId, name);
-        if (!result.ok) {
-          toast.error(result.error ?? 'Something went wrong.');
-          // The parent is gone (deleted outside the app) — drop it from the sidebar roots.
-          if (result.status === 424 || result.status === 404) {
-            void loadStatus();
-          }
-          return;
-        }
-        await reloadPanes();
-        toast.success(`Folder "${name}" created.`);
-        setNewFolderOpen(false);
-        setNewFolderName('');
-      } catch (error) {
-        toast.error(extractApiErrorMessage(error));
-      } finally {
-        setCreating(false);
-      }
-    },
-    [
-      activeBackend,
-      currentFolderId,
-      paneB,
-      newFolderPane,
-      newFolderName,
-      creating,
-      reloadPanes,
-      toast,
-      loadStatus,
-    ],
-  );
-
-  /**
-   * Drops an id from the preview and both panes' selection (after it's deleted or its id changed).
-   **/
-  const forgetEntry = useCallback(
-    (id: string) => {
-      setSelected((current) => (current?.id === id ? null : current));
-      pruneSelection(id);
-      paneB.pruneSelection(id);
-    },
-    [paneB, pruneSelection],
-  );
-
-  const confirmDelete = useCallback(async () => {
-    if (!confirmTarget || activeBackend === null) {
-      return;
-    }
-    const entry = confirmTarget;
-
-    setDeleting(true);
-    try {
-      const result = await deleteItemAction(activeBackend, entry.id);
-      if (!result.ok) {
-        toast.error(result.error ?? 'Something went wrong.');
-        return;
-      }
-      await reloadPanes();
-      forgetEntry(entry.id);
-      toast.success(`${entry.isFolder ? 'Folder' : 'File'} "${entry.name}" deleted.`);
-      setConfirmTarget(null);
-    } catch (error) {
-      toast.error(extractApiErrorMessage(error));
-    } finally {
-      setDeleting(false);
-    }
-  }, [activeBackend, confirmTarget, selected, reloadPanes, paneB, toast]);
-
-  const confirmBulkDelete = useCallback(async () => {
-    const ids = bulkPane === 0 ? [...selectedIds] : [...paneB.selectedIds];
-    if (activeBackend === null || ids.length === 0) {
-      return;
-    }
-    const backend = activeBackend;
-
-    setBulkDeleting(true);
-    try {
-      const results = await Promise.all(ids.map((id) => deleteItemAction(backend, id)));
-      const failed = results.filter((result) => !result.ok).length;
-
-      await reloadPanes();
-      if (selected && ids.includes(selected.id)) {
-        setSelected(null);
-      }
-      if (bulkPane === 0) {
-        clearSelection();
-      } else {
-        paneB.clearSelection();
-      }
-      setBulkDeleteOpen(false);
-
-      if (failed > 0) {
-        toast.error(`Failed to delete ${failed} item${failed === 1 ? '' : 's'}.`);
-      } else {
-        toast.success(`Deleted ${ids.length} item${ids.length === 1 ? '' : 's'}.`);
-      }
-    } catch (error) {
-      toast.error(extractApiErrorMessage(error));
-    } finally {
-      setBulkDeleting(false);
-    }
-  }, [activeBackend, bulkPane, selectedIds, paneB, selected, reloadPanes, toast]);
-
-  const openRename = useCallback((entry: ViewEntry) => {
-    setRenameTarget(entry);
-    setRenameName(entry.name);
-  }, []);
-
-  const runRename = useCallback(
-    async (name: string) => {
-      if (!renameTarget || activeBackend === null) {
-        return;
-      }
-      // Renaming to the same name is a no-op (and an S3 self-delete) — guard it.
-      if (name === renameTarget.name) {
-        setRenameTarget(null);
-        setExtWarning(null);
-        return;
-      }
-
-      setRenaming(true);
-      setPendingRename(name);
-      try {
-        const result = await renameItemAction(activeBackend, renameTarget.id, name);
-        if (!result.ok) {
-          toast.error(result.error ?? 'Something went wrong.');
-          return;
-        }
-        await reloadPanes();
-        // The id can change on rename (S3 keys), so drop the old id from selection/preview.
-        forgetEntry(renameTarget.id);
-        toast.success(`Renamed to "${name}".`);
-        setRenameTarget(null);
-        setExtWarning(null);
-      } catch (error) {
-        toast.error(extractApiErrorMessage(error));
-      } finally {
-        setRenaming(false);
-        setPendingRename(null);
-      }
-    },
-    [activeBackend, renameTarget, selected, reloadPanes, paneB, toast],
-  );
-
-  const handleRename = useCallback(
-    (event: FormEvent) => {
-      event.preventDefault();
-      const name = renameName.trim();
-      if (!renameTarget || activeBackend === null || !name || renaming) {
-        return;
-      }
-      if (name === renameTarget.name) {
-        setRenameTarget(null);
-        return;
-      }
-
-      // Warn (Finder-style) before changing a file's extension. Folders have none.
-      if (!renameTarget.isFolder) {
-        const fromExt = splitExtension(renameTarget.name).ext;
-        const { base, ext: toExt } = splitExtension(name);
-        if (fromExt.toLowerCase() !== toExt.toLowerCase()) {
-          setExtWarning({ use: name, keep: `${base}${fromExt}`, fromExt, toExt });
-          return;
-        }
-      }
-
-      void runRename(name);
-    },
-    [renameName, renameTarget, activeBackend, renaming, runRename],
   );
 
   const handleManageFolders = useCallback(async () => {
@@ -864,27 +658,6 @@ function WorkspaceInner({
     }
   }, [loadStatus, toast]);
 
-  const confirmUnselect = useCallback(async () => {
-    if (!unselectTarget) {
-      return;
-    }
-    setUnselecting(true);
-    try {
-      const result = await removeFolderAction(unselectTarget.id);
-      if (!result.ok) {
-        toast.error(result.error ?? 'Something went wrong.');
-        return;
-      }
-      setUnselectTarget(null);
-      await loadStatus();
-      toast.success('Folder removed from the app.');
-    } catch (error) {
-      toast.error(extractApiErrorMessage(error));
-    } finally {
-      setUnselecting(false);
-    }
-  }, [unselectTarget, loadStatus, toast]);
-
   const handleLogout = useCallback(() => {
     setLoggingOut(true);
     // /logout revokes the session, clears cookies and redirects (full navigation).
@@ -893,7 +666,6 @@ function WorkspaceInner({
 
   const rootLabel = activeStatus?.label ?? 'Home';
   const rootIcon = activeBackend ? STORAGE_ICON[activeBackend] : 'Home';
-  const bulkCount = bulkPane === 0 ? selectedIds.size : paneB.selectedIds.size;
 
   // One set of props for both sidebar shells: the desktop rail and the mobile swipe-open drawer.
   const sidebarProps: AccountSidebarProps = {
@@ -953,22 +725,16 @@ function WorkspaceInner({
               setSelected(null);
               clearSelection();
             }}
-            onUpload={(items) => handleUpload(items, 0)}
-            onNewFolder={() => {
-              setNewFolderPane(0);
-              setNewFolderOpen(true);
-            }}
+            onUpload={(items) => uploads.handleUpload(items, 0)}
+            onNewFolder={() => ops.newFolder.openFor(0)}
             onToggleSelect={toggleSelect}
             onSelectAll={selectAll}
             onClearSelection={clearSelection}
             onSetSelectedIds={setSelection}
-            onBulkDelete={() => {
-              setBulkPane(0);
-              setBulkDeleteOpen(true);
-            }}
+            onBulkDelete={() => ops.bulkRemove.openFor(0)}
             onDownload={handleDownload}
-            onRename={openRename}
-            onDelete={setConfirmTarget}
+            onRename={ops.rename.open}
+            onDelete={ops.remove.request}
             storagePicker={{
               storages: statuses,
               activeBackend,
@@ -988,7 +754,7 @@ function WorkspaceInner({
             onMoveIntoFolder={handleMoveIntoFolder}
             onUnselectRoot={
               activeBackend === 'drive' && (driveStatus?.isOwner ?? false)
-                ? setUnselectTarget
+                ? ops.unselectRoot.request
                 : undefined
             }
           />
@@ -1025,22 +791,16 @@ function WorkspaceInner({
                   setSelected(null);
                   paneB.clearSelection();
                 }}
-                onUpload={(items) => handleUpload(items, 1)}
-                onNewFolder={() => {
-                  setNewFolderPane(1);
-                  setNewFolderOpen(true);
-                }}
+                onUpload={(items) => uploads.handleUpload(items, 1)}
+                onNewFolder={() => ops.newFolder.openFor(1)}
                 onToggleSelect={paneB.toggleSelect}
                 onSelectAll={paneB.selectAll}
                 onClearSelection={paneB.clearSelection}
                 onSetSelectedIds={paneB.setSelection}
-                onBulkDelete={() => {
-                  setBulkPane(1);
-                  setBulkDeleteOpen(true);
-                }}
+                onBulkDelete={() => ops.bulkRemove.openFor(1)}
                 onDownload={handleDownload}
-                onRename={openRename}
-                onDelete={setConfirmTarget}
+                onRename={ops.rename.open}
+                onDelete={ops.remove.request}
                 sortKey={paneB.sortKey}
                 sortDir={paneB.sortDir}
                 onToggleSort={paneB.toggleSort}
@@ -1063,178 +823,16 @@ function WorkspaceInner({
           isRoot={activePane === 0 ? atRoots : paneB.atRoots}
           backend={activeBackend}
           onClose={() => setSelected(null)}
-          onDelete={setConfirmTarget}
+          onDelete={ops.remove.request}
           onDownload={handleDownload}
-          onRename={openRename}
+          onRename={ops.rename.open}
           onCopyLink={handleCopyEntryLink}
         />
       </main>
 
       <UploadDock />
 
-      <Modal
-        open={duplicate !== null}
-        onClose={() => resolveDuplicate('cancel')}
-        title='Items already exist'>
-        <div className='flex flex-col gap-y-5'>
-          <p className='text-sm text-zinc-600 dark:text-zinc-400'>
-            {duplicate?.length === 1
-              ? 'An item with this name already exists here:'
-              : `${duplicate?.length} items with these names already exist here:`}
-          </p>
-          <ul className='max-h-32 overflow-y-auto rounded-lg bg-zinc-100 p-3 text-xs dark:bg-zinc-900'>
-            {duplicate?.map((name) => (
-              <li key={name} className='truncate'>
-                {name}
-              </li>
-            ))}
-          </ul>
-          <div className='flex flex-wrap justify-end gap-2'>
-            <Button variant='soft-danger' onClick={() => resolveDuplicate('cancel')}>
-              Cancel
-            </Button>
-            <Button variant='normal' onClick={() => resolveDuplicate('keep')}>
-              Keep both
-            </Button>
-            <Button variant='primary' onClick={() => resolveDuplicate('replace')}>
-              Replace
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal open={newFolderOpen} onClose={() => setNewFolderOpen(false)} title='New folder'>
-        <form onSubmit={handleCreateFolder} className='flex flex-col gap-y-4'>
-          <Input
-            name='folderName'
-            label='Folder name'
-            value={newFolderName}
-            onChange={(event) => setNewFolderName(event.target.value)}
-            autoFocus
-          />
-          <div className='flex justify-end gap-x-2'>
-            <Button variant='soft-danger' onClick={() => setNewFolderOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              type='submit'
-              variant='primary'
-              loading={creating}
-              disabled={!newFolderName.trim()}>
-              Create
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
-        open={renameTarget !== null}
-        onClose={() => {
-          setRenameTarget(null);
-          setExtWarning(null);
-        }}
-        title={renameTarget?.isFolder ? 'Rename folder' : 'Rename file'}>
-        <form onSubmit={handleRename} className='flex flex-col gap-y-4'>
-          <Input
-            name='renameName'
-            label='Name'
-            value={renameName}
-            onChange={(event) => setRenameName(event.target.value)}
-            autoFocus
-          />
-          <div className='flex justify-end gap-x-2'>
-            <Button
-              variant='soft-danger'
-              onClick={() => {
-                setRenameTarget(null);
-                setExtWarning(null);
-              }}>
-              Cancel
-            </Button>
-            <Button
-              type='submit'
-              variant='primary'
-              loading={renaming && extWarning === null}
-              disabled={!renameName.trim() || renameName.trim() === renameTarget?.name}>
-              Rename
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Extension-change confirmation (a modal on top of the rename modal) */}
-      <Modal
-        open={extWarning !== null}
-        onClose={() => setExtWarning(null)}
-        title='Change extension?'>
-        <div className='flex flex-col gap-y-5'>
-          <div className='flex gap-x-3'>
-            <div className='inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-500'>
-              <Icon icon='ExclamationTriangle' className='h-5 w-5' />
-            </div>
-            <p className='text-sm text-zinc-600 dark:text-zinc-400'>
-              {extWarning?.toExt === ''
-                ? `Removing the "${extWarning?.fromExt}" extension may change how this file opens.`
-                : extWarning?.fromExt === ''
-                  ? `Adding the "${extWarning?.toExt}" extension may change this file's type.`
-                  : `Changing the extension from "${extWarning?.fromExt}" to "${extWarning?.toExt}" may change this file's type.`}
-            </p>
-          </div>
-          <div className='flex flex-wrap justify-end gap-2'>
-            <Button variant='soft-danger' onClick={() => setExtWarning(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant='normal'
-              loading={renaming && pendingRename === extWarning?.keep}
-              disabled={renaming}
-              onClick={() => extWarning && void runRename(extWarning.keep)}>
-              {extWarning?.fromExt ? `Keep "${extWarning.fromExt}"` : 'Keep without extension'}
-            </Button>
-            <Button
-              variant='primary'
-              loading={renaming && pendingRename === extWarning?.use}
-              disabled={renaming}
-              onClick={() => extWarning && void runRename(extWarning.use)}>
-              {extWarning?.toExt ? `Use "${extWarning.toExt}"` : 'Remove extension'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      <ConfirmDialog
-        open={bulkDeleteOpen}
-        onClose={() => setBulkDeleteOpen(false)}
-        title='Delete items'
-        message={`Delete the ${bulkCount} selected item${bulkCount === 1 ? '' : 's'}, including everything inside any selected folders? This cannot be undone.`}
-        confirmLabel='Delete'
-        loading={bulkDeleting}
-        onConfirm={confirmBulkDelete}
-      />
-
-      <ConfirmDialog
-        open={confirmTarget !== null}
-        onClose={() => setConfirmTarget(null)}
-        title={confirmTarget?.isFolder ? 'Delete folder' : 'Delete file'}
-        message={
-          confirmTarget?.isFolder
-            ? `Delete the folder "${confirmTarget?.name}" and everything inside it? This cannot be undone.`
-            : `Delete the file "${confirmTarget?.name}"? This cannot be undone.`
-        }
-        confirmLabel='Delete'
-        loading={deleting}
-        onConfirm={confirmDelete}
-      />
-
-      <ConfirmDialog
-        open={unselectTarget !== null}
-        onClose={() => setUnselectTarget(null)}
-        title='Remove folder'
-        message={`Remove "${unselectTarget?.name}" from the app? It stays in Google Drive — only its authorization here is revoked.`}
-        confirmLabel='Remove'
-        loading={unselecting}
-        onConfirm={confirmUnselect}
-      />
+      <WorkspaceDialogs ops={ops} uploads={uploads} />
     </div>
   );
 }

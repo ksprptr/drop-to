@@ -130,16 +130,7 @@ export function useEntryListing({
       onError({ error: result.error, status: result.status });
     }
     setLoadingMore(false);
-  }, [
-    nextPageToken,
-    backend,
-    currentFolderId,
-    loadingMore,
-    search,
-    sortKey,
-    sortDir,
-    onError,
-  ]);
+  }, [nextPageToken, backend, currentFolderId, loadingMore, search, sortKey, sortDir, onError]);
 
   return {
     entries,
