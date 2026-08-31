@@ -4,6 +4,10 @@ import path from 'node:path';
 const monorepoRoot = path.join(__dirname, '../..');
 const isDevelopment = process.env.NODE_ENV === 'development';
 
+// HSTS on https origins only. Sent from a local http build it would pin `localhost` to https for
+// two years — and localhost is shared by every dev server on this machine.
+const servesHttps = (process.env.APP_URL ?? '').startsWith('https://');
+
 // Google origins (Picker/OAuth scripts, frames, XHRs, images) allowed by the CSP.
 const GOOGLE_SCRIPT = 'https://apis.google.com https://*.gstatic.com';
 const GOOGLE_FRAME =
@@ -36,12 +40,19 @@ const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
   // Drop ambient access to sensor/geolocation APIs the app never uses.
   {
     key: 'Permissions-Policy',
     value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()',
   },
+  ...(servesHttps
+    ? [
+        {
+          key: 'Strict-Transport-Security',
+          value: 'max-age=63072000; includeSubDomains; preload',
+        },
+      ]
+    : []),
 ];
 
 const nextConfig: NextConfig = {

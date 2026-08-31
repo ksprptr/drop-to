@@ -14,7 +14,6 @@ import {
 import {
   createFolderAction,
   deleteItemAction,
-  listContentsAction,
   moveItemAction,
   renameItemAction,
   resolvePathAction,
@@ -23,31 +22,23 @@ import {
 import { DESKTOP_QUERY } from '@/common/constants/layout.constants';
 import { useBrowsePane } from '@/common/hooks/useBrowsePane';
 import { useDebouncedValue } from '@/common/hooks/useDebouncedValue';
+import { useEntryListing } from '@/common/hooks/useEntryListing';
+import { useEntrySelection } from '@/common/hooks/useEntrySelection';
 import { useMediaQuery } from '@/common/hooks/useMediaQuery';
+import { useUploadQueue } from '@/common/hooks/useUploadQueue';
 import {
   fileDownloadUrl,
   folderDownloadUrl,
-  uploadFile,
 } from '@/common/services/api/storage.client';
 import { type PickedFolder, usePicker } from '@/common/services/picker/usePicker';
 import type {
-  BatchRuntime,
   Crumb,
   SortDir,
   SortKey,
-  UploadBatch,
-  UploadItem,
   ViewEntry,
 } from '@/common/types/workspace.types';
-import { extractApiErrorMessage, isCanceledError } from '@/common/utils/error.functions';
+import { extractApiErrorMessage } from '@/common/utils/error.functions';
 import { buildWorkspaceUrl, slugify } from '@/common/utils/storage-url';
-import {
-  isIgnoredUploadName,
-  isTopLevelFolder,
-  topLevelName,
-  uniqueName,
-} from '@/common/utils/upload.functions';
-import { toViewEntries } from '@/common/utils/view-entry.functions';
 import Button from '@/components/common/Button';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Icon from '@/components/common/Icon';
@@ -126,31 +117,18 @@ function WorkspaceInner({
   const pathname = usePathname();
   const toast = useToast();
   const { openPicker } = usePicker();
-  const {
-    setBatches,
-    setDownloads,
-    updateTask,
-    setBatchStatus,
-    scheduleRemoveBatch,
-    batchRuntime,
-  } = useUploadActions();
+  const { setDownloads } = useUploadActions();
 
   const [statuses, setStatuses] = useState<StorageStatus[]>(initialStatuses);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [activeBackend, setActiveBackend] = useState<StorageBackend | null>(initialBackend ?? null);
   const [path, setPath] = useState<Crumb[]>(initialPath ?? []);
-  const [entries, setEntries] = useState<ViewEntry[]>([]);
-  const [loadingEntries, setLoadingEntries] = useState(false);
   const [search, setSearch] = useState('');
-  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [selected, setSelected] = useState<ViewEntry | null>(null);
-  const [duplicate, setDuplicate] = useState<string[] | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<ViewEntry | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [unselectTarget, setUnselectTarget] = useState<ViewEntry | null>(null);
   const [unselecting, setUnselecting] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const canSplit = useMediaQuery(DESKTOP_QUERY);
@@ -171,10 +149,6 @@ function WorkspaceInner({
   const [loggingOut, setLoggingOut] = useState(false);
 
   const handledParams = useRef(false);
-  const duplicateResolve = useRef<((choice: 'replace' | 'keep' | 'cancel') => void) | null>(null);
-  // Bumped on every listing read; a resolved request whose id no longer matches is stale (the
-  // operator navigated away mid-flight) and must not paint over the current folder.
-  const listSeq = useRef(0);
   // id → display name, so navigating (and rebuilding a deep-linked breadcrumb) shows real names.
   const nameCache = useRef<Map<string, string>>(
     new Map((initialPath ?? []).map((crumb) => [crumb.id, crumb.name])),
@@ -238,6 +212,39 @@ function WorkspaceInner({
       }
     },
     [toast, loadStatus],
+  );
+
+  // The main pane's listing and selection — the same primitives the split pane runs on. Only the
+  // location differs: this pane reads it from the URL, the split pane from local state.
+  const {
+    entries,
+    loading: loadingEntries,
+    hasMore,
+    loadingMore,
+    loadMore: loadMoreEntries,
+    reload: loadEntries,
+  } = useEntryListing({
+    backend: activeBackend,
+    currentFolderId,
+    roots,
+    search: debouncedSearch,
+    sortKey,
+    sortDir,
+    onError: onPaneError,
+  });
+
+  const {
+    selectedIds,
+    toggleSelect,
+    selectAll: selectIds,
+    clearSelection,
+    setSelection,
+    pruneSelection,
+  } = useEntrySelection(currentFolderId, activeBackend);
+
+  const selectAll = useCallback(
+    () => selectIds(entries.map((entry) => entry.id)),
+    [entries, selectIds],
   );
 
   // The second (split) pane: an independent browser over the same backend.
@@ -325,11 +332,6 @@ function WorkspaceInner({
     };
   }, [pathname, statuses, router]);
 
-  // Drop any multi-select whenever the folder or storage changes.
-  useEffect(() => {
-    setSelectedIds(new Set());
-  }, [currentFolderId, activeBackend]);
-
   useEffect(() => {
     if (handledParams.current) {
       return;
@@ -359,90 +361,6 @@ function WorkspaceInner({
   useEffect(() => {
     setSearch('');
   }, [currentFolderId, activeBackend]);
-
-  const loadEntries = useCallback(async () => {
-    const seq = ++listSeq.current;
-
-    if (currentFolderId === null || activeBackend === null) {
-      setEntries(roots);
-      setNextPageToken(null);
-      setLoadingEntries(false);
-      return;
-    }
-
-    setLoadingEntries(true);
-    const result = await listContentsAction(activeBackend, currentFolderId, {
-      // Drive filters server-side; S3 lists the whole level and is filtered client-side.
-      search: activeBackend === 'drive' && debouncedSearch ? debouncedSearch : undefined,
-      sortKey,
-      sortDir,
-    });
-
-    // Superseded while in flight — a newer read owns the view now.
-    if (seq !== listSeq.current) {
-      return;
-    }
-
-    if (result.ok) {
-      setEntries(toViewEntries(result.data?.entries ?? []));
-      setNextPageToken(result.data?.nextPageToken ?? null);
-    } else {
-      toast.error(result.error ?? 'Failed to open the folder.');
-      // Storage disconnected, or the folder was deleted in Drive — refresh so the sidebar reflects it.
-      if (result.status === 424 || result.status === 404) {
-        void loadStatus();
-      }
-    }
-    setLoadingEntries(false);
-  }, [activeBackend, currentFolderId, roots, toast, loadStatus, debouncedSearch, sortKey, sortDir]);
-
-  useEffect(() => {
-    void loadEntries();
-  }, [loadEntries]);
-
-  const loadMoreEntries = useCallback(async () => {
-    if (
-      nextPageToken === null ||
-      activeBackend === null ||
-      currentFolderId === null ||
-      loadingMore
-    ) {
-      return;
-    }
-
-    const seq = listSeq.current;
-    setLoadingMore(true);
-    const result = await listContentsAction(activeBackend, currentFolderId, {
-      pageToken: nextPageToken,
-      search: activeBackend === 'drive' && debouncedSearch ? debouncedSearch : undefined,
-      sortKey,
-      sortDir,
-    });
-
-    // The folder changed under us — appending this page would mix two listings.
-    if (seq !== listSeq.current) {
-      setLoadingMore(false);
-      return;
-    }
-
-    if (result.ok) {
-      // Append (never replace) so the scroll position is preserved during infinite scroll.
-      setEntries((current) => [...current, ...toViewEntries(result.data?.entries ?? [])]);
-      setNextPageToken(result.data?.nextPageToken ?? null);
-    } else if (result.status === 424 || result.status === 404) {
-      void loadStatus();
-    }
-    setLoadingMore(false);
-  }, [
-    nextPageToken,
-    activeBackend,
-    currentFolderId,
-    loadingMore,
-    debouncedSearch,
-    sortKey,
-    sortDir,
-    loadStatus,
-  ]);
 
   // Reload both panes after a mutation so the source and destination both refresh.
   const reloadPanes = useCallback(async () => {
@@ -618,7 +536,7 @@ function WorkspaceInner({
       const failed = results.filter((result) => !result.ok).length;
 
       await reloadPanes();
-      setSelectedIds(new Set());
+      clearSelection();
       paneB.clearSelection();
       if (selected && moveIds.includes(selected.id)) {
         setSelected(null);
@@ -664,7 +582,7 @@ function WorkspaceInner({
       const failed = results.filter((result) => !result.ok).length;
 
       await reloadPanes();
-      setSelectedIds(new Set());
+      clearSelection();
       paneB.clearSelection();
       if (selected && ids.includes(selected.id)) {
         setSelected(null);
@@ -682,238 +600,19 @@ function WorkspaceInner({
     [dragMove, activeBackend, currentFolderId, paneB, reloadPanes, selected, toast],
   );
 
-  // --- Upload orchestration -----------------------------------------------------
-
-  // Undo a batch: delete everything it created so a cancel leaves nothing behind.
-  const rollbackBatch = useCallback(
-    async (batchId: string, backend: StorageBackend) => {
-      // Flip the batch and its rows to cancelled (the dock turns them red).
-      setBatches((current) =>
-        current.map((batch) =>
-          batch.id === batchId
-            ? {
-                ...batch,
-                status: 'canceling',
-                tasks: batch.tasks.map((task) => ({ ...task, status: 'canceled', rate: null })),
-              }
-            : batch,
-        ),
-      );
-      const runtime = batchRuntime.current.get(batchId);
-      if (runtime) {
-        await Promise.all(
-          [...runtime.rootFolderIds, ...runtime.looseFileIds].map((id) =>
-            deleteItemAction(backend, id),
-          ),
-        );
-        batchRuntime.current.delete(batchId);
-      }
-      await reloadPanes();
-      setBatchStatus(batchId, 'canceled');
-      scheduleRemoveBatch(batchId);
-    },
-    [reloadPanes, setBatchStatus, scheduleRemoveBatch, setBatches, batchRuntime],
+  // Uploads (duplicate prompt, folder creation, progress, rollback) live in their own hook.
+  const getPaneTarget = useCallback(
+    (pane: 0 | 1) =>
+      pane === 0
+        ? { folderId: currentFolderId, entries }
+        : { folderId: paneB.currentFolderId, entries: paneB.entries },
+    [currentFolderId, entries, paneB],
   );
 
-  const askDuplicate = useCallback((names: string[]): Promise<'replace' | 'keep' | 'cancel'> => {
-    setDuplicate(names);
-    return new Promise((resolve) => {
-      duplicateResolve.current = resolve;
-    });
-  }, []);
-
-  const resolveDuplicate = useCallback((choice: 'replace' | 'keep' | 'cancel') => {
-    setDuplicate(null);
-    duplicateResolve.current?.(choice);
-    duplicateResolve.current = null;
-  }, []);
-
-  const handleUpload = useCallback(
-    async (droppedItems: UploadItem[], pane: 0 | 1 = 0) => {
-      const items = droppedItems.filter((item) => !isIgnoredUploadName(item.relativePath));
-      const targetFolderId = pane === 0 ? currentFolderId : paneB.currentFolderId;
-      const existing = pane === 0 ? entries : paneB.entries;
-      if (targetFolderId === null || activeBackend === null || items.length === 0) {
-        return;
-      }
-      const backend = activeBackend;
-
-      // Detect name conflicts among the top-level items being added here.
-      const existingNames = new Set(existing.map((entry) => entry.name));
-      const topLevel = new Map<string, boolean>();
-      for (const item of items) {
-        const top = topLevelName(item.relativePath);
-        topLevel.set(top, topLevel.get(top) === true || isTopLevelFolder(item.relativePath));
-      }
-      const conflicts = [...topLevel.keys()].filter((name) => existingNames.has(name));
-
-      const renameMap = new Map<string, string>();
-      // "Replace": upload first, delete originals only once they're safely in.
-      let replaceIds: string[] = [];
-      if (conflicts.length > 0) {
-        const choice = await askDuplicate(conflicts);
-        if (choice === 'cancel') {
-          return;
-        }
-        if (choice === 'replace') {
-          replaceIds = existing
-            .filter((entry) => conflicts.includes(entry.name))
-            .map((entry) => entry.id);
-        } else {
-          const taken = new Set(existingNames);
-          for (const name of conflicts) {
-            const renamed = uniqueName(name, taken);
-            taken.add(renamed);
-            renameMap.set(name, renamed);
-          }
-        }
-      }
-
-      // Apply any renames (folders via their path, loose files via an upload name).
-      const finalItems: UploadItem[] = items.map((item) => {
-        const top = topLevelName(item.relativePath);
-        const renamed = renameMap.get(top);
-        if (!renamed) {
-          return item;
-        }
-        return isTopLevelFolder(item.relativePath)
-          ? { ...item, relativePath: `${renamed}${item.relativePath.slice(top.length)}` }
-          : { ...item, relativePath: renamed, uploadName: renamed };
-      });
-
-      const folderTops = new Set(
-        finalItems
-          .filter((item) => isTopLevelFolder(item.relativePath))
-          .map((item) => topLevelName(item.relativePath)),
-      );
-      const looseCount = finalItems.filter((item) => !isTopLevelFolder(item.relativePath)).length;
-      const kind: UploadBatch['kind'] =
-        folderTops.size === 1 && looseCount === 0 ? 'folder' : 'files';
-      const folderName = kind === 'folder' ? [...folderTops][0] : null;
-
-      const batchId = crypto.randomUUID();
-      const runtime: BatchRuntime = {
-        controller: new AbortController(),
-        looseFileIds: [],
-        rootFolderIds: [],
-      };
-      batchRuntime.current.set(batchId, runtime);
-      const { signal } = runtime.controller;
-
-      const queue = finalItems.map((item) => {
-        const slash = item.relativePath.lastIndexOf('/');
-        return {
-          taskId: crypto.randomUUID(),
-          item,
-          dirPath: slash === -1 ? '' : item.relativePath.slice(0, slash),
-        };
-      });
-      setBatches((current) => [
-        ...current,
-        {
-          id: batchId,
-          kind,
-          folderName,
-          status: 'uploading',
-          tasks: queue.map(({ taskId, item }) => ({
-            id: taskId,
-            name: item.uploadName ?? item.file.name,
-            size: item.file.size,
-            percent: 0,
-            rate: null,
-            status: 'pending' as const,
-          })),
-        },
-      ]);
-
-      // Recreate the nested folder structure, tracking top-level folders for cancel.
-      const folderIdByPath = new Map<string, string>([['', targetFolderId]]);
-      const ensureFolder = async (dirPath: string): Promise<string> => {
-        const cached = folderIdByPath.get(dirPath);
-        if (cached) {
-          return cached;
-        }
-        const slash = dirPath.lastIndexOf('/');
-        const parentPath = slash === -1 ? '' : dirPath.slice(0, slash);
-        const name = slash === -1 ? dirPath : dirPath.slice(slash + 1);
-        const parentId = await ensureFolder(parentPath);
-        const result = await createFolderAction(backend, parentId, name);
-        if (!result.ok || !result.data) {
-          throw new Error(result.error ?? 'Failed to create folder.');
-        }
-        const created = result.data;
-        folderIdByPath.set(dirPath, created.id);
-        if (parentPath === '') {
-          runtime.rootFolderIds.push(created.id);
-        }
-        return created.id;
-      };
-
-      for (const { taskId, item, dirPath } of queue) {
-        if (signal.aborted) {
-          break;
-        }
-        updateTask(batchId, taskId, { status: 'uploading' });
-        try {
-          // eslint-disable-next-line no-await-in-loop -- uploads run one at a time (progress + folder dedup)
-          const uploadFolderId = await ensureFolder(dirPath);
-          // eslint-disable-next-line no-await-in-loop -- sequential upload queue
-          const result = await uploadFile(
-            backend,
-            uploadFolderId,
-            item.file,
-            ({ percent, rate }) => {
-              updateTask(batchId, taskId, {
-                percent,
-                rate,
-                status: percent >= 100 ? 'processing' : 'uploading',
-              });
-            },
-            signal,
-            item.uploadName,
-          );
-          if (dirPath === '') {
-            runtime.looseFileIds.push(result.fileId);
-          }
-          updateTask(batchId, taskId, { status: 'done', percent: 100, rate: null });
-        } catch (error) {
-          if (isCanceledError(error)) {
-            break;
-          }
-          updateTask(batchId, taskId, { status: 'error', rate: null });
-          toast.error(`${item.uploadName ?? item.file.name}: ${extractApiErrorMessage(error)}`);
-        }
-      }
-
-      if (signal.aborted) {
-        await rollbackBatch(batchId, backend);
-      } else {
-        try {
-          // Replacements are in — now remove the originals they superseded.
-          if (replaceIds.length > 0) {
-            await Promise.all(replaceIds.map((id) => deleteItemAction(backend, id)));
-          }
-          await reloadPanes();
-        } finally {
-          batchRuntime.current.delete(batchId);
-          setBatchStatus(batchId, 'done');
-          scheduleRemoveBatch(batchId);
-        }
-      }
-    },
-    [
-      activeBackend,
-      currentFolderId,
-      paneB,
-      entries,
-      reloadPanes,
-      toast,
-      askDuplicate,
-      updateTask,
-      setBatchStatus,
-      scheduleRemoveBatch,
-      rollbackBatch,
-    ],
+  const { duplicate, resolveDuplicate, handleUpload } = useUploadQueue(
+    activeBackend,
+    getPaneTarget,
+    reloadPanes,
   );
 
   const handleDownload = useCallback(
@@ -991,17 +690,10 @@ function WorkspaceInner({
   const forgetEntry = useCallback(
     (id: string) => {
       setSelected((current) => (current?.id === id ? null : current));
-      setSelectedIds((current) => {
-        if (!current.has(id)) {
-          return current;
-        }
-        const next = new Set(current);
-        next.delete(id);
-        return next;
-      });
+      pruneSelection(id);
       paneB.pruneSelection(id);
     },
-    [paneB],
+    [paneB, pruneSelection],
   );
 
   const confirmDelete = useCallback(async () => {
@@ -1028,26 +720,6 @@ function WorkspaceInner({
     }
   }, [activeBackend, confirmTarget, selected, reloadPanes, paneB, toast]);
 
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
-
-  const selectAll = useCallback(() => {
-    setSelectedIds(new Set(entries.map((entry) => entry.id)));
-  }, [entries]);
-
-  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
-
-  const setSelection = useCallback((ids: string[]) => setSelectedIds(new Set(ids)), []);
-
   const confirmBulkDelete = useCallback(async () => {
     const ids = bulkPane === 0 ? [...selectedIds] : [...paneB.selectedIds];
     if (activeBackend === null || ids.length === 0) {
@@ -1065,7 +737,7 @@ function WorkspaceInner({
         setSelected(null);
       }
       if (bulkPane === 0) {
-        setSelectedIds(new Set());
+        clearSelection();
       } else {
         paneB.clearSelection();
       }
@@ -1310,7 +982,7 @@ function WorkspaceInner({
             onCopyEntryLink={handleCopyEntryLink}
             searchQuery={search}
             onSearchChange={setSearch}
-            hasMore={nextPageToken !== null}
+            hasMore={hasMore}
             loadingMore={loadingMore}
             onLoadMore={loadMoreEntries}
             onMoveIntoFolder={handleMoveIntoFolder}
