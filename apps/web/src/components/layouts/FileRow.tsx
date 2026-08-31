@@ -1,6 +1,6 @@
 'use client';
 
-import type { DragEvent, KeyboardEvent, MouseEvent } from 'react';
+import { type DragEvent, type KeyboardEvent, memo, type MouseEvent } from 'react';
 
 import type { ViewEntry } from '@/common/types/workspace.types';
 import { fileIcon } from '@/common/utils/drop-items.functions';
@@ -38,8 +38,9 @@ interface Props {
  * One row of the file list: icon, name, modified date, size and the action menu.
  **/
 // Every interaction is decided by the browser above — this only reports events and paints state,
-// which keeps the list markup readable on its own.
-export default function FileRow({
+// which keeps the list markup readable on its own. Memoized: every prop is either a scalar or a
+// callback the browser keeps stable, so selecting one row re-renders that row, not the whole list.
+function FileRow({
   entry,
   selected,
   checked,
@@ -128,3 +129,5 @@ export default function FileRow({
     </li>
   );
 }
+
+export default memo(FileRow);

@@ -186,6 +186,13 @@ export default function FileBrowser({
   // Folder row currently hovered as a move drop target (Finder-style same-pane move).
   const [dropFolderId, setDropFolderId] = useState<string | null>(null);
 
+  // The row handlers below must keep a stable identity for `FileRow`'s memo to hold, so the values
+  // that change on every selection or drag tick are read through refs instead of closed over.
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
+  const dropFolderIdRef = useRef(dropFolderId);
+  dropFolderIdRef.current = dropFolderId;
+
   // Close the search box and drop its filter.
   const closeSearch = useCallback(() => {
     setShowSearch(false);
@@ -253,6 +260,9 @@ export default function FileBrowser({
     });
   }, [entries, sortKey, sortDir, query]);
 
+  const sortedRef = useRef(sorted);
+  sortedRef.current = sorted;
+
   // Identity of the current view — changes only on folder / sort / search, i.e. a "fresh load".
   const viewKey = `${path.map((crumb) => crumb.id).join('/')}|${sortKey}|${sortDir}|${query}`;
 
@@ -306,13 +316,13 @@ export default function FileBrowser({
       ? 'grid-cols-[minmax(0,1fr)_4.5rem_2rem] sm:grid-cols-[minmax(0,1fr)_8rem_6rem_2rem]'
       : 'grid-cols-[minmax(0,1fr)_4.5rem] sm:grid-cols-[minmax(0,1fr)_8rem_6rem]';
 
-  const openMenu = (event: MouseEvent<HTMLButtonElement>, entry: ViewEntry) => {
+  const openMenu = useCallback((event: MouseEvent<HTMLButtonElement>, entry: ViewEntry) => {
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
     // Opening a row menu closes the toolbar menu (they must never overlap).
     setToolbarMenu(null);
     setMenu((current) => (current?.entry.id === entry.id ? null : { entry, rect }));
-  };
+  }, []);
 
   const openToolbarMenu = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -378,102 +388,128 @@ export default function FileBrowser({
     });
   };
 
-  const handleRowDragStart = (event: DragEvent<HTMLDivElement>, entry: ViewEntry) => {
-    if (!canModify) {
-      return;
-    }
-    // Dragging a selected row moves the whole selection; otherwise just that row.
-    const ids = selectedIds.has(entry.id) ? [...selectedIds] : [entry.id];
-    event.dataTransfer.setData(MOVE_MIME, ids.join(','));
-    event.dataTransfer.effectAllowed = 'move';
-    onMoveDragStart?.(ids);
-  };
+  const handleRowDragStart = useCallback(
+    (event: DragEvent<HTMLDivElement>, entry: ViewEntry) => {
+      if (!canModify) {
+        return;
+      }
+      // Dragging a selected row moves the whole selection; otherwise just that row.
+      const current = selectedIdsRef.current;
+      const ids = current.has(entry.id) ? [...current] : [entry.id];
+      event.dataTransfer.setData(MOVE_MIME, ids.join(','));
+      event.dataTransfer.effectAllowed = 'move';
+      onMoveDragStart?.(ids);
+    },
+    [canModify, onMoveDragStart],
+  );
 
-  const handleRowDragOver = (event: DragEvent<HTMLDivElement>, entry: ViewEntry) => {
-    // A folder row accepts a move drop (unless it's part of the dragged selection).
-    if (
-      canModify &&
-      onMoveIntoFolder &&
-      entry.isFolder &&
-      !selectedIds.has(entry.id) &&
-      event.dataTransfer.types.includes(MOVE_MIME)
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
-      event.dataTransfer.dropEffect = 'move';
-      if (dropFolderId !== entry.id) setDropFolderId(entry.id);
-    }
-  };
+  const handleRowDragOver = useCallback(
+    (event: DragEvent<HTMLDivElement>, entry: ViewEntry) => {
+      // A folder row accepts a move drop (unless it's part of the dragged selection).
+      if (
+        canModify &&
+        onMoveIntoFolder &&
+        entry.isFolder &&
+        !selectedIdsRef.current.has(entry.id) &&
+        event.dataTransfer.types.includes(MOVE_MIME)
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = 'move';
+        if (dropFolderIdRef.current !== entry.id) setDropFolderId(entry.id);
+      }
+    },
+    [canModify, onMoveIntoFolder],
+  );
 
-  const handleRowDragLeave = (event: DragEvent<HTMLDivElement>, entry: ViewEntry) => {
+  const handleRowDragLeave = useCallback((event: DragEvent<HTMLDivElement>, entry: ViewEntry) => {
     if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
       return;
     }
     setDropFolderId((current) => (current === entry.id ? null : current));
-  };
+  }, []);
 
-  const handleRowDrop = (event: DragEvent<HTMLDivElement>, entry: ViewEntry) => {
-    if (
-      !canModify ||
-      !onMoveIntoFolder ||
-      !entry.isFolder ||
-      !event.dataTransfer.types.includes(MOVE_MIME)
-    ) {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    setDropFolderId(null);
-    const ids = event.dataTransfer.getData(MOVE_MIME).split(',').filter(Boolean);
-    if (ids.length > 0 && !ids.includes(entry.id)) {
-      onMoveIntoFolder(entry.id, ids);
-    }
-  };
-
-  const handleRowClick = (event: MouseEvent<HTMLDivElement>, entry: ViewEntry) => {
-    // Don't let the click reach the finder's deselect handler.
-    event.stopPropagation();
-    const ids = sorted.map((row) => row.id);
-    // Shift-click: select the range from the anchor to this row.
-    if (event.shiftKey && onSetSelectedIds && selectionAnchor.current) {
-      const from = ids.indexOf(selectionAnchor.current);
-      const to = ids.indexOf(entry.id);
-      if (from !== -1 && to !== -1) {
-        const [lo, hi] = from < to ? [from, to] : [to, from];
-        onSetSelectedIds(ids.slice(lo, hi + 1));
+  const handleRowDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>, entry: ViewEntry) => {
+      if (
+        !canModify ||
+        !onMoveIntoFolder ||
+        !entry.isFolder ||
+        !event.dataTransfer.types.includes(MOVE_MIME)
+      ) {
         return;
       }
-    }
-    // Cmd/Ctrl-click: toggle this row in the multi-selection.
-    if ((event.metaKey || event.ctrlKey) && canModify) {
-      onToggleSelect(entry.id);
-      selectionAnchor.current = entry.id;
-      return;
-    }
-    // Plain click: single select (preview) and drop any multi-selection.
-    onSelect(entry);
-    if (canModify) {
-      onClearSelection();
-    }
-    selectionAnchor.current = entry.id;
-  };
-
-  const handleRowOpen = (entry: ViewEntry) => {
-    if (entry.isFolder) onOpenFolder(entry);
-    else if (entry.webViewLink) window.open(entry.webViewLink, '_blank');
-  };
-
-  const handleRowKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>, entry: ViewEntry) => {
-    // Enter opens a folder / selects a file; Space selects.
-    if (event.key === 'Enter') {
       event.preventDefault();
-      if (entry.isFolder) onOpenFolder(entry);
-      else onSelect(entry);
-    } else if (event.key === ' ') {
-      event.preventDefault();
+      event.stopPropagation();
+      setDropFolderId(null);
+      const ids = event.dataTransfer.getData(MOVE_MIME).split(',').filter(Boolean);
+      if (ids.length > 0 && !ids.includes(entry.id)) {
+        onMoveIntoFolder(entry.id, ids);
+      }
+    },
+    [canModify, onMoveIntoFolder],
+  );
+
+  const handleRowClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>, entry: ViewEntry) => {
+      // Don't let the click reach the finder's deselect handler.
+      event.stopPropagation();
+      const ids = sortedRef.current.map((row) => row.id);
+      // Shift-click: select the range from the anchor to this row.
+      if (event.shiftKey && onSetSelectedIds && selectionAnchor.current) {
+        const from = ids.indexOf(selectionAnchor.current);
+        const to = ids.indexOf(entry.id);
+        if (from !== -1 && to !== -1) {
+          const [lo, hi] = from < to ? [from, to] : [to, from];
+          onSetSelectedIds(ids.slice(lo, hi + 1));
+          return;
+        }
+      }
+      // Cmd/Ctrl-click: toggle this row in the multi-selection.
+      if ((event.metaKey || event.ctrlKey) && canModify) {
+        onToggleSelect(entry.id);
+        selectionAnchor.current = entry.id;
+        return;
+      }
+      // Plain click: single select (preview) and drop any multi-selection.
       onSelect(entry);
-    }
-  };
+      if (canModify) {
+        onClearSelection();
+      }
+      selectionAnchor.current = entry.id;
+    },
+    [canModify, onSetSelectedIds, onToggleSelect, onSelect, onClearSelection],
+  );
+
+  const handleRowOpen = useCallback(
+    (entry: ViewEntry) => {
+      if (entry.isFolder) onOpenFolder(entry);
+      else if (entry.webViewLink) window.open(entry.webViewLink, '_blank');
+    },
+    [onOpenFolder],
+  );
+
+  const handleRowKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>, entry: ViewEntry) => {
+      // Enter opens a folder / selects a file; Space selects.
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (entry.isFolder) onOpenFolder(entry);
+        else onSelect(entry);
+      } else if (event.key === ' ') {
+        event.preventDefault();
+        onSelect(entry);
+      }
+    },
+    [onOpenFolder, onSelect],
+  );
+
+  const handleRowDragEnd = useCallback(() => onMoveDragEnd?.(), [onMoveDragEnd]);
+
+  const handleRowToggleCheck = useCallback(
+    (entry: ViewEntry) => onToggleSelect(entry.id),
+    [onToggleSelect],
+  );
 
   const handleInput = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -699,14 +735,14 @@ export default function FileBrowser({
                   showMenu={canModify || (rootMenu && entry.isFolder)}
                   gridCols={gridCols}
                   onDragStart={handleRowDragStart}
-                  onDragEnd={() => onMoveDragEnd?.()}
+                  onDragEnd={handleRowDragEnd}
                   onDragOver={handleRowDragOver}
                   onDragLeave={handleRowDragLeave}
                   onDrop={handleRowDrop}
                   onClick={handleRowClick}
                   onDoubleClick={handleRowOpen}
                   onKeyDown={handleRowKeyDown}
-                  onToggleCheck={(row) => onToggleSelect(row.id)}
+                  onToggleCheck={handleRowToggleCheck}
                   onOpenMenu={openMenu}
                 />
               ))}

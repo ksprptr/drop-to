@@ -1,7 +1,7 @@
 'use client';
 
 import type { StorageBackend } from '@dropto/types';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { listContentsAction } from '@/actions/storage/storage.actions';
 import type { SortDir, SortKey, ViewEntry } from '@/common/types/workspace.types';
@@ -132,13 +132,16 @@ export function useEntryListing({
     setLoadingMore(false);
   }, [nextPageToken, backend, currentFolderId, loadingMore, search, sortKey, sortDir, onError]);
 
-  return {
-    entries,
-    setEntries,
-    loading,
-    hasMore: nextPageToken !== null,
-    loadingMore,
-    loadMore,
-    reload,
-  };
+  return useMemo(
+    () => ({
+      entries,
+      setEntries,
+      loading,
+      hasMore: nextPageToken !== null,
+      loadingMore,
+      loadMore,
+      reload,
+    }),
+    [entries, loading, nextPageToken, loadingMore, loadMore, reload],
+  );
 }

@@ -182,6 +182,16 @@ function WorkspaceInner({
   // The second (split) pane: an independent browser over the same backend.
   const paneB = useBrowsePane(activeBackend, roots, onPaneError);
 
+  // A move empties both selections and drops the preview if it was one of the moved items.
+  const handleMoved = useCallback(
+    (ids: string[]) => {
+      clearSelection();
+      paneB.clearSelection();
+      setSelected((current) => (current && ids.includes(current.id) ? null : current));
+    },
+    [clearSelection, paneB],
+  );
+
   useEffect(() => {
     if (handledParams.current) {
       return;
@@ -287,13 +297,26 @@ function WorkspaceInner({
     path,
     paneB,
     reloadPanes,
-    // A move empties both selections and drops the preview if it was one of the moved items.
-    onMoved: (ids) => {
-      clearSelection();
-      paneB.clearSelection();
-      setSelected((current) => (current && ids.includes(current.id) ? null : current));
-    },
+    onMoved: handleMoved,
   });
+
+  // Stable identities: FileRow is memoized, and its handlers close over these. Inline arrows here
+  // would change on every render and make the memo a no-op.
+  const selectInPane = useMemo(
+    () =>
+      [0, 1].map((pane) => (entry: ViewEntry) => {
+        setSelected(entry);
+        setActivePane(pane as 0 | 1);
+      }),
+    [],
+  );
+
+  const startMoveDrag = useMemo(
+    () => [0, 1].map((pane) => (ids: string[]) => setDragMove({ ids, sourcePane: pane as 0 | 1 })),
+    [],
+  );
+
+  const endMoveDrag = useCallback(() => setDragMove(null), []);
 
   splitRef.current = split;
 
@@ -461,15 +484,12 @@ function WorkspaceInner({
             split={split}
             onToggleSplit={currentFolderId !== null || split ? toggleSplit : undefined}
             acceptMove={split && dragMove?.sourcePane === 1 && currentFolderId !== null}
-            onMoveDragStart={(ids) => setDragMove({ ids, sourcePane: 0 })}
-            onMoveDragEnd={() => setDragMove(null)}
+            onMoveDragStart={startMoveDrag[0]}
+            onMoveDragEnd={endMoveDrag}
             onMoveDrop={() => void handleMoveDrop(0)}
             onNavigate={navigate}
             onOpenFolder={openFolder}
-            onSelect={(entry) => {
-              setSelected(entry);
-              setActivePane(0);
-            }}
+            onSelect={selectInPane[0]}
             onDeselect={() => {
               setSelected(null);
               clearSelection();
@@ -527,15 +547,12 @@ function WorkspaceInner({
                 split={split}
                 onToggleSplit={toggleSplit}
                 acceptMove={split && dragMove?.sourcePane === 0 && paneB.currentFolderId !== null}
-                onMoveDragStart={(ids) => setDragMove({ ids, sourcePane: 1 })}
-                onMoveDragEnd={() => setDragMove(null)}
+                onMoveDragStart={startMoveDrag[1]}
+                onMoveDragEnd={endMoveDrag}
                 onMoveDrop={() => void handleMoveDrop(1)}
                 onNavigate={paneB.navigate}
                 onOpenFolder={paneB.openFolder}
-                onSelect={(entry) => {
-                  setSelected(entry);
-                  setActivePane(1);
-                }}
+                onSelect={selectInPane[1]}
                 onDeselect={() => {
                   setSelected(null);
                   paneB.clearSelection();

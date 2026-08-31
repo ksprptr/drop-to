@@ -1,7 +1,7 @@
 'use client';
 
 import type { StorageBackend } from '@dropto/types';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 /** Multi-selection over the entries of one pane. */
 export interface EntrySelection {
@@ -62,5 +62,8 @@ export function useEntrySelection(
     });
   }, []);
 
-  return { selectedIds, toggleSelect, selectAll, clearSelection, setSelection, pruneSelection };
+  return useMemo(
+    () => ({ selectedIds, toggleSelect, selectAll, clearSelection, setSelection, pruneSelection }),
+    [selectedIds, toggleSelect, selectAll, clearSelection, setSelection, pruneSelection],
+  );
 }
