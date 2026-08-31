@@ -80,7 +80,9 @@ describe('GlobalExceptionFilter', () => {
 
   it('redacts bearer-grade query values before logging the URL', () => {
     const warn = jest.spyOn(filter['logger'], 'warn');
-    const { host } = buildHost('/google-auth/google/callback?code=4/secret&state=nonce&scope=drive');
+    const { host } = buildHost(
+      '/google-auth/google/callback?code=4/secret&state=nonce&scope=drive',
+    );
 
     filter.catch(new NotFoundException('nope'), host);
 

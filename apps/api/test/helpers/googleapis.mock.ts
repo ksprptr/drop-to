@@ -13,6 +13,7 @@ export const driveFilesMock = {
   list: jest.fn(),
   create: jest.fn(),
   delete: jest.fn(),
+  update: jest.fn(),
 };
 
 /**
@@ -38,4 +39,5 @@ export const resetGoogleApisMock = (): void => {
   driveFilesMock.list.mockReset();
   driveFilesMock.create.mockReset();
   driveFilesMock.delete.mockReset();
+  driveFilesMock.update.mockReset();
 };

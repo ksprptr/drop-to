@@ -7,3 +7,17 @@ config({ path: resolve(__dirname, '../.env.test'), override: true });
 
 // Silence Nest's logger so test output stays readable (services log on success/error paths).
 Logger.overrideLogger(false);
+
+// Fail loudly on any outbound HTTP a test forgot to stub. The Drive provider opens resumable upload
+// sessions and polls their status through global `fetch` (googleapis is only mocked at the
+// `google.drive()` client level, which does not cover those), so without this a test touching those
+// paths would hit googleapis.com for real on every CI run. Tests that exercise them stub
+// `global.fetch` themselves; anything else gets a pointed error instead of a silent live call.
+global.fetch = ((input: RequestInfo | URL): never => {
+  const url =
+    typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url;
+
+  throw new Error(
+    `Unmocked outbound fetch to ${url}. Stub global.fetch in the test rather than calling a real service.`,
+  );
+}) as unknown as typeof fetch;

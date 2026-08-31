@@ -28,10 +28,11 @@ describe('GoogleDriveProvider', () => {
     list: jest.Mock;
     create: jest.Mock;
     delete: jest.Mock;
+    update: jest.Mock;
   };
   let googleAuth: { getActiveAccountId: jest.Mock; getAuthorizedClient: jest.Mock };
   let prisma: {
-    allowedFolder: { findMany: jest.Mock };
+    allowedFolder: { findMany: jest.Mock; deleteMany: jest.Mock };
   };
 
   /**
@@ -45,7 +46,13 @@ describe('GoogleDriveProvider', () => {
   });
 
   beforeEach(() => {
-    files = { get: jest.fn(), list: jest.fn(), create: jest.fn(), delete: jest.fn() };
+    files = {
+      get: jest.fn(),
+      list: jest.fn(),
+      create: jest.fn(),
+      delete: jest.fn(),
+      update: jest.fn(),
+    };
     (google.drive as jest.Mock).mockReturnValue({ files });
 
     googleAuth = {
@@ -55,7 +62,7 @@ describe('GoogleDriveProvider', () => {
       }),
     };
     prisma = {
-      allowedFolder: { findMany: jest.fn() },
+      allowedFolder: { findMany: jest.fn(), deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
     };
 
     service = new GoogleDriveProvider(
@@ -332,6 +339,359 @@ describe('GoogleDriveProvider', () => {
       });
 
       await expect(service.createFolderArchive('doc')).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('listRoots (liveness pruning)', () => {
+    const row = { id: 'f1', folderId: 'drive-1', name: 'Photos', createdAt: new Date() };
+    // The rows are mapped to the wire entity on the way out, which serializes `createdAt`.
+    const entity = { ...row, createdAt: row.createdAt.toISOString() };
+
+    /**
+     * Scripts the authorized-root rows independently of `getAllowedFolderIds`.
+     **/
+    const withRootRows = () => {
+      prisma.allowedFolder.findMany.mockResolvedValue([row]);
+    };
+
+    it('returns a root that still exists in Drive', async () => {
+      withRootRows();
+      files.get.mockResolvedValue({ data: { id: 'drive-1', trashed: false } });
+
+      await expect(service.listRoots()).resolves.toEqual([entity]);
+      expect(prisma.allowedFolder.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('hides a trashed root but keeps the authorization (it can be restored in Drive)', async () => {
+      withRootRows();
+      files.get.mockResolvedValue({ data: { id: 'drive-1', trashed: true } });
+
+      await expect(service.listRoots()).resolves.toEqual([]);
+      expect(prisma.allowedFolder.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('drops and unauthorizes a root Drive reports as gone (404)', async () => {
+      withRootRows();
+      files.get.mockRejectedValue(Object.assign(new Error('File not found'), { code: 404 }));
+
+      await expect(service.listRoots()).resolves.toEqual([]);
+      expect(prisma.allowedFolder.deleteMany).toHaveBeenCalledWith({
+        where: { driveAccountId: 'account-1', id: { in: ['f1'] } },
+      });
+    });
+
+    it('keeps a root when the liveness check fails transiently', async () => {
+      withRootRows();
+      // Only a hard 404 is proof the folder is gone. Treating a 500 or a timeout as proof would
+      // silently revoke a working authorization the operator would then have to re-pick.
+      files.get.mockRejectedValue(Object.assign(new Error('backend error'), { code: 500 }));
+
+      await expect(service.listRoots()).resolves.toEqual([entity]);
+      expect(prisma.allowedFolder.deleteMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('renameItem', () => {
+    it('renames an item inside the authorized tree', async () => {
+      withAllowedRoots('root-1');
+      files.get.mockResolvedValue({ data: { id: 'doc', parents: ['root-1'] } });
+      files.update.mockResolvedValue({
+        data: { id: 'doc', name: 'new.pdf', mimeType: 'application/pdf', size: '10' },
+      });
+
+      await expect(service.renameItem('doc', 'new.pdf')).resolves.toMatchObject({
+        id: 'doc',
+        name: 'new.pdf',
+        isFolder: false,
+        size: 10,
+      });
+      expect(files.update).toHaveBeenCalledWith(
+        expect.objectContaining({ fileId: 'doc', requestBody: { name: 'new.pdf' } }),
+      );
+    });
+
+    it('refuses to rename an authorized root (409)', async () => {
+      withAllowedRoots('root-1');
+
+      await expect(service.renameItem('root-1', 'Renamed')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      // Rejected before Drive is touched at all.
+      expect(files.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to rename an item outside the authorized tree (403)', async () => {
+      withAllowedRoots('root-1');
+      files.get.mockResolvedValue({ data: { id: 'outsider', parents: [] } });
+
+      await expect(service.renameItem('outsider', 'new')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(files.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('moveItem', () => {
+    it('reparents an item, detaching it from its previous parents', async () => {
+      withAllowedRoots('root-1');
+      files.get.mockImplementation(({ fileId }: { fileId: string }) =>
+        Promise.resolve({ data: { id: fileId, parents: ['root-1'] } }),
+      );
+      files.update.mockResolvedValue({
+        data: { id: 'doc', name: 'doc.pdf', mimeType: 'application/pdf' },
+      });
+
+      await expect(service.moveItem('doc', 'sub-1')).resolves.toMatchObject({ id: 'doc' });
+      expect(files.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileId: 'doc',
+          addParents: 'sub-1',
+          removeParents: 'root-1',
+        }),
+      );
+    });
+
+    it('rejects moving an item into itself (400)', async () => {
+      withAllowedRoots('root-1');
+
+      await expect(service.moveItem('doc', 'doc')).rejects.toBeInstanceOf(BadRequestException);
+      expect(files.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to move an authorized root (409)', async () => {
+      withAllowedRoots('root-1');
+
+      await expect(service.moveItem('root-1', 'sub-1')).rejects.toBeInstanceOf(ConflictException);
+      expect(files.update).not.toHaveBeenCalled();
+    });
+
+    it('validates the destination too, not just the item (403)', async () => {
+      withAllowedRoots('root-1');
+      // The item is inside the tree; the target is not. Checking only the source would let an
+      // operator move an authorized file out into the rest of the owner's Drive.
+      files.get.mockImplementation(({ fileId }: { fileId: string }) =>
+        Promise.resolve({
+          data: { id: fileId, parents: fileId === 'doc' ? ['root-1'] : [] },
+        }),
+      );
+
+      await expect(service.moveItem('doc', 'elsewhere')).rejects.toBeInstanceOf(ForbiddenException);
+      expect(files.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('downloadFile', () => {
+    it('returns the stream with the file metadata', async () => {
+      withAllowedRoots('root-1');
+      const stream = { pipe: jest.fn() };
+      files.get.mockImplementation(({ alt, fields }: { alt?: string; fields?: string }) => {
+        if (alt === 'media') return Promise.resolve({ data: stream });
+        if (fields === 'name, mimeType, size') {
+          return Promise.resolve({
+            data: { name: 'doc.pdf', mimeType: 'application/pdf', size: '2048' },
+          });
+        }
+        return Promise.resolve({ data: { id: 'doc', parents: ['root-1'] } });
+      });
+
+      await expect(service.downloadFile('doc')).resolves.toMatchObject({
+        stream,
+        name: 'doc.pdf',
+        mimeType: 'application/pdf',
+        size: 2048,
+      });
+    });
+
+    it('refuses to stream a folder as a file (400)', async () => {
+      withAllowedRoots('root-1');
+      files.get.mockImplementation(({ fields }: { fields?: string }) =>
+        Promise.resolve(
+          fields === 'name, mimeType, size'
+            ? { data: { name: 'Sub', mimeType: FOLDER_MIME } }
+            : { data: { id: 'sub', parents: ['root-1'] } },
+        ),
+      );
+
+      await expect(service.downloadFile('sub')).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuses a file outside the authorized tree (403)', async () => {
+      withAllowedRoots('root-1');
+      files.get.mockResolvedValue({ data: { id: 'outsider', parents: [] } });
+
+      await expect(service.downloadFile('outsider')).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  // These two are the only places the provider talks to Google over raw `fetch` rather than the
+  // mocked `google.drive()` client, so `global.fetch` is stubbed per test. test/setup-env.ts makes
+  // an unstubbed call throw, which is what keeps this suite from ever reaching googleapis.com.
+  describe('createResumableUpload', () => {
+    const init = {
+      name: 'big.bin',
+      mimeType: 'application/octet-stream',
+      size: 1024,
+      origin: 'http://localhost:3000',
+    };
+    let fetchMock: jest.Mock;
+
+    beforeEach(() => {
+      fetchMock = jest.fn();
+      global.fetch = fetchMock as unknown as typeof fetch;
+    });
+
+    it('returns the session URL Google puts in the Location header', async () => {
+      withAllowedRoots('root-1');
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({
+          location: 'https://www.googleapis.com/upload/drive/v3/files?upload_id=X',
+        }),
+      });
+
+      await expect(service.createResumableUpload('root-1', init)).resolves.toEqual({
+        uploadUrl: 'https://www.googleapis.com/upload/drive/v3/files?upload_id=X',
+      });
+    });
+
+    it('bakes the validated parent and the browser origin into the session', async () => {
+      withAllowedRoots('root-1');
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ location: 'https://www.googleapis.com/upload/drive/session' }),
+      });
+
+      await service.createResumableUpload('root-1', init);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      // The parent is server-side only: the browser gets a session it cannot repoint elsewhere.
+      expect(JSON.parse(options.body as string)).toEqual({
+        name: 'big.bin',
+        parents: ['root-1'],
+        mimeType: 'application/octet-stream',
+      });
+      expect((options.headers as Record<string, string>)['Origin']).toBe('http://localhost:3000');
+    });
+
+    it('refuses to open a session for a folder outside the authorized tree (403)', async () => {
+      withAllowedRoots('root-1');
+      files.get.mockResolvedValue({ data: { id: 'outsider', parents: [] } });
+
+      await expect(service.createResumableUpload('outsider', init)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('maps a rejected session to a 503', async () => {
+      withAllowedRoots('root-1');
+      fetchMock.mockResolvedValue({ ok: false, status: 403, headers: new Headers() });
+
+      await expect(service.createResumableUpload('root-1', init)).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+    });
+
+    it('maps a 200 without a Location header to a 503', async () => {
+      withAllowedRoots('root-1');
+      fetchMock.mockResolvedValue({ ok: true, status: 200, headers: new Headers() });
+
+      await expect(service.createResumableUpload('root-1', init)).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+    });
+  });
+
+  describe('getUploadStatus', () => {
+    let fetchMock: jest.Mock;
+
+    beforeEach(() => {
+      fetchMock = jest.fn();
+      global.fetch = fetchMock as unknown as typeof fetch;
+    });
+
+    // The URL arrives in the request body, so this prefix check is the only thing stopping the
+    // endpoint from being a server-side request forgery primitive into the internal network.
+    it.each([
+      ['an unrelated host', 'https://evil.example.com/upload/drive/v3/files'],
+      ['plain http', 'http://www.googleapis.com/upload/drive/v3/files'],
+      ['an internal address', 'http://169.254.169.254/latest/meta-data/'],
+      ['a look-alike host', 'https://www.googleapis.com.evil.test/upload/drive/'],
+      [
+        'the prefix buried in a query string',
+        'https://evil.test/?u=https://www.googleapis.com/upload/drive/',
+      ],
+    ])('rejects %s without dialling it (400)', async (_label, url) => {
+      await expect(service.getUploadStatus(url, 100)).rejects.toBeInstanceOf(BadRequestException);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('reports a finished session with the created file id', async () => {
+      fetchMock.mockResolvedValue({
+        status: 200,
+        headers: new Headers(),
+        json: jest.fn().mockResolvedValue({ id: 'file-1' }),
+      });
+
+      await expect(
+        service.getUploadStatus(
+          'https://www.googleapis.com/upload/drive/v3/files?upload_id=X',
+          500,
+        ),
+      ).resolves.toEqual({ complete: true, receivedBytes: 500, fileId: 'file-1' });
+    });
+
+    it('survives a 200 whose body is not JSON', async () => {
+      fetchMock.mockResolvedValue({
+        status: 201,
+        headers: new Headers(),
+        json: jest.fn().mockRejectedValue(new Error('not json')),
+      });
+
+      await expect(
+        service.getUploadStatus('https://www.googleapis.com/upload/drive/v3/files', 500),
+      ).resolves.toEqual({ complete: true, receivedBytes: 500, fileId: null });
+    });
+
+    it('translates a 308 Range header into the received byte count', async () => {
+      // "bytes=0-99" means bytes 0..99 inclusive landed, i.e. 100 bytes.
+      fetchMock.mockResolvedValue({
+        status: 308,
+        headers: new Headers({ range: 'bytes=0-99' }),
+      });
+
+      await expect(
+        service.getUploadStatus('https://www.googleapis.com/upload/drive/v3/files', 500),
+      ).resolves.toEqual({ complete: false, receivedBytes: 100, fileId: null });
+    });
+
+    it('treats a 308 without a Range header as nothing received', async () => {
+      fetchMock.mockResolvedValue({ status: 308, headers: new Headers() });
+
+      await expect(
+        service.getUploadStatus('https://www.googleapis.com/upload/drive/v3/files', 500),
+      ).resolves.toEqual({ complete: false, receivedBytes: 0, fileId: null });
+    });
+
+    it('falls back to 0 when the Range header is unparseable', async () => {
+      fetchMock.mockResolvedValue({
+        status: 308,
+        headers: new Headers({ range: 'bytes=garbage' }),
+      });
+
+      await expect(
+        service.getUploadStatus('https://www.googleapis.com/upload/drive/v3/files', 500),
+      ).resolves.toMatchObject({ receivedBytes: 0 });
+    });
+
+    it('maps any other status to a 503', async () => {
+      fetchMock.mockResolvedValue({ status: 500, headers: new Headers() });
+
+      await expect(
+        service.getUploadStatus('https://www.googleapis.com/upload/drive/v3/files', 500),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
     });
   });
 
