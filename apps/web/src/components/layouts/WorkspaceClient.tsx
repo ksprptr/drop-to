@@ -522,7 +522,10 @@ function WorkspaceInner({
           />
 
           <div className='min-w-0 overflow-hidden'>
+            {/* `inert` (not display:none) so the open/close width+opacity transition still plays:
+                the pane stays laid out, but a closed one is out of the tab order and the a11y tree. */}
             <div
+              inert={!split}
               className={`flex h-full min-w-0 flex-col border-l border-zinc-200 pl-3 transition-opacity duration-300 dark:border-zinc-800 ${
                 split ? 'opacity-100' : 'pointer-events-none opacity-0'
               }`}>
