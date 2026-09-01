@@ -28,6 +28,8 @@ overrides:
   js-yaml@5: 5.2.2
   find-my-way: ^9.6.1
 allowBuilds:
+  # Jest's optional native file watcher — never built here and the suites do not need it.
+  '@parcel/watcher': false
   '@prisma/engines': true
   '@scarf/scarf': false
   '@swc/core': true
