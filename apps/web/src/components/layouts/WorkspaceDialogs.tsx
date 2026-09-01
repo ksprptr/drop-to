@@ -14,6 +14,13 @@ interface Props {
 }
 
 /**
+ * Longest name a folder/file may be given.
+ **/
+// Matches what Drive's own UI accepts and what every mainstream filesystem stores (255 bytes), so a
+// downloaded file keeps its name. One under the API's `@MaxLength(256)`, which stays the backstop.
+const MAX_NAME_LENGTH = 255;
+
+/**
  * Every workspace dialog: duplicate uploads, new folder, rename, delete, bulk delete and root removal.
  **/
 // Purely presentational — state and handlers live in useEntryOperations / useUploadQueue.
@@ -54,6 +61,7 @@ export default function WorkspaceDialogs({ ops, uploads }: Props) {
       <Modal open={ops.newFolder.open} onClose={() => ops.newFolder.close()} title='New folder'>
         <form onSubmit={ops.newFolder.submit} className='flex flex-col gap-y-4'>
           <Input
+            maxLength={MAX_NAME_LENGTH}
             name='folderName'
             label='Folder name'
             value={ops.newFolder.name}
@@ -84,6 +92,7 @@ export default function WorkspaceDialogs({ ops, uploads }: Props) {
         title={ops.rename.target?.isFolder ? 'Rename folder' : 'Rename file'}>
         <form onSubmit={ops.rename.submit} className='flex flex-col gap-y-4'>
           <Input
+            maxLength={MAX_NAME_LENGTH}
             name='ops.rename.name'
             label='Name'
             value={ops.rename.name}
