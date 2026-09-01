@@ -1,7 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 
 import type { ExtendedProps } from '@/common/types/global.types';
 import Icon from '@/components/common/Icon';
@@ -17,6 +17,8 @@ interface Props extends ExtendedProps {
  * Animated modal dialog with a backdrop and optional title.
  **/
 export default function Modal({ open, onClose, title, maxWidth = 'max-w-md', children }: Props) {
+  const titleId = useId();
+
   useEffect(() => {
     if (!open) {
       return;
@@ -52,12 +54,19 @@ export default function Modal({ open, onClose, title, maxWidth = 'max-w-md', chi
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
             transition={{ type: 'spring', stiffness: 320, damping: 26 }}
             onClick={(event) => event.stopPropagation()}
+            role='dialog'
+            aria-modal='true'
+            aria-label={title ? undefined : 'Dialog'}
+            aria-labelledby={title ? titleId : undefined}
             className={`w-full border-zinc-300 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 ${maxWidth} max-h-[90vh] overflow-y-auto rounded-xl border shadow-2xl`}>
             {title && (
               <div className='flex items-center justify-between border-b border-zinc-300 px-6 py-4 dark:border-zinc-700'>
-                <h2 className='text-base font-semibold'>{title}</h2>
+                <h2 id={titleId} className='text-base font-semibold'>
+                  {title}
+                </h2>
                 <button
                   type='button'
+                  aria-label='Close dialog'
                   onClick={onClose}
                   className='rounded-md p-1 text-zinc-600 transition hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800'>
                   <Icon icon='XMark' className='h-5 w-5' />
