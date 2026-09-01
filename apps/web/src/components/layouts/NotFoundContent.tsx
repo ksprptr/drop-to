@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 /**
- * 404 body — shared by the not-found route and the workspace route's unknown-backend branch.
+ * 404 body for the not-found route.
  **/
 // Deliberately static: an error page must not depend on JS having run to become visible.
 export default function NotFoundContent() {
