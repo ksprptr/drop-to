@@ -30,6 +30,7 @@ describe('GoogleDriveProvider', () => {
     delete: jest.Mock;
     update: jest.Mock;
   };
+  let about: { get: jest.Mock };
   let googleAuth: { getActiveAccountId: jest.Mock; getAuthorizedClient: jest.Mock };
   let prisma: {
     allowedFolder: { findMany: jest.Mock; deleteMany: jest.Mock };
@@ -53,7 +54,8 @@ describe('GoogleDriveProvider', () => {
       delete: jest.fn(),
       update: jest.fn(),
     };
-    (google.drive as jest.Mock).mockReturnValue({ files });
+    about = { get: jest.fn() };
+    (google.drive as jest.Mock).mockReturnValue({ files, about });
 
     googleAuth = {
       getActiveAccountId: jest.fn().mockResolvedValue('account-1'),
@@ -685,6 +687,67 @@ describe('GoogleDriveProvider', () => {
       await expect(
         service.getUploadStatus('https://www.googleapis.com/upload/drive/v3/files', 500),
       ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    });
+  });
+
+  describe('status (quota caching)', () => {
+    /**
+     * A connected account with one authorized root that Drive still reports as live.
+     **/
+    const connected = () => {
+      googleAuth.getStatus = jest.fn().mockResolvedValue({
+        connected: true,
+        email: 'owner@gmail.com',
+        allowedFolders: [{ id: 'f1', folderId: 'root-1', name: 'test', createdAt: new Date() }],
+      });
+      about.get.mockResolvedValue({ data: { storageQuota: { usage: '100', limit: '1000' } } });
+      files.get.mockResolvedValue({ data: { id: 'root-1', trashed: false } });
+    };
+
+    it('reports the quota from Drive on the first call', async () => {
+      connected();
+
+      await expect(service.status()).resolves.toMatchObject({
+        connected: true,
+        quota: { usage: 100, limit: 1000 },
+      });
+      expect(about.get).toHaveBeenCalledTimes(1);
+    });
+
+    it('serves the quota from cache on the next call', async () => {
+      connected();
+
+      await service.status();
+      await service.status();
+      await service.status();
+
+      // One `about.get` for three polls: the quota is what the cache is for.
+      expect(about.get).toHaveBeenCalledTimes(1);
+    });
+
+    it('still re-checks root liveness on every call', async () => {
+      connected();
+
+      await service.status();
+      const afterFirst = files.get.mock.calls.length;
+      await service.status();
+
+      // Deliberately uncached: a root deleted in Drive has to disappear from the sidebar at once.
+      expect(files.get.mock.calls.length).toBeGreaterThan(afterFirst);
+    });
+
+    it('re-reads the quota once the TTL has passed', async () => {
+      connected();
+      const now = Date.now();
+      const clock = jest.spyOn(Date, 'now');
+
+      clock.mockReturnValue(now);
+      await service.status();
+      clock.mockReturnValue(now + 30_001);
+      await service.status();
+
+      expect(about.get).toHaveBeenCalledTimes(2);
+      clock.mockRestore();
     });
   });
 

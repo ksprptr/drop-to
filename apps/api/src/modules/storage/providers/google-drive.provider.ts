@@ -51,6 +51,12 @@ const ITEM_MISSING_MESSAGE = 'This item no longer exists in Google Drive.';
 // One network page. Small enough to keep first paint fast, big enough that most folders need one call.
 const PAGE_SIZE = 100;
 
+/** How long the reported storage quota stays trusted. */
+// Only the quota is cached. It is one `about.get` per status poll for a number that moves slowly, so
+// a stale reading is invisible; root liveness deliberately is NOT cached, because that check is the
+// whole point of the poll (an e2e caught a cached root lingering after it was deleted in Drive).
+const QUOTA_CACHE_TTL_MS = 30_000;
+
 /** How long a folder's parent list stays trusted. Ancestry changes only when a folder is moved. */
 const ANCESTOR_CACHE_TTL_MS = 60_000;
 
@@ -64,7 +70,14 @@ export class GoogleDriveProvider implements StorageProvider {
   readonly backend: StorageBackend = 'drive';
 
   // Intermediate folders only — the target item is always re-read, so a deleted item still 404s.
-  private readonly ancestorCache = new TtlCache<string[]>(ANCESTOR_CACHE_TTL_MS, ANCESTOR_CACHE_MAX);
+  private readonly ancestorCache = new TtlCache<string[]>(
+    ANCESTOR_CACHE_TTL_MS,
+    ANCESTOR_CACHE_MAX,
+  );
+  private quotaCache: {
+    value: { usage: number; limit: number | null } | null;
+    expiresAt: number;
+  } | null = null;
 
   private readonly logger = new Logger(GoogleDriveProvider.name);
 
@@ -87,7 +100,7 @@ export class GoogleDriveProvider implements StorageProvider {
       const accountId = await this.googleAuthService.getActiveAccountId();
       const auth = await this.googleAuthService.getAuthorizedClient(accountId);
       await auth.getAccessToken();
-      quota = await this.fetchQuota(auth);
+      quota = await this.cachedQuota(auth);
       // The owner can delete an authorized folder in Drive; don't offer it as a browse root.
       folders = await this.pruneMissingRoots(
         google.drive({ version: 'v3', auth }),
@@ -116,6 +129,24 @@ export class GoogleDriveProvider implements StorageProvider {
       roots: folders.map((folder) => ({ id: folder.folderId, name: folder.name })),
       quota,
     };
+  }
+
+  /**
+   * The storage quota, re-read from Drive at most once per TTL.
+   **/
+  private async cachedQuota(
+    auth: Auth.OAuth2Client,
+  ): Promise<{ usage: number; limit: number | null } | null> {
+    const now = Date.now();
+
+    if (this.quotaCache && this.quotaCache.expiresAt > now) {
+      return this.quotaCache.value;
+    }
+
+    const value = await this.fetchQuota(auth);
+    this.quotaCache = { value, expiresAt: now + QUOTA_CACHE_TTL_MS };
+
+    return value;
   }
 
   /**
