@@ -1,5 +1,10 @@
 import { ImageResponse } from 'next/og';
 
+import { metadataConfig } from '@/configs/seo/metadata.config';
+
+const wordmark = metadataConfig.title;
+const subtitle = metadataConfig.tagline;
+
 /**
  * Loads a Poppins weight from Google Fonts as TTF/OTF data for Satori (`text` subsets it).
  **/
@@ -16,10 +21,10 @@ async function loadPoppins(weight: number, text: string): Promise<ArrayBuffer> {
 }
 
 /**
- * OG image (`GET /api/og`) — the DropTo badge + wordmark on a light zinc background.
+ * OG image (`GET /api/og`) — the badge, the wordmark and the tagline on a light zinc background.
  **/
 export async function GET() {
-  const poppins = await loadPoppins(600, 'DropTo');
+  const poppins = await loadPoppins(600, `${wordmark}${subtitle}`);
 
   return new ImageResponse(
     <div
@@ -62,12 +67,16 @@ export async function GET() {
           style={{
             display: 'flex',
             marginTop: 40,
-            fontSize: 104,
+            fontSize: 96,
             fontWeight: 600,
             letterSpacing: -2,
             color: '#18181b',
           }}>
-          DropTo
+          {wordmark}
+        </div>
+
+        <div style={{ display: 'flex', marginTop: 12, fontSize: 34, color: '#52525b' }}>
+          {subtitle}
         </div>
       </div>
     </div>,

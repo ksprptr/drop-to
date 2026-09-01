@@ -1,7 +1,7 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
 import { CircleAlert, CircleCheck } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   createContext,
   type PropsWithChildren,

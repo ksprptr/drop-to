@@ -1,7 +1,7 @@
 'use client';
 
 import type { StorageBackend, StorageStatus } from '@dropto/types';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -103,10 +103,7 @@ export default function Breadcrumb({
 
   const renderCrumb = (crumb: Crumb, index: number) => (
     <span key={crumb.id} className='flex min-w-0 items-center gap-x-1'>
-      <Icon
-        icon='ChevronRight'
-        className='h-3.5 w-3.5 shrink-0 text-zinc-600 dark:text-zinc-400'
-      />
+      <Icon icon='ChevronRight' className='h-3.5 w-3.5 shrink-0 text-zinc-600 dark:text-zinc-400' />
       <button
         type='button'
         onClick={() => onNavigate(index)}
@@ -236,7 +233,11 @@ export default function Breadcrumb({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: -4 }}
                 transition={{ duration: 0.08, ease: 'easeOut' }}
-                style={{ transformOrigin: 'top left', top: overflowPos.top, left: overflowPos.left }}
+                style={{
+                  transformOrigin: 'top left',
+                  top: overflowPos.top,
+                  left: overflowPos.left,
+                }}
                 className='fixed z-50 flex max-h-72 w-56 flex-col gap-y-0.5 overflow-y-auto rounded-xl border border-zinc-300 bg-zinc-50 p-1.5 text-sm shadow-xl dark:border-zinc-700 dark:bg-zinc-800'>
                 {crumbs.slice(1, crumbs.length - 2).map((crumb, i) => (
                   <button

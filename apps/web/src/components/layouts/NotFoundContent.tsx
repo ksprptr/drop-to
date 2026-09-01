@@ -1,32 +1,22 @@
-'use client';
-
-import { motion } from 'framer-motion';
 import Link from 'next/link';
 
-import Icon from '@/components/common/Icon';
-
 /**
- * Animated 404 body (client, so the not-found route stays a Server Component).
+ * 404 body for the not-found route.
  **/
+// Deliberately static: an error page must not depend on JS having run to become visible.
 export default function NotFoundContent() {
   return (
-    <main className='flex min-h-screen items-center justify-center px-4'>
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 24 }}
-        className='flex w-full max-w-sm flex-col items-center text-center'>
-        <Icon icon='ExclamationTriangle' className='mb-4 h-8 w-8 text-green-600' />
-        <h1 className='text-lg font-semibold'>Page not found</h1>
-        <p className='mt-1 text-sm text-zinc-600 dark:text-zinc-400'>
-          The page you are looking for doesn&apos;t exist or has been moved.
-        </p>
-        <Link
-          href='/'
-          className='mt-6 inline-flex items-center gap-x-2 rounded-lg bg-green-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-green-700'>
-          Back to home
-        </Link>
-      </motion.div>
+    <main className='flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center'>
+      <p className='text-sm font-semibold tracking-widest text-green-600 uppercase'>Error 404</p>
+      <h1 className='text-2xl font-bold'>Page not found</h1>
+      <p className='max-w-md text-zinc-600 dark:text-zinc-400'>
+        This page does not exist — but your storage is one click away.
+      </p>
+      <Link
+        href='/'
+        className='rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 ease-out hover:bg-green-700'>
+        Back to the workspace
+      </Link>
     </main>
   );
 }

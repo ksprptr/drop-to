@@ -2,6 +2,7 @@
 
 import {
   Archive,
+  ArrowLeftRight,
   BadgeCheck,
   Check,
   ChevronDown,
@@ -58,6 +59,7 @@ const ICONS: Record<string, LucideIcon> = {
   ArrowTopRightOnSquare: ExternalLink,
   ArrowUpTray: Upload,
   ArrowsPointingIn: Move,
+  ArrowsRightLeft: ArrowLeftRight,
   Check: Check,
   CheckBadge: BadgeCheck,
   ChevronDown,

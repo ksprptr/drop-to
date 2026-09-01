@@ -3,22 +3,12 @@
 import type { StorageBackend } from '@dropto/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { listContentsAction } from '@/actions/storage/storage.actions';
 import { useDebouncedValue } from '@/common/hooks/useDebouncedValue';
+import { type PaneError, useEntryListing } from '@/common/hooks/useEntryListing';
+import { useEntrySelection } from '@/common/hooks/useEntrySelection';
 import type { Crumb, SortDir, SortKey, ViewEntry } from '@/common/types/workspace.types';
-import { toViewEntries } from '@/common/utils/view-entry.functions';
 
-/**
- * Drive filters by name server-side; S3 lists a whole level and is filtered client-side.
- **/
-const serverSearch = (backend: StorageBackend | null, term: string): string | undefined =>
-  backend === 'drive' && term ? term : undefined;
-
-/** A failed read, surfaced to the pane's error handler. */
-export interface PaneError {
-  error?: string;
-  status?: number;
-}
+export type { PaneError };
 
 /** A single independently-browsable pane of folders/files. */
 export interface BrowsePane {
@@ -52,41 +42,41 @@ export interface BrowsePane {
 /**
  * Owns one browsing pane's state (path, entries, loading, multi-selection).
  **/
+// Location lives in local state here (the main pane uses the URL); everything below it is shared.
 export function useBrowsePane(
   backend: StorageBackend | null,
   roots: ViewEntry[],
   onError: (error: PaneError) => void,
 ): BrowsePane {
   const [path, setPath] = useState<Crumb[]>([]);
-  const [entries, setEntries] = useState<ViewEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [search, setSearch] = useState('');
-  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
 
   const currentFolderId = path.length > 0 ? path[path.length - 1].id : null;
   const atRoots = path.length === 0;
   const debouncedSearch = useDebouncedValue(search.trim(), 250);
 
-  // Bumped on every listing read; a resolved request whose id no longer matches is stale (the pane
-  // navigated away mid-flight) and must not paint over the current folder.
-  const listSeq = useRef(0);
-
   useEffect(() => {
     setPath([]);
   }, [backend]);
-
-  useEffect(() => {
-    setSelectedIds(new Set());
-  }, [currentFolderId, backend]);
 
   // A new folder starts unfiltered.
   useEffect(() => {
     setSearch('');
   }, [currentFolderId, backend]);
+
+  const listing = useEntryListing({
+    backend,
+    currentFolderId,
+    roots,
+    search: debouncedSearch,
+    sortKey,
+    sortDir,
+    onError,
+  });
+
+  const selection = useEntrySelection(currentFolderId, backend);
 
   // Keep the latest sortKey for toggleSort without making it depend on (and re-create) on every change.
   const sortKeyRef = useRef<SortKey>(sortKey);
@@ -96,70 +86,6 @@ export function useBrowsePane(
     setSortDir((dir) => (key === sortKeyRef.current ? (dir === 'asc' ? 'desc' : 'asc') : 'asc'));
     setSortKey(key);
   }, []);
-
-  const reload = useCallback(async () => {
-    const seq = ++listSeq.current;
-
-    if (currentFolderId === null || backend === null) {
-      setEntries(roots);
-      setNextPageToken(null);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    const result = await listContentsAction(backend, currentFolderId, {
-      search: serverSearch(backend, debouncedSearch),
-      sortKey,
-      sortDir,
-    });
-
-    // Superseded while in flight — a newer read owns the pane now.
-    if (seq !== listSeq.current) {
-      return;
-    }
-
-    if (result.ok) {
-      setEntries(toViewEntries(result.data?.entries ?? []));
-      setNextPageToken(result.data?.nextPageToken ?? null);
-    } else {
-      onError({ error: result.error, status: result.status });
-    }
-    setLoading(false);
-  }, [backend, currentFolderId, roots, onError, debouncedSearch, sortKey, sortDir]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  const loadMore = useCallback(async () => {
-    if (nextPageToken === null || backend === null || currentFolderId === null || loadingMore) {
-      return;
-    }
-
-    const seq = listSeq.current;
-    setLoadingMore(true);
-    const result = await listContentsAction(backend, currentFolderId, {
-      pageToken: nextPageToken,
-      search: serverSearch(backend, debouncedSearch),
-      sortKey,
-      sortDir,
-    });
-
-    // The folder changed under us — appending this page would mix two listings.
-    if (seq !== listSeq.current) {
-      setLoadingMore(false);
-      return;
-    }
-
-    if (result.ok) {
-      setEntries((current) => [...current, ...toViewEntries(result.data?.entries ?? [])]);
-      setNextPageToken(result.data?.nextPageToken ?? null);
-    } else {
-      onError({ error: result.error, status: result.status });
-    }
-    setLoadingMore(false);
-  }, [nextPageToken, backend, currentFolderId, loadingMore, debouncedSearch, sortKey, sortDir, onError]);
 
   const openFolder = useCallback((entry: ViewEntry) => {
     setPath((current) => [
@@ -174,43 +100,19 @@ export function useBrowsePane(
 
   const goTo = useCallback((next: Crumb[]) => setPath(next), []);
 
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
-
-  const selectAll = useCallback(() => {
-    setSelectedIds(new Set(entries.map((entry) => entry.id)));
-  }, [entries]);
-
-  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
-
-  const setSelection = useCallback((ids: string[]) => setSelectedIds(new Set(ids)), []);
-
-  const pruneSelection = useCallback((id: string) => {
-    setSelectedIds((current) => {
-      if (!current.has(id)) {
-        return current;
-      }
-      const next = new Set(current);
-      next.delete(id);
-      return next;
-    });
-  }, []);
+  const { entries } = listing;
+  const { selectAll: selectIds } = selection;
+  const selectAll = useCallback(
+    () => selectIds(entries.map((entry) => entry.id)),
+    [entries, selectIds],
+  );
 
   return useMemo(
     () => ({
       path,
-      entries,
-      loading,
-      selectedIds,
+      entries: listing.entries,
+      loading: listing.loading,
+      selectedIds: selection.selectedIds,
       currentFolderId,
       atRoots,
       sortKey,
@@ -218,42 +120,33 @@ export function useBrowsePane(
       toggleSort,
       search,
       setSearch,
-      hasMore: nextPageToken !== null,
-      loadingMore,
-      loadMore,
+      hasMore: listing.hasMore,
+      loadingMore: listing.loadingMore,
+      loadMore: listing.loadMore,
       openFolder,
       navigate,
       goTo,
-      reload,
-      toggleSelect,
+      reload: listing.reload,
+      toggleSelect: selection.toggleSelect,
       selectAll,
-      clearSelection,
-      setSelection,
-      pruneSelection,
+      clearSelection: selection.clearSelection,
+      setSelection: selection.setSelection,
+      pruneSelection: selection.pruneSelection,
     }),
     [
       path,
-      entries,
-      loading,
-      selectedIds,
+      listing,
+      selection,
       currentFolderId,
       atRoots,
       sortKey,
       sortDir,
       toggleSort,
       search,
-      nextPageToken,
-      loadingMore,
-      loadMore,
       openFolder,
       navigate,
       goTo,
-      reload,
-      toggleSelect,
       selectAll,
-      clearSelection,
-      setSelection,
-      pruneSelection,
     ],
   );
 }

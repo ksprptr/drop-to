@@ -1,13 +1,18 @@
 # docker-compose.yml
-# Runs the full infrastructure + all applications.
+# Full deployment: Postgres + Redis + the API + the web app.
 #
 # Usage:
-#   docker compose up -d                       # all services
-#   docker compose up -d dropto-pg             # infrastructure only
-#   docker compose logs -f dropto-api          # stream logs for a service
+#   cp .env.example .env                              # infra + web settings
+#   cp apps/api/.env.example apps/api/.env            # API secrets
+#   docker compose up -d --build                      # build + start everything
+#   docker compose logs -f dropto-web                 # stream logs for a service
+#   docker compose down                               # stop (data survives in the volumes)
 #
-# Infrastructure + web build args: root .env (see .env.example)
-# API env vars: apps/api/.env (see apps/api/.env.example)
+# Migrations run automatically on every `up` (the one-shot `dropto-migrate` service); the API
+# only starts once they have been applied.
+#
+# Infra + web settings: root .env (see .env.example)
+# API secrets:          apps/api/.env (see apps/api/.env.example)
 
 services:
   dropto-pg:
@@ -19,7 +24,8 @@ services:
       POSTGRES_PASSWORD: '${DB_PASS}'
       POSTGRES_DB: '${DB_NAME}'
     ports:
-      - '127.0.0.1:${DB_PORT}:5432'
+      # Loopback only — nothing outside this host needs to reach the database.
+      - '127.0.0.1:${DB_PORT:-5432}:5432'
     volumes:
       - dropto_pg_data:/var/lib/postgresql/data
     networks:
@@ -36,7 +42,7 @@ services:
     restart: unless-stopped
     command: ['redis-server', '--requirepass', '${REDIS_PASS}']
     ports:
-      - '127.0.0.1:${REDIS_PORT}:6379'
+      - '127.0.0.1:${REDIS_PORT:-6379}:6379'
     volumes:
       - dropto_redis_data:/data
     networks:
@@ -47,20 +53,59 @@ services:
       timeout: 5s
       retries: 5
 
+  # One-shot: applies pending Prisma migrations, then exits. Shares the API image.
+  dropto-migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: dropto-api
+    container_name: dropto-migrate
+    restart: 'no'
+    command: ['node_modules/.bin/prisma', 'migrate', 'deploy']
+    env_file:
+      - apps/api/.env
+    environment: &api_env
+      NODE_ENV: 'production'
+      # Inside the network the services talk over their container names and default ports; these
+      # override apps/api/.env so the root .env stays the single source for infra credentials.
+      DB_HOST: 'dropto-pg'
+      DB_PORT: '5432'
+      DB_NAME: '${DB_NAME}'
+      DB_USER: '${DB_USER}'
+      DB_PASS: '${DB_PASS}'
+      REDIS_HOST: 'dropto-redis'
+      REDIS_PORT: '6379'
+      REDIS_USER: '${REDIS_USER:-default}'
+      REDIS_PASS: '${REDIS_PASS}'
+      REDIS_KEY_PREFIX: '${REDIS_KEY_PREFIX:-dropto:}'
+    networks:
+      - dropto_net
+    depends_on:
+      dropto-pg:
+        condition: service_healthy
+
   dropto-api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+    image: dropto-api
     container_name: dropto-api
     restart: unless-stopped
     env_file:
       - apps/api/.env
-    environment:
-      NODE_ENV: 'production'
-      DB_HOST: 'dropto-pg'
-      REDIS_HOST: 'dropto-redis'
+    environment: *api_env
+    # The server only reads its own bundle; /tmp is writable for Prisma's query engine.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     ports:
-      - '4000:4000'
+      # The browser hits this directly during the Google OAuth redirect, so it must be reachable
+      # from wherever the operator's browser runs. Drop the 127.0.0.1 prefix to expose it on the LAN.
+      - '127.0.0.1:${API_PORT:-4000}:4000'
     networks:
       - dropto_net
     depends_on:
@@ -68,40 +113,45 @@ services:
         condition: service_healthy
       dropto-redis:
         condition: service_healthy
-    healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://localhost:4000/health || exit 1']
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      dropto-migrate:
+        condition: service_completed_successfully
 
   dropto-web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: '${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}'
+        # Inlined into the client bundle / prerendered metadata — build-time only.
         NEXT_PUBLIC_GOOGLE_API_KEY: '${NEXT_PUBLIC_GOOGLE_API_KEY:-}'
         NEXT_PUBLIC_GOOGLE_APP_ID: '${NEXT_PUBLIC_GOOGLE_APP_ID:-}'
         APP_URL: '${APP_URL:-http://localhost:3000}'
+    image: dropto-web
     container_name: dropto-web
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     environment:
       NODE_ENV: 'production'
       PORT: '3000'
+      # Runtime, so renaming the instance needs no rebuild.
+      APP_NAME: '${APP_NAME:-DropTo}'
+      APP_URL: '${APP_URL:-http://localhost:3000}'
+      # Server-to-server, over the compose network — never leaves the host.
       API_URL: 'http://dropto-api:4000/api/v1'
       COOKIE_DOMAIN: '${COOKIE_DOMAIN:-localhost}'
     ports:
-      - '3000:3000'
+      # Bound to loopback for a same-host reverse proxy; drop the prefix to expose it directly.
+      - '127.0.0.1:${WEB_PORT:-3000}:3000'
     networks:
       - dropto_net
     depends_on:
       dropto-api:
         condition: service_healthy
-    healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000 || exit 1']
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
 volumes:
   dropto_pg_data:

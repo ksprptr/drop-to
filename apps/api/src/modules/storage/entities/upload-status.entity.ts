@@ -1,9 +1,10 @@
+import type { ResumableUploadStatus } from '@dropto/types';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
  * How far a resumable upload session got — lets the browser resume a dropped upload from where it left off
  **/
-export class UploadStatusEntity {
+export class UploadStatusEntity implements ResumableUploadStatus {
   @ApiProperty({ type: 'boolean', description: 'Whether the upload already finished' })
   complete: boolean;
 

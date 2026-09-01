@@ -1,3 +1,4 @@
+import type { StorageBackend } from '@dropto/types';
 import { Archiver } from 'archiver';
 import { Readable } from 'node:stream';
 
@@ -9,8 +10,8 @@ import { StorageStatusEntity } from '../entities/storage-status.entity';
 import { UploadResultEntity } from '../entities/upload-result.entity';
 import { UploadStatusEntity } from '../entities/upload-status.entity';
 
-/** The storage backends the workspace can browse. */
-export type StorageBackend = 'drive' | 's3';
+// Part of the wire contract, so it lives in @dropto/types; re-exported here as the single import site.
+export type { StorageBackend };
 
 /** All known backend keys, in the order they appear in the sidebar. */
 export const STORAGE_BACKENDS: StorageBackend[] = ['drive', 's3'];

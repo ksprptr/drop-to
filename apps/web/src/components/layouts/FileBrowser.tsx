@@ -1,9 +1,10 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   type ChangeEvent,
   type DragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
   useCallback,
   useEffect,
@@ -12,6 +13,9 @@ import {
   useState,
 } from 'react';
 
+import { DESKTOP_QUERY } from '@/common/constants/layout.constants';
+import { useDebouncedValue } from '@/common/hooks/useDebouncedValue';
+import { useMediaQuery } from '@/common/hooks/useMediaQuery';
 import type {
   Crumb,
   SortDir,
@@ -19,14 +23,18 @@ import type {
   UploadItem,
   ViewEntry,
 } from '@/common/types/workspace.types';
-import { formatBytes, formatDate } from '@/common/utils/format.functions';
+import { resolveDropItems } from '@/common/utils/drop-items.functions';
 import Icon from '@/components/common/Icon';
 import LoadingIndicator from '@/components/loadings/LoadingIndicator';
 
 import Breadcrumb, { type BreadcrumbStoragePicker } from './Breadcrumb';
+import FileRow from './FileRow';
 
 /** Custom DataTransfer type marking an internal drag-to-move (vs an OS file drop). */
 const MOVE_MIME = 'application/x-dropto-move';
+
+/** Delay before a typed query re-filters the list; the input itself stays instant. */
+const FILTER_DEBOUNCE_MS = 150;
 
 /** Dropdown-menu open/close animation (fade + zoom + slight slide), shadcn-style. */
 const MENU_MOTION = {
@@ -109,76 +117,6 @@ interface RowMenu {
 }
 
 /**
- * Icon name for a MIME type.
- **/
-const fileIcon = (mimeType: string | null): string => {
-  if (!mimeType) return 'Document';
-  if (mimeType.startsWith('image/')) return 'Photo';
-  if (mimeType.startsWith('video/')) return 'Film';
-  if (mimeType.startsWith('audio/')) return 'MusicalNote';
-  if (mimeType === 'application/pdf') return 'DocumentText';
-  if (mimeType.includes('zip') || mimeType.includes('compressed')) return 'ArchiveBox';
-  return 'Document';
-};
-
-/**
- * Reads all entries from a directory reader (≤100 per call).
- **/
-const readAllEntries = (reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> =>
-  new Promise((resolve, reject) => reader.readEntries(resolve, reject));
-
-/**
- * Resolves a file entry into a File.
- **/
-const entryToFile = (entry: FileSystemFileEntry): Promise<File> =>
-  new Promise((resolve, reject) => entry.file(resolve, reject));
-
-/**
- * Recursively walks a dropped entry into flat upload items.
- **/
-const walkEntry = async (
-  entry: FileSystemEntry,
-  prefix: string,
-  out: UploadItem[],
-): Promise<void> => {
-  if (entry.isFile) {
-    const file = await entryToFile(entry as FileSystemFileEntry);
-    out.push({ file, relativePath: `${prefix}${entry.name}` });
-    return;
-  }
-
-  const reader = (entry as FileSystemDirectoryEntry).createReader();
-  let batch = await readAllEntries(reader);
-  while (batch.length > 0) {
-    for (const child of batch) {
-      // eslint-disable-next-line no-await-in-loop -- sequential walk into a shared, ordered list
-      await walkEntry(child, `${prefix}${entry.name}/`, out);
-    }
-    // eslint-disable-next-line no-await-in-loop -- the directory reader is stateful; read in sequence
-    batch = await readAllEntries(reader);
-  }
-};
-
-/**
- * Dropped items → flat upload items (falls back to the plain file list).
- **/
-const resolveDropItems = async (
-  entries: FileSystemEntry[],
-  flatFiles: File[],
-): Promise<UploadItem[]> => {
-  if (entries.length === 0) {
-    return flatFiles.map((file) => ({ file, relativePath: file.name }));
-  }
-
-  const out: UploadItem[] = [];
-  for (const entry of entries) {
-    // eslint-disable-next-line no-await-in-loop -- entries walked sequentially into an ordered list
-    await walkEntry(entry, '', out);
-  }
-  return out;
-};
-
-/**
  * Middle pane: Finder-like sortable list + drop target for uploads.
  **/
 export default function FileBrowser({
@@ -228,6 +166,8 @@ export default function FileBrowser({
   onLoadMore,
   onMoveIntoFolder,
 }: Props) {
+  // Desktop-only, and the toolbar menu is client-rendered, so the media query touches no server markup.
+  const canSplit = useMediaQuery(DESKTOP_QUERY);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   // Anchor row for Shift-click range selection.
@@ -245,7 +185,12 @@ export default function FileBrowser({
   // Folder row currently hovered as a move drop target (Finder-style same-pane move).
   const [dropFolderId, setDropFolderId] = useState<string | null>(null);
 
-  // Close the search box and drop its filter.
+  // Read through refs so the row handlers keep the stable identity `FileRow`'s memo needs.
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
+  const dropFolderIdRef = useRef(dropFolderId);
+  dropFolderIdRef.current = dropFolderId;
+
   const closeSearch = useCallback(() => {
     setShowSearch(false);
     onSearchChange?.('');
@@ -286,8 +231,8 @@ export default function FileBrowser({
     };
   }, [menu, toolbarMenu]);
 
-  // Instant client-side filter (superset of Drive's server-side filter; also covers roots + S3).
-  const query = searchQuery.trim().toLowerCase();
+  // Debounced: without it every keystroke re-filtered, re-sorted and re-rendered both panes' lists.
+  const query = useDebouncedValue(searchQuery.trim().toLowerCase(), FILTER_DEBOUNCE_MS);
   const sorted = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1;
     const list = query
@@ -309,6 +254,9 @@ export default function FileBrowser({
       return a.name.localeCompare(b.name) * dir;
     });
   }, [entries, sortKey, sortDir, query]);
+
+  const sortedRef = useRef(sorted);
+  sortedRef.current = sorted;
 
   // Identity of the current view — changes only on folder / sort / search, i.e. a "fresh load".
   const viewKey = `${path.map((crumb) => crumb.id).join('/')}|${sortKey}|${sortDir}|${query}`;
@@ -363,18 +311,17 @@ export default function FileBrowser({
       ? 'grid-cols-[minmax(0,1fr)_4.5rem_2rem] sm:grid-cols-[minmax(0,1fr)_8rem_6rem_2rem]'
       : 'grid-cols-[minmax(0,1fr)_4.5rem] sm:grid-cols-[minmax(0,1fr)_8rem_6rem]';
 
-  const openMenu = (event: MouseEvent<HTMLButtonElement>, entry: ViewEntry) => {
+  const openMenu = useCallback((event: MouseEvent<HTMLButtonElement>, entry: ViewEntry) => {
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
     // Opening a row menu closes the toolbar menu (they must never overlap).
     setToolbarMenu(null);
     setMenu((current) => (current?.entry.id === entry.id ? null : { entry, rect }));
-  };
+  }, []);
 
   const openToolbarMenu = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
-    // Opening the toolbar menu closes any open row menu.
     setMenu(null);
     setToolbarMenu((current) => (current ? null : rect));
   };
@@ -435,16 +382,127 @@ export default function FileBrowser({
     });
   };
 
-  const handleRowDragStart = (event: DragEvent<HTMLDivElement>, entry: ViewEntry) => {
-    if (!canModify) {
+  const handleRowDragStart = useCallback(
+    (event: DragEvent<HTMLDivElement>, entry: ViewEntry) => {
+      if (!canModify) {
+        return;
+      }
+      // Dragging a selected row moves the whole selection; otherwise just that row.
+      const current = selectedIdsRef.current;
+      const ids = current.has(entry.id) ? [...current] : [entry.id];
+      event.dataTransfer.setData(MOVE_MIME, ids.join(','));
+      event.dataTransfer.effectAllowed = 'move';
+      onMoveDragStart?.(ids);
+    },
+    [canModify, onMoveDragStart],
+  );
+
+  const handleRowDragOver = useCallback(
+    (event: DragEvent<HTMLDivElement>, entry: ViewEntry) => {
+      // A folder row accepts a move drop (unless it's part of the dragged selection).
+      if (
+        canModify &&
+        onMoveIntoFolder &&
+        entry.isFolder &&
+        !selectedIdsRef.current.has(entry.id) &&
+        event.dataTransfer.types.includes(MOVE_MIME)
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = 'move';
+        if (dropFolderIdRef.current !== entry.id) setDropFolderId(entry.id);
+      }
+    },
+    [canModify, onMoveIntoFolder],
+  );
+
+  const handleRowDragLeave = useCallback((event: DragEvent<HTMLDivElement>, entry: ViewEntry) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
       return;
     }
-    // Dragging a selected row moves the whole selection; otherwise just that row.
-    const ids = selectedIds.has(entry.id) ? [...selectedIds] : [entry.id];
-    event.dataTransfer.setData(MOVE_MIME, ids.join(','));
-    event.dataTransfer.effectAllowed = 'move';
-    onMoveDragStart?.(ids);
-  };
+    setDropFolderId((current) => (current === entry.id ? null : current));
+  }, []);
+
+  const handleRowDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>, entry: ViewEntry) => {
+      if (
+        !canModify ||
+        !onMoveIntoFolder ||
+        !entry.isFolder ||
+        !event.dataTransfer.types.includes(MOVE_MIME)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      setDropFolderId(null);
+      const ids = event.dataTransfer.getData(MOVE_MIME).split(',').filter(Boolean);
+      if (ids.length > 0 && !ids.includes(entry.id)) {
+        onMoveIntoFolder(entry.id, ids);
+      }
+    },
+    [canModify, onMoveIntoFolder],
+  );
+
+  const handleRowClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>, entry: ViewEntry) => {
+      // Don't let the click reach the finder's deselect handler.
+      event.stopPropagation();
+      const ids = sortedRef.current.map((row) => row.id);
+      // Shift-click: select the range from the anchor to this row.
+      if (event.shiftKey && onSetSelectedIds && selectionAnchor.current) {
+        const from = ids.indexOf(selectionAnchor.current);
+        const to = ids.indexOf(entry.id);
+        if (from !== -1 && to !== -1) {
+          const [lo, hi] = from < to ? [from, to] : [to, from];
+          onSetSelectedIds(ids.slice(lo, hi + 1));
+          return;
+        }
+      }
+      if ((event.metaKey || event.ctrlKey) && canModify) {
+        onToggleSelect(entry.id);
+        selectionAnchor.current = entry.id;
+        return;
+      }
+      // Plain click: single select (preview) and drop any multi-selection.
+      onSelect(entry);
+      if (canModify) {
+        onClearSelection();
+      }
+      selectionAnchor.current = entry.id;
+    },
+    [canModify, onSetSelectedIds, onToggleSelect, onSelect, onClearSelection],
+  );
+
+  const handleRowOpen = useCallback(
+    (entry: ViewEntry) => {
+      if (entry.isFolder) onOpenFolder(entry);
+      else if (entry.webViewLink) window.open(entry.webViewLink, '_blank');
+    },
+    [onOpenFolder],
+  );
+
+  const handleRowKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>, entry: ViewEntry) => {
+      // Enter opens a folder / selects a file; Space selects.
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (entry.isFolder) onOpenFolder(entry);
+        else onSelect(entry);
+      } else if (event.key === ' ') {
+        event.preventDefault();
+        onSelect(entry);
+      }
+    },
+    [onOpenFolder, onSelect],
+  );
+
+  const handleRowDragEnd = useCallback(() => onMoveDragEnd?.(), [onMoveDragEnd]);
+
+  const handleRowToggleCheck = useCallback(
+    (entry: ViewEntry) => onToggleSelect(entry.id),
+    [onToggleSelect],
+  );
 
   const handleInput = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -658,154 +716,29 @@ export default function FileBrowser({
             </div>
 
             <ul className='py-1'>
-              {sorted.map((entry) => {
-                const selected = entry.id === selectedId;
-                const checked = selectedIds.has(entry.id);
-                return (
-                  <li key={entry.id}>
-                    <div
-                      role='button'
-                      tabIndex={0}
-                      draggable={canModify}
-                      onDragStart={(event) => handleRowDragStart(event, entry)}
-                      onDragEnd={() => onMoveDragEnd?.()}
-                      onDragOver={(event) => {
-                        // A folder row accepts a move drop (unless it's part of the dragged selection).
-                        if (
-                          canModify &&
-                          onMoveIntoFolder &&
-                          entry.isFolder &&
-                          !selectedIds.has(entry.id) &&
-                          event.dataTransfer.types.includes(MOVE_MIME)
-                        ) {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          event.dataTransfer.dropEffect = 'move';
-                          if (dropFolderId !== entry.id) setDropFolderId(entry.id);
-                        }
-                      }}
-                      onDragLeave={(event) => {
-                        if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                          return;
-                        }
-                        setDropFolderId((current) => (current === entry.id ? null : current));
-                      }}
-                      onDrop={(event) => {
-                        if (
-                          !canModify ||
-                          !onMoveIntoFolder ||
-                          !entry.isFolder ||
-                          !event.dataTransfer.types.includes(MOVE_MIME)
-                        ) {
-                          return;
-                        }
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setDropFolderId(null);
-                        const ids = event.dataTransfer.getData(MOVE_MIME).split(',').filter(Boolean);
-                        if (ids.length > 0 && !ids.includes(entry.id)) {
-                          onMoveIntoFolder(entry.id, ids);
-                        }
-                      }}
-                      onClick={(event) => {
-                        // Don't let the click reach the finder's deselect handler.
-                        event.stopPropagation();
-                        const ids = sorted.map((row) => row.id);
-                        // Shift-click: select the range from the anchor to this row.
-                        if (event.shiftKey && onSetSelectedIds && selectionAnchor.current) {
-                          const from = ids.indexOf(selectionAnchor.current);
-                          const to = ids.indexOf(entry.id);
-                          if (from !== -1 && to !== -1) {
-                            const [lo, hi] = from < to ? [from, to] : [to, from];
-                            onSetSelectedIds(ids.slice(lo, hi + 1));
-                            return;
-                          }
-                        }
-                        // Cmd/Ctrl-click: toggle this row in the multi-selection.
-                        if ((event.metaKey || event.ctrlKey) && canModify) {
-                          onToggleSelect(entry.id);
-                          selectionAnchor.current = entry.id;
-                          return;
-                        }
-                        // Plain click: single select (preview) and drop any multi-selection.
-                        onSelect(entry);
-                        if (canModify) {
-                          onClearSelection();
-                        }
-                        selectionAnchor.current = entry.id;
-                      }}
-                      onDoubleClick={() => {
-                        if (entry.isFolder) onOpenFolder(entry);
-                        else if (entry.webViewLink) window.open(entry.webViewLink, '_blank');
-                      }}
-                      onKeyDown={(event) => {
-                        // Enter opens a folder / selects a file; Space selects.
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          if (entry.isFolder) onOpenFolder(entry);
-                          else onSelect(entry);
-                        } else if (event.key === ' ') {
-                          event.preventDefault();
-                          onSelect(entry);
-                        }
-                      }}
-                      className={`grid ${gridCols} w-full cursor-pointer items-center gap-x-3 rounded-lg px-3 py-2 text-left transition ${
-                        dropFolderId === entry.id
-                          ? 'bg-green-600/15 ring-2 ring-green-600 ring-inset'
-                          : checked || selected
-                            ? 'bg-green-600/10'
-                            : 'hover:bg-zinc-200 dark:hover:bg-zinc-800'
-                      }`}>
-                      {canModify && (
-                        // Wrapper keeps the grid cell aligned on desktop; the checkbox shows only on mobile.
-                        <span className='flex h-4 w-4 items-center justify-center'>
-                          <input
-                            type='checkbox'
-                            checked={checked}
-                            onClick={(event) => event.stopPropagation()}
-                            onChange={() => onToggleSelect(entry.id)}
-                            className='hidden h-4 w-4 max-sm:block'
-                          />
-                          {/* Desktop: a check indicator (no checkbox) for selected rows. */}
-                          {checked && (
-                            <Icon icon='Check' className='hidden h-4 w-4 text-green-600 sm:block' />
-                          )}
-                        </span>
-                      )}
-                      <span className='flex min-w-0 items-center gap-x-2.5'>
-                        {entry.isFolder ? (
-                          <Icon icon='Folder' className='h-5 w-5 shrink-0 text-green-600' />
-                        ) : (
-                          <Icon
-                            icon={fileIcon(entry.mimeType)}
-                            className='h-5 w-5 shrink-0 text-zinc-600 dark:text-zinc-400'
-                          />
-                        )}
-                        <span className='min-w-0 truncate text-sm font-medium'>{entry.name}</span>
-                      </span>
-                      <span className='hidden text-xs text-zinc-600 sm:block dark:text-zinc-400'>
-                        {formatDate(entry.modifiedTime)}
-                      </span>
-                      <span className='text-right text-xs text-zinc-600 dark:text-zinc-400'>
-                        {entry.isFolder ? '—' : formatBytes(entry.size)}
-                      </span>
-                      {(canModify || (rootMenu && entry.isFolder)) && (
-                        <div className='flex justify-end'>
-                          <button
-                            type='button'
-                            title='Actions'
-                            onClick={(event) => openMenu(event, entry)}
-                            className={`inline-flex h-7 w-7 items-center justify-center rounded-md text-zinc-600 transition hover:bg-zinc-300 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-50 ${
-                              menu?.entry.id === entry.id ? 'bg-zinc-300 dark:bg-zinc-700' : ''
-                            }`}>
-                            <Icon icon='EllipsisVertical' className='h-4 w-4' />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
+              {sorted.map((entry) => (
+                <FileRow
+                  key={entry.id}
+                  entry={entry}
+                  selected={entry.id === selectedId}
+                  checked={selectedIds.has(entry.id)}
+                  isDropTarget={dropFolderId === entry.id}
+                  menuOpen={menu?.entry.id === entry.id}
+                  canModify={canModify}
+                  showMenu={canModify || (rootMenu && entry.isFolder)}
+                  gridCols={gridCols}
+                  onDragStart={handleRowDragStart}
+                  onDragEnd={handleRowDragEnd}
+                  onDragOver={handleRowDragOver}
+                  onDragLeave={handleRowDragLeave}
+                  onDrop={handleRowDrop}
+                  onClick={handleRowClick}
+                  onDoubleClick={handleRowOpen}
+                  onKeyDown={handleRowKeyDown}
+                  onToggleCheck={handleRowToggleCheck}
+                  onOpenMenu={openMenu}
+                />
+              ))}
             </ul>
 
             {loadingMore && (
@@ -894,7 +827,7 @@ export default function FileBrowser({
                 onClick={() => runToolbarAction(onNewFolder)}
               />
             )}
-            {onToggleSplit && (
+            {onToggleSplit && canSplit && (
               <MenuItem
                 icon={split ? 'XMark' : 'ViewColumns'}
                 label={split ? 'Close split view' : 'Split view'}

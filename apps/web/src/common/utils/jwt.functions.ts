@@ -8,7 +8,7 @@ interface JwtPayload {
 /**
  * Decodes a JWT payload WITHOUT verifying its signature (proxy reads `exp` only).
  **/
-export const decodeJwtPayload = (token: string | undefined): JwtPayload | null => {
+const decodeJwtPayload = (token: string | undefined): JwtPayload | null => {
   if (!token) {
     return null;
   }

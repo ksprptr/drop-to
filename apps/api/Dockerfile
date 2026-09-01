@@ -12,12 +12,16 @@ RUN apk add --no-cache openssl libc6-compat
 
 WORKDIR /app
 ENV CI=true
+# No .git in the build context, so the root `prepare` (husky) has nothing to install.
+ENV HUSKY=0
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json ./apps/api/
 COPY packages/types/package.json ./packages/types/
 
-RUN npm install -g pnpm
+# corepack resolves pnpm from the `packageManager` field, so the image matches the lockfile.
+RUN corepack enable
 RUN pnpm install --frozen-lockfile
 
 COPY apps/api ./apps/api
@@ -27,9 +31,9 @@ COPY tsconfig.base.json ./
 
 WORKDIR /app/apps/api
 
-# `pnpm run build` runs `prisma generate` first; it loads prisma.config.ts, whose datasource url is
-# templated from DB_* — generate doesn't connect, so build-time placeholders suffice (real values
-# come from env_file at runtime).
+# The Prisma client is generated into src/prisma/generated and committed, so the build only needs
+# tsc. The DB_* placeholders keep prisma.config.ts (whose datasource url is templated from them)
+# loadable if a Prisma command runs here; real values come from the environment at runtime.
 ENV DB_USER=build DB_PASS=build DB_HOST=localhost DB_PORT=5432 DB_NAME=build
 
 # tsc needs headroom here (the googleapis type surface is large and OOMs the default ~1 GiB
@@ -45,12 +49,14 @@ RUN apk add --no-cache openssl libc6-compat
 WORKDIR /app
 ENV CI=true
 ENV NODE_ENV=production
+ENV HUSKY=0
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json ./apps/api/
 COPY packages/types/package.json ./packages/types/
 
-RUN npm install -g pnpm
+RUN corepack enable
 # Production dependencies only (Prisma CLI is a runtime dep — migrations run here).
 RUN pnpm install --frozen-lockfile --prod
 
@@ -67,4 +73,9 @@ WORKDIR /app/apps/api
 USER node
 
 EXPOSE 4000
+
+# 127.0.0.1, not localhost: that also resolves to ::1, which the IPv4 listener refuses.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:4000/health || exit 1
+
 CMD ["node", "dist/main"]

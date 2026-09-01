@@ -4,10 +4,10 @@ import type {
   DriveEntryPage,
   ListContentsQuery,
   ResumableUploadSession,
+  ResumableUploadStatus,
   StorageBackend,
   StorageStatus,
   UploadResult,
-  UploadStatus,
 } from '@dropto/types';
 
 import { getHttp } from '@/common/services/axios/axios.instance';
@@ -119,9 +119,9 @@ export const getUploadStatus = async (
   backend: StorageBackend,
   uploadUrl: string,
   size: number,
-): Promise<UploadStatus> => {
+): Promise<ResumableUploadStatus> => {
   const http = await getHttp();
-  const { data } = await http.post<UploadStatus>(`/storage/${backend}/upload-status`, {
+  const { data } = await http.post<ResumableUploadStatus>(`/storage/${backend}/upload-status`, {
     uploadUrl,
     size,
   });

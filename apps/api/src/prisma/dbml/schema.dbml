@@ -58,22 +58,4 @@ rotations so a session can\'t outlive `login + absolute TTL`. `subject` keys row
 the table is ready for multiple users. Expired rows are pruned on refresh to keep it small.'
 }
 
-Table upload_logs {
-  id String [pk]
-  fileName String [not null]
-  folderId String [not null]
-  fileId String
-  size BigInt
-  status UploadStatus [not null]
-  error String
-  createdAt DateTime [default: `now()`, not null]
-
-  Note: 'Audit trail of upload attempts for the history view.'
-}
-
-Enum UploadStatus {
-  SUCCESS
-  FAILED
-}
-
 Ref: allowed_folders.driveAccountId > drive_accounts.id [delete: Cascade]

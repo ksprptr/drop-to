@@ -1,3 +1,4 @@
+import type { DriveEntryPage } from '@dropto/types';
 import { ApiProperty } from '@nestjs/swagger';
 
 import { DriveEntryEntity } from './drive-entry.entity';
@@ -5,7 +6,7 @@ import { DriveEntryEntity } from './drive-entry.entity';
 /**
  * One page of folder contents; `nextPageToken` is the cursor for the next page (null on the last).
  **/
-export class DriveEntryPageEntity {
+export class DriveEntryPageEntity implements DriveEntryPage {
   @ApiProperty({ type: [DriveEntryEntity], description: 'Entries in this page' })
   entries: DriveEntryEntity[];
 

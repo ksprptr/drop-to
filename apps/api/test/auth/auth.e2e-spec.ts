@@ -113,6 +113,44 @@ describe('Google Auth (integration)', () => {
     });
   });
 
+  describe('DELETE /api/v1/google-auth/folders/:folderId', () => {
+    it('returns 403 without a verified owner cookie', async () => {
+      prisma.driveAccount.findFirst.mockResolvedValue({ id: 'acc-1', email: 'owner@gmail.com' });
+
+      const res = await request(app.getHttpServer())
+        .delete('/api/v1/google-auth/folders/drive-1')
+        .set('Cookie', accessCookie());
+
+      // Being a logged-in operator is not enough — unauthorizing a folder is the owner's call.
+      expect(res.status).toBe(403);
+      expect(prisma.allowedFolder.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('returns 403 for an owner cookie naming a different account', async () => {
+      prisma.driveAccount.findFirst.mockResolvedValue({ id: 'acc-1', email: 'current@gmail.com' });
+
+      const res = await request(app.getHttpServer())
+        .delete('/api/v1/google-auth/folders/drive-1')
+        .set('Cookie', `${accessCookie()}; ${ownerCookie('previous@gmail.com')}`);
+
+      expect(res.status).toBe(403);
+      expect(prisma.allowedFolder.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('removes the folder for the verified owner (204)', async () => {
+      prisma.driveAccount.findFirst.mockResolvedValue({ id: 'acc-1', email: 'owner@gmail.com' });
+
+      const res = await request(app.getHttpServer())
+        .delete('/api/v1/google-auth/folders/drive-1')
+        .set('Cookie', `${accessCookie()}; ${ownerCookie('owner@gmail.com')}`);
+
+      expect(res.status).toBe(204);
+      expect(prisma.allowedFolder.deleteMany).toHaveBeenCalledWith({
+        where: { driveAccountId: 'acc-1', folderId: 'drive-1' },
+      });
+    });
+  });
+
   describe('GET /api/v1/google-auth/picker-token', () => {
     it('returns a short-lived access token for the Picker', async () => {
       prisma.driveAccount.findFirst.mockResolvedValue({ id: 'acc-1' });

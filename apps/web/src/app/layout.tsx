@@ -65,14 +65,34 @@ export default function RootLayout({ children }: Readonly<PropsWithChildren>) {
   return (
     <html lang='en' data-scroll-behavior='smooth' suppressHydrationWarning>
       <head>
-        <meta name='apple-mobile-web-app-title' content='DropTo' />
+        <meta name='apple-mobile-web-app-title' content={metadataConfig.shortTitle} />
       </head>
       <body
         className={`${poppins.className} min-h-screen bg-zinc-100 text-zinc-950 antialiased dark:bg-zinc-900 dark:text-zinc-50`}
         suppressHydrationWarning>
-        <ThemeProvider>
-          <ToastProvider>{children}</ToastProvider>
-        </ThemeProvider>
+        <div className='app-shell'>
+          <ThemeProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </ThemeProvider>
+        </div>
+
+        <noscript>
+          <style>{`
+            noscript { display: block; }
+            .app-shell { display: none !important; }
+            body { background: var(--color-zinc-100); }
+            @media (prefers-color-scheme: dark) { body { background: var(--color-zinc-900); } }
+          `}</style>
+          <div className='noscript-screen'>
+            <p className='noscript-eyebrow'>JavaScript required</p>
+            <h1 className='noscript-title'>This app needs JavaScript</h1>
+            <p className='noscript-text'>
+              Browsing your storage, uploading files and tracking their progress all happen in the
+              browser, so none of it works with JavaScript turned off. Enable it for this site and
+              reload the page.
+            </p>
+          </div>
+        </noscript>
       </body>
     </html>
   );

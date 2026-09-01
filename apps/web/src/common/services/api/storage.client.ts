@@ -141,23 +141,29 @@ const uploadToDriveDirect = async (
     try {
       // PUT the remaining bytes to the Google session URL (the URL is the capability — no auth header/cookies); progress offset by confirmed bytes.
       // eslint-disable-next-line no-await-in-loop -- deliberate: one (resumable) attempt per loop turn
-      const res = await axios.put<{ id?: string }>(uploadUrl, offset > 0 ? file.slice(offset) : file, {
-        signal: attempt.signal,
-        withCredentials: false,
-        headers: {
-          'Content-Type': mimeType,
-          ...(offset > 0 ? { 'Content-Range': `bytes ${offset}-${size - 1}/${size}` } : {}),
+      const res = await axios.put<{ id?: string }>(
+        uploadUrl,
+        offset > 0 ? file.slice(offset) : file,
+        {
+          signal: attempt.signal,
+          withCredentials: false,
+          headers: {
+            'Content-Type': mimeType,
+            ...(offset > 0 ? { 'Content-Range': `bytes ${offset}-${size - 1}/${size}` } : {}),
+          },
+          validateStatus: (statusCode) =>
+            (statusCode >= 200 && statusCode < 300) || statusCode === 308,
+          onUploadProgress: (event) => {
+            if (!onProgress) return;
+            const loaded = offset + event.loaded;
+            onProgress({
+              percent: Math.min(100, Math.round((loaded / size) * 100)),
+              rate:
+                typeof event.rate === 'number' && Number.isFinite(event.rate) ? event.rate : null,
+            });
+          },
         },
-        validateStatus: (statusCode) => (statusCode >= 200 && statusCode < 300) || statusCode === 308,
-        onUploadProgress: (event) => {
-          if (!onProgress) return;
-          const loaded = offset + event.loaded;
-          onProgress({
-            percent: Math.min(100, Math.round((loaded / size) * 100)),
-            rate: typeof event.rate === 'number' && Number.isFinite(event.rate) ? event.rate : null,
-          });
-        },
-      });
+      );
       if (res.status === 308) {
         recheck = true; // Google wants more — re-query the confirmed offset and continue
         continue;

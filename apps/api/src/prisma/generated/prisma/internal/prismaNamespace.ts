@@ -80,12 +80,12 @@ export type PrismaVersion = {
 }
 
 /**
- * Prisma Client JS version: 7.9.1
- * Query Engine version: e922089b7d7502aff4249d5da3420f6fa55fc6ad
+ * Prisma Client JS version: 7.10.0
+ * Query Engine version: 0edf323efd1d98336f3f0a68684b56f689b900d3
  */
 export const prismaVersion: PrismaVersion = {
-  client: "7.9.1",
-  engine: "e922089b7d7502aff4249d5da3420f6fa55fc6ad"
+  client: "7.10.0",
+  engine: "0edf323efd1d98336f3f0a68684b56f689b900d3"
 }
 
 /**
@@ -400,8 +400,7 @@ export const ModelName = {
   AuthState: 'AuthState',
   DriveAccount: 'DriveAccount',
   AllowedFolder: 'AllowedFolder',
-  RefreshToken: 'RefreshToken',
-  UploadLog: 'UploadLog'
+  RefreshToken: 'RefreshToken'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -417,7 +416,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "authState" | "driveAccount" | "allowedFolder" | "refreshToken" | "uploadLog"
+    modelProps: "authState" | "driveAccount" | "allowedFolder" | "refreshToken"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -717,80 +716,6 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
-    UploadLog: {
-      payload: Prisma.$UploadLogPayload<ExtArgs>
-      fields: Prisma.UploadLogFieldRefs
-      operations: {
-        findUnique: {
-          args: Prisma.UploadLogFindUniqueArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$UploadLogPayload> | null
-        }
-        findUniqueOrThrow: {
-          args: Prisma.UploadLogFindUniqueOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$UploadLogPayload>
-        }
-        findFirst: {
-          args: Prisma.UploadLogFindFirstArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$UploadLogPayload> | null
-        }
-        findFirstOrThrow: {
-          args: Prisma.UploadLogFindFirstOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$UploadLogPayload>
-        }
-        findMany: {
-          args: Prisma.UploadLogFindManyArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$UploadLogPayload>[]
-        }
-        create: {
-          args: Prisma.UploadLogCreateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$UploadLogPayload>
-        }
-        createMany: {
-          args: Prisma.UploadLogCreateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        createManyAndReturn: {
-          args: Prisma.UploadLogCreateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$UploadLogPayload>[]
-        }
-        delete: {
-          args: Prisma.UploadLogDeleteArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$UploadLogPayload>
-        }
-        update: {
-          args: Prisma.UploadLogUpdateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$UploadLogPayload>
-        }
-        deleteMany: {
-          args: Prisma.UploadLogDeleteManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateMany: {
-          args: Prisma.UploadLogUpdateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateManyAndReturn: {
-          args: Prisma.UploadLogUpdateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$UploadLogPayload>[]
-        }
-        upsert: {
-          args: Prisma.UploadLogUpsertArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$UploadLogPayload>
-        }
-        aggregate: {
-          args: Prisma.UploadLogAggregateArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.AggregateUploadLog>
-        }
-        groupBy: {
-          args: Prisma.UploadLogGroupByArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.UploadLogGroupByOutputType>[]
-        }
-        count: {
-          args: Prisma.UploadLogCountArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.UploadLogCountAggregateOutputType> | number
-        }
-      }
-    }
   }
 } & {
   other: {
@@ -875,20 +800,6 @@ export const RefreshTokenScalarFieldEnum = {
 export type RefreshTokenScalarFieldEnum = (typeof RefreshTokenScalarFieldEnum)[keyof typeof RefreshTokenScalarFieldEnum]
 
 
-export const UploadLogScalarFieldEnum = {
-  id: 'id',
-  fileName: 'fileName',
-  folderId: 'folderId',
-  fileId: 'fileId',
-  size: 'size',
-  status: 'status',
-  error: 'error',
-  createdAt: 'createdAt'
-} as const
-
-export type UploadLogScalarFieldEnum = (typeof UploadLogScalarFieldEnum)[keyof typeof UploadLogScalarFieldEnum]
-
-
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -958,34 +869,6 @@ export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel
  * Reference to a field of type 'DateTime[]'
  */
 export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime[]'>
-    
-
-
-/**
- * Reference to a field of type 'BigInt'
- */
-export type BigIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BigInt'>
-    
-
-
-/**
- * Reference to a field of type 'BigInt[]'
- */
-export type ListBigIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BigInt[]'>
-    
-
-
-/**
- * Reference to a field of type 'UploadStatus'
- */
-export type EnumUploadStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'UploadStatus'>
-    
-
-
-/**
- * Reference to a field of type 'UploadStatus[]'
- */
-export type ListEnumUploadStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'UploadStatus[]'>
     
 
 
@@ -1157,7 +1040,6 @@ export type GlobalOmitConfig = {
   driveAccount?: Prisma.DriveAccountOmit
   allowedFolder?: Prisma.AllowedFolderOmit
   refreshToken?: Prisma.RefreshTokenOmit
-  uploadLog?: Prisma.UploadLogOmit
 }
 
 /* Types for Logging */

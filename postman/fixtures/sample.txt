@@ -1,0 +1,2 @@
+DropTo runtime smoke fixture.
+Uploaded by the Postman regression collection.

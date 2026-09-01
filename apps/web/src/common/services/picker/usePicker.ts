@@ -11,14 +11,54 @@ export interface PickedFolder {
   name: string;
 }
 
-// gapi/Picker globals have no bundled types.
+/** A document handed back by the Picker (only the fields this hook reads). */
+interface PickerDocument {
+  id: string;
+  name?: string;
+}
+
+/** Payload of the Picker's callback. */
+interface PickerCallbackData {
+  action: string;
+  docs?: PickerDocument[];
+}
+
+/** Chainable Picker view builder. */
+interface PickerView {
+  setSelectFolderEnabled: (enabled: boolean) => PickerView;
+  setIncludeFolders: (include: boolean) => PickerView;
+  setOwnedByMe: (ownedByMe: boolean) => PickerView;
+  setMimeTypes: (mimeTypes: string) => PickerView;
+}
+
+/** Chainable Picker builder. */
+interface PickerBuilder {
+  addView: (view: PickerView) => PickerBuilder;
+  enableFeature: (feature: string) => PickerBuilder;
+  setOAuthToken: (token: string) => PickerBuilder;
+  setDeveloperKey: (apiKey: string) => PickerBuilder;
+  setAppId: (appId: string) => PickerBuilder;
+  setCallback: (callback: (data: PickerCallbackData) => void) => PickerBuilder;
+  build: () => { setVisible: (visible: boolean) => void };
+}
+
+/** The slice of the `google.picker` namespace this hook drives. */
+interface PickerApi {
+  DocsView: new (viewId: string) => PickerView;
+  PickerBuilder: new () => PickerBuilder;
+  ViewId: { FOLDERS: string };
+  Feature: { MULTISELECT_ENABLED: string };
+  Action: { PICKED: string };
+}
+
+// gapi/Picker ship no bundled types, so the globals are declared structurally.
 declare global {
   interface Window {
     gapi?: {
       load: (name: string, callback: () => void) => void;
     };
     google?: {
-      picker: any;
+      picker: PickerApi;
     };
   }
 }
@@ -99,14 +139,14 @@ export function usePicker() {
         .enableFeature(picker.Feature.MULTISELECT_ENABLED)
         .setOAuthToken(token)
         .setDeveloperKey(apiKey)
-        .setCallback((data: any) => {
+        .setCallback((data) => {
           if (data.action !== picker.Action.PICKED) {
             return;
           }
 
-          const folders: PickedFolder[] = (data.docs ?? []).map((doc: any) => ({
-            folderId: doc.id as string,
-            name: (doc.name as string) ?? 'Untitled',
+          const folders: PickedFolder[] = (data.docs ?? []).map((doc) => ({
+            folderId: doc.id,
+            name: doc.name ?? 'Untitled',
           }));
 
           onPicked(folders);

@@ -46,8 +46,3 @@ export type AllowedFolder = Prisma.AllowedFolderModel
  * the table is ready for multiple users. Expired rows are pruned on refresh to keep it small.
  */
 export type RefreshToken = Prisma.RefreshTokenModel
-/**
- * Model UploadLog
- * Audit trail of upload attempts for the history view.
- */
-export type UploadLog = Prisma.UploadLogModel

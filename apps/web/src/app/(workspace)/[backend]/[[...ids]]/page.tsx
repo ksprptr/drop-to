@@ -1,20 +1,28 @@
 import type { StorageBackend, StorageStatus } from '@dropto/types';
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
 import { getStatuses, resolveNames } from '@/common/services/api/storage.api';
 import { getCurrentUser } from '@/common/services/auth/current-user';
 import type { Crumb } from '@/common/types/workspace.types';
 import { slugify } from '@/common/utils/storage-url';
-import NotFoundContent from '@/components/layouts/NotFoundContent';
 import WorkspaceClient from '@/components/layouts/WorkspaceClient';
-
-export const metadata: Metadata = {
-  title: 'Workspace',
-};
+import { appServerConfig } from '@/configs/app/app.server-config';
 
 interface Props {
   params: Promise<{ backend: string; ids?: string[] }>;
+}
+
+/**
+ * Title for the route — "Page not found" when the URL names no backend.
+ **/
+// Dynamic: the client re-applies this segment's metadata after hydration and would win the tab title back on a 404.
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { backend } = await params;
+
+  return backend === 'drive' || backend === 's3'
+    ? { title: 'Workspace' }
+    : { title: 'Page not found', robots: { index: false, follow: true } };
 }
 
 /**
@@ -24,9 +32,9 @@ export default async function WorkspaceBrowsePage({ params }: Props) {
   const user = await getCurrentUser();
   const { backend, ids } = await params;
 
-  // Unknown backend → full-page 404; rendered inline (not notFound()) to avoid the next-themes script-tag warning.
+  // A URL naming no backend is not a workspace, so it gets the real 404; an unresolved folder stays in the workspace.
   if (backend !== 'drive' && backend !== 's3') {
-    return <NotFoundContent />;
+    notFound();
   }
 
   const restIds = (ids ?? []).slice(1);
@@ -72,6 +80,7 @@ export default async function WorkspaceBrowsePage({ params }: Props) {
 
   return (
     <WorkspaceClient
+      appName={appServerConfig.name}
       username={user.username}
       initialStatuses={statuses}
       initialBackend={isConnected ? (backend as StorageBackend) : null}

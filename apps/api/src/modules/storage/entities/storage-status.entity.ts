@@ -1,3 +1,4 @@
+import type { StorageRoot, StorageStatus } from '@dropto/types';
 import { ApiProperty } from '@nestjs/swagger';
 
 import { StorageBackend } from '../interfaces/storage-provider.interface';
@@ -5,7 +6,7 @@ import { StorageBackend } from '../interfaces/storage-provider.interface';
 /**
  * A browse root within a backend: a Drive folder or an S3 bucket.
  **/
-export class StorageRootEntity {
+export class StorageRootEntity implements StorageRoot {
   @ApiProperty({ type: 'string', description: 'Opaque id used to browse into this root' })
   id: string;
 
@@ -13,7 +14,7 @@ export class StorageRootEntity {
   name: string;
 }
 
-export class StorageStatusEntity {
+export class StorageStatusEntity implements StorageStatus {
   @ApiProperty({ enum: ['drive', 's3'], description: 'Storage backend key' })
   backend: StorageBackend;
 

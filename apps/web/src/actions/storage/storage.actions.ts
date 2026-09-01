@@ -5,10 +5,10 @@ import type {
   DriveEntryPage,
   ListContentsQuery,
   ResumableUploadSession,
+  ResumableUploadStatus,
   StorageBackend,
   StorageStatus,
   UploadResult,
-  UploadStatus,
 } from '@dropto/types';
 
 import {
@@ -92,7 +92,7 @@ export async function uploadStatusAction(
   backend: StorageBackend,
   uploadUrl: string,
   size: number,
-): Promise<ActionResult<UploadStatus>> {
+): Promise<ActionResult<ResumableUploadStatus>> {
   return runAction(() => getUploadStatus(backend, uploadUrl, size));
 }
 

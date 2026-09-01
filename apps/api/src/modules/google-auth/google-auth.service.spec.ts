@@ -35,7 +35,7 @@ describe('GoogleAuthService', () => {
       findFirst: jest.Mock;
       delete: jest.Mock;
     };
-    allowedFolder: { upsert: jest.Mock; findMany: jest.Mock };
+    allowedFolder: { upsert: jest.Mock; findMany: jest.Mock; deleteMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let crypto: { encrypt: jest.Mock; decrypt: jest.Mock };
@@ -64,7 +64,11 @@ describe('GoogleAuthService', () => {
         findFirst: jest.fn(),
         delete: jest.fn(),
       },
-      allowedFolder: { upsert: jest.fn(), findMany: jest.fn() },
+      allowedFolder: {
+        upsert: jest.fn(),
+        findMany: jest.fn(),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       $transaction: jest.fn(),
     };
     crypto = { encrypt: jest.fn(), decrypt: jest.fn() };
@@ -206,16 +210,21 @@ describe('GoogleAuthService', () => {
 
   describe('saveAllowedFolders', () => {
     it('upserts each selected folder in a transaction and returns the updated list', async () => {
+      // Prisma hands back a Date; the entity exposes the ISO string the wire contract declares.
       const saved = [
         { id: 'f1', folderId: 'drive-1', name: 'Photos', createdAt: new Date('2026-01-01') },
       ];
+      const expected = saved.map((folder) => ({
+        ...folder,
+        createdAt: folder.createdAt.toISOString(),
+      }));
       prisma.driveAccount.findFirst.mockResolvedValue({ id: 'acc-1' });
       prisma.$transaction.mockResolvedValue([]);
       prisma.allowedFolder.findMany.mockResolvedValue(saved);
 
       const dto = { folders: [{ folderId: 'drive-1', name: 'Photos' }] };
 
-      await expect(service.saveAllowedFolders(dto)).resolves.toEqual(saved);
+      await expect(service.saveAllowedFolders(dto)).resolves.toEqual(expected);
       expect(prisma.allowedFolder.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { driveAccountId_folderId: { driveAccountId: 'acc-1', folderId: 'drive-1' } },
@@ -240,6 +249,10 @@ describe('GoogleAuthService', () => {
       const allowedFolders = [
         { id: 'f1', folderId: 'drive-1', name: 'Photos', createdAt: new Date('2026-01-01') },
       ];
+      const expectedFolders = allowedFolders.map((folder) => ({
+        ...folder,
+        createdAt: folder.createdAt.toISOString(),
+      }));
       prisma.driveAccount.findFirst.mockResolvedValue({
         email: 'owner@gmail.com',
         allowedFolders,
@@ -248,8 +261,107 @@ describe('GoogleAuthService', () => {
       await expect(service.getStatus()).resolves.toEqual({
         connected: true,
         email: 'owner@gmail.com',
-        allowedFolders,
+        allowedFolders: expectedFolders,
       });
+    });
+  });
+
+  // The owner token is what separates "the operator is logged in" from "the operator controls the account".
+  describe('issueOwnerToken / isVerifiedOwner', () => {
+    /**
+     * Makes `decrypt` return the given owner-token payload verbatim.
+     **/
+    const decryptsTo = (payload: unknown) =>
+      crypto.decrypt.mockReturnValue(JSON.stringify(payload));
+
+    it('issues a token bound to the email and an expiry', () => {
+      crypto.encrypt.mockReturnValue('sealed');
+
+      expect(service.issueOwnerToken('owner@gmail.com')).toBe('sealed');
+
+      const payload = JSON.parse((crypto.encrypt.mock.calls[0] as [string])[0]) as {
+        email: string;
+        exp: number;
+      };
+      expect(payload.email).toBe('owner@gmail.com');
+      expect(payload.exp).toBeGreaterThan(Date.now());
+    });
+
+    it('verifies a token whose email matches the connected account', async () => {
+      decryptsTo({ email: 'owner@gmail.com', exp: Date.now() + 60_000 });
+      prisma.driveAccount.findFirst.mockResolvedValue({ email: 'owner@gmail.com' });
+
+      await expect(service.isVerifiedOwner('sealed')).resolves.toBe(true);
+    });
+
+    it('rejects a token for a different account than the one connected', async () => {
+      // Reconnecting to another Google account must invalidate the previous owner's proof.
+      decryptsTo({ email: 'previous@gmail.com', exp: Date.now() + 60_000 });
+      prisma.driveAccount.findFirst.mockResolvedValue({ email: 'current@gmail.com' });
+
+      await expect(service.isVerifiedOwner('sealed')).resolves.toBe(false);
+    });
+
+    it('rejects an expired token', async () => {
+      decryptsTo({ email: 'owner@gmail.com', exp: Date.now() - 1 });
+
+      await expect(service.isVerifiedOwner('sealed')).resolves.toBe(false);
+      expect(prisma.driveAccount.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('rejects a token with no expiry rather than treating it as eternal', async () => {
+      decryptsTo({ email: 'owner@gmail.com' });
+
+      await expect(service.isVerifiedOwner('sealed')).resolves.toBe(false);
+    });
+
+    it('rejects a token that does not decrypt (forged or tampered)', async () => {
+      crypto.decrypt.mockImplementation(() => {
+        throw new Error('bad auth tag');
+      });
+
+      await expect(service.isVerifiedOwner('forged')).resolves.toBe(false);
+    });
+
+    it('rejects a decryptable token that is not the expected JSON shape', async () => {
+      crypto.decrypt.mockReturnValue('not json at all');
+
+      await expect(service.isVerifiedOwner('sealed')).resolves.toBe(false);
+    });
+
+    it('rejects an absent token without touching crypto or the database', async () => {
+      await expect(service.isVerifiedOwner(undefined)).resolves.toBe(false);
+      expect(crypto.decrypt).not.toHaveBeenCalled();
+      expect(prisma.driveAccount.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('rejects a valid token when no account is connected any more', async () => {
+      decryptsTo({ email: 'owner@gmail.com', exp: Date.now() + 60_000 });
+      prisma.driveAccount.findFirst.mockResolvedValue(null);
+
+      await expect(service.isVerifiedOwner('sealed')).resolves.toBe(false);
+    });
+  });
+
+  describe('removeAllowedFolder', () => {
+    it('deletes the folder scoped to the active account', async () => {
+      prisma.driveAccount.findFirst.mockResolvedValue({ id: 'acc-1' });
+
+      await service.removeAllowedFolder('drive-1');
+
+      // Scoped by account, so an id from another account can never be unauthorized through this.
+      expect(prisma.allowedFolder.deleteMany).toHaveBeenCalledWith({
+        where: { driveAccountId: 'acc-1', folderId: 'drive-1' },
+      });
+    });
+
+    it('fails when no account is connected', async () => {
+      prisma.driveAccount.findFirst.mockResolvedValue(null);
+
+      await expect(service.removeAllowedFolder('drive-1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(prisma.allowedFolder.deleteMany).not.toHaveBeenCalled();
     });
   });
 

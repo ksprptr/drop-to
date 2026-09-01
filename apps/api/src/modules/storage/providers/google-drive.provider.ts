@@ -12,7 +12,11 @@ import { Archiver, ZipArchive } from 'archiver';
 import { Auth, drive_v3, google } from 'googleapis';
 import { Readable } from 'node:stream';
 
-import { AllowedFolderEntity } from '@/modules/google-auth/entities/allowed-folder.entity';
+import { TtlCache } from '@/common/utils/ttl-cache.functions';
+import {
+  AllowedFolderEntity,
+  toAllowedFolderEntity,
+} from '@/modules/google-auth/entities/allowed-folder.entity';
 import { GoogleAuthService } from '@/modules/google-auth/google-auth.service';
 import { PrismaService } from '@/prisma/prisma.service';
 
@@ -38,7 +42,6 @@ import {
   StorageDisconnectedException,
 } from '../storage.errors';
 import { finalizeArchiveInBackground, sanitizeZipEntryPath } from '../storage.functions';
-import { logUploadFailure, logUploadSuccess } from '../upload-log.functions';
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const MAX_ANCESTOR_DEPTH = 50;
@@ -48,12 +51,31 @@ const ITEM_MISSING_MESSAGE = 'This item no longer exists in Google Drive.';
 // One network page. Small enough to keep first paint fast, big enough that most folders need one call.
 const PAGE_SIZE = 100;
 
+/** How long the reported storage quota stays trusted. */
+// Only the quota is cached; root liveness must stay live (an e2e caught a cached deleted root lingering).
+const QUOTA_CACHE_TTL_MS = 30_000;
+
+/** How long a folder's parent list stays trusted. Ancestry changes only when a folder is moved. */
+const ANCESTOR_CACHE_TTL_MS = 60_000;
+
+const ANCESTOR_CACHE_MAX = 500;
+
 /**
  * StorageProvider over the Drive API; every op is validated to stay inside the authorized folder tree.
  **/
 @Injectable()
 export class GoogleDriveProvider implements StorageProvider {
   readonly backend: StorageBackend = 'drive';
+
+  // Intermediate folders only — the target item is always re-read, so a deleted item still 404s.
+  private readonly ancestorCache = new TtlCache<string[]>(
+    ANCESTOR_CACHE_TTL_MS,
+    ANCESTOR_CACHE_MAX,
+  );
+  private quotaCache: {
+    value: { usage: number; limit: number | null } | null;
+    expiresAt: number;
+  } | null = null;
 
   private readonly logger = new Logger(GoogleDriveProvider.name);
 
@@ -76,7 +98,7 @@ export class GoogleDriveProvider implements StorageProvider {
       const accountId = await this.googleAuthService.getActiveAccountId();
       const auth = await this.googleAuthService.getAuthorizedClient(accountId);
       await auth.getAccessToken();
-      quota = await this.fetchQuota(auth);
+      quota = await this.cachedQuota(auth);
       // The owner can delete an authorized folder in Drive; don't offer it as a browse root.
       folders = await this.pruneMissingRoots(
         google.drive({ version: 'v3', auth }),
@@ -105,6 +127,24 @@ export class GoogleDriveProvider implements StorageProvider {
       roots: folders.map((folder) => ({ id: folder.folderId, name: folder.name })),
       quota,
     };
+  }
+
+  /**
+   * The storage quota, re-read from Drive at most once per TTL.
+   **/
+  private async cachedQuota(
+    auth: Auth.OAuth2Client,
+  ): Promise<{ usage: number; limit: number | null } | null> {
+    const now = Date.now();
+
+    if (this.quotaCache && this.quotaCache.expiresAt > now) {
+      return this.quotaCache.value;
+    }
+
+    const value = await this.fetchQuota(auth);
+    this.quotaCache = { value, expiresAt: now + QUOTA_CACHE_TTL_MS };
+
+    return value;
   }
 
   /**
@@ -162,8 +202,7 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Reads the target's parents. Gone in Drive (deleted/trashed) → 404; unreadable for any other
-   * reason → null, letting the ancestor walk end in the usual 403.
+   * Reads the target's parents; gone in Drive → 404, unreadable for any other reason → null.
    **/
   private async getItemParents(drive: drive_v3.Drive, itemId: string): Promise<string[] | null> {
     try {
@@ -184,9 +223,7 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Passes if the id is an authorized root or has one as an ancestor; else 403. Authorized roots are
-   * still verified against Drive — the owner can delete one there, and the stale id would otherwise
-   * reach the API and blow up as an unhandled 404.
+   * Passes if the id is an authorized root or has one as an ancestor; else 403 (roots re-verified against Drive).
    **/
   private async assertItemAllowed(
     drive: drive_v3.Drive,
@@ -215,9 +252,19 @@ export class GoogleDriveProvider implements StorageProvider {
         }
         visited.add(id);
 
+        const cached = this.ancestorCache.get(id);
+
+        if (cached) {
+          next.push(...cached);
+          continue;
+        }
+
         try {
           const res = await drive.files.get({ fileId: id, fields: 'id, parents' });
-          next.push(...(res.data.parents ?? []));
+          const parents = res.data.parents ?? [];
+
+          this.ancestorCache.set(id, parents);
+          next.push(...parents);
         } catch {
           // Not reachable (deleted / no access) — treat as not allowed.
           continue;
@@ -232,9 +279,7 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   /**
-   * Drops authorized roots that are gone from Drive so the sidebar never offers a folder every
-   * later call would 404 on. A hard 404 means gone for good → the authorization is pruned too;
-   * trashed folders are only hidden (restoring one in Drive brings it back).
+   * Drops roots gone from Drive: a hard 404 unauthorizes them, a trashed folder is only hidden.
    **/
   private async pruneMissingRoots(
     drive: drive_v3.Drive,
@@ -277,7 +322,8 @@ export class GoogleDriveProvider implements StorageProvider {
       orderBy: { createdAt: 'asc' },
     });
 
-    return this.pruneMissingRoots(drive, driveAccountId, folders);
+    // Deliberately uncached: reporting which roots are still live is the whole job (an e2e caught a cached one lingering).
+    return this.pruneMissingRoots(drive, driveAccountId, folders.map(toAllowedFolderEntity));
   }
 
   async listContents(folderId: string, options: ListContentsOptions = {}): Promise<ContentsPage> {
@@ -333,15 +379,24 @@ export class GoogleDriveProvider implements StorageProvider {
   async resolveNames(ids: string[]): Promise<ResolvedNameEntity[]> {
     const driveAccountId = await this.googleAuthService.getActiveAccountId();
     const drive = await this.getDrive(driveAccountId);
+    const allowedIds = await this.getAllowedFolderIds(driveAccountId);
 
-    // Breadcrumb names + Drive links only — one parallel files.get per id, no ancestor walk (data access still validates the full tree).
+    // Validated first: the grant covers the whole Drive, so an unchecked id would leak any file's name and link.
     return Promise.all(
       ids.map(async (id) => {
+        const empty = { id, name: '', webViewLink: null };
+
+        try {
+          await this.assertItemAllowed(drive, id, allowedIds);
+        } catch {
+          return empty;
+        }
+
         try {
           const res = await drive.files.get({ fileId: id, fields: 'id, name, webViewLink' });
           return { id, name: res.data.name ?? '', webViewLink: res.data.webViewLink ?? null };
         } catch {
-          return { id, name: '', webViewLink: null };
+          return empty;
         }
       }),
     );
@@ -370,32 +425,25 @@ export class GoogleDriveProvider implements StorageProvider {
 
     await this.assertItemAllowed(drive, folderId, allowedIds);
 
-    try {
-      const res = await drive.files.create(
-        {
-          requestBody: { name: fileName, parents: [folderId] },
-          media: { mimeType, body },
-          fields: 'id, name, size, webViewLink',
-        },
-        { signal },
-      );
+    const res = await drive.files.create(
+      {
+        requestBody: { name: fileName, parents: [folderId] },
+        media: { mimeType, body },
+        fields: 'id, name, size, webViewLink',
+      },
+      { signal },
+    );
 
-      const size = this.parseSize(res.data.size);
+    const size = this.parseSize(res.data.size);
 
-      await logUploadSuccess(this.prismaService, { fileName, folderId, fileId: res.data.id, size });
+    this.logger.log(`Uploaded "${fileName}" (${res.data.id}) into ${folderId}.`);
 
-      this.logger.log(`Uploaded "${fileName}" (${res.data.id}) into ${folderId}.`);
-
-      return {
-        fileId: res.data.id ?? '',
-        fileName: res.data.name ?? fileName,
-        size,
-        webViewLink: res.data.webViewLink ?? null,
-      };
-    } catch (error) {
-      await logUploadFailure(this.prismaService, { fileName, folderId, error, signal });
-      throw error;
-    }
+    return {
+      fileId: res.data.id ?? '',
+      fileName: res.data.name ?? fileName,
+      size,
+      webViewLink: res.data.webViewLink ?? null,
+    };
   }
 
   /**
@@ -493,13 +541,6 @@ export class GoogleDriveProvider implements StorageProvider {
 
     const size = this.parseSize(res.data.size);
     const fileName = res.data.name ?? '';
-
-    await logUploadSuccess(this.prismaService, {
-      fileName,
-      folderId: res.data.parents?.[0] ?? '',
-      fileId: res.data.id,
-      size,
-    });
 
     this.logger.log(`Finalized upload "${fileName}" (${res.data.id}).`);
 

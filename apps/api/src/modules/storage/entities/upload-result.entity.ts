@@ -1,6 +1,7 @@
+import type { UploadResult } from '@dropto/types';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class UploadResultEntity {
+export class UploadResultEntity implements UploadResult {
   @ApiProperty({
     type: 'string',
     description: 'Opaque id of the uploaded file (Drive id or S3 ref)',

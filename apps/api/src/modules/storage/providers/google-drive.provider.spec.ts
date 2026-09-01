@@ -28,11 +28,12 @@ describe('GoogleDriveProvider', () => {
     list: jest.Mock;
     create: jest.Mock;
     delete: jest.Mock;
+    update: jest.Mock;
   };
+  let about: { get: jest.Mock };
   let googleAuth: { getActiveAccountId: jest.Mock; getAuthorizedClient: jest.Mock };
   let prisma: {
-    allowedFolder: { findMany: jest.Mock };
-    uploadLog: { create: jest.Mock };
+    allowedFolder: { findMany: jest.Mock; deleteMany: jest.Mock };
   };
 
   /**
@@ -46,8 +47,15 @@ describe('GoogleDriveProvider', () => {
   });
 
   beforeEach(() => {
-    files = { get: jest.fn(), list: jest.fn(), create: jest.fn(), delete: jest.fn() };
-    (google.drive as jest.Mock).mockReturnValue({ files });
+    files = {
+      get: jest.fn(),
+      list: jest.fn(),
+      create: jest.fn(),
+      delete: jest.fn(),
+      update: jest.fn(),
+    };
+    about = { get: jest.fn() };
+    (google.drive as jest.Mock).mockReturnValue({ files, about });
 
     googleAuth = {
       getActiveAccountId: jest.fn().mockResolvedValue('account-1'),
@@ -56,8 +64,7 @@ describe('GoogleDriveProvider', () => {
       }),
     };
     prisma = {
-      allowedFolder: { findMany: jest.fn() },
-      uploadLog: { create: jest.fn().mockResolvedValue(undefined) },
+      allowedFolder: { findMany: jest.fn(), deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
     };
 
     service = new GoogleDriveProvider(
@@ -246,14 +253,9 @@ describe('GoogleDriveProvider', () => {
         size: 1024,
         webViewLink: 'http://view',
       });
-      expect(prisma.uploadLog.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ status: 'SUCCESS', fileId: 'up-1' }),
-        }),
-      );
     });
 
-    it('logs a FAILED entry and rethrows when the Drive upload fails', async () => {
+    it('rethrows when the Drive upload fails', async () => {
       withAllowedRoots('root-1');
       files.create.mockRejectedValue(new Error('quota exceeded'));
 
@@ -264,44 +266,59 @@ describe('GoogleDriveProvider', () => {
           mimeType: 'image/jpeg',
         }),
       ).rejects.toThrow('quota exceeded');
-
-      expect(prisma.uploadLog.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ status: 'FAILED', error: 'quota exceeded' }),
-        }),
-      );
     });
   });
 
   describe('resolveNames', () => {
-    it('resolves each id to its name + Drive link with a single parallel files.get (no ancestor walk)', async () => {
-      files.get.mockImplementation(({ fileId }: { fileId: string }) =>
-        Promise.resolve({
-          data: { id: fileId, name: `name-${fileId}`, webViewLink: `http://view/${fileId}` },
-        }),
+    it('resolves each authorized id to its name + Drive link', async () => {
+      withAllowedRoots('a', 'b');
+      files.get.mockImplementation(({ fileId, fields }: { fileId: string; fields: string }) =>
+        Promise.resolve(
+          fields === 'id, parents, trashed'
+            ? { data: { id: fileId, parents: [] } }
+            : {
+                data: { id: fileId, name: `name-${fileId}`, webViewLink: `http://view/${fileId}` },
+              },
+        ),
       );
 
-      const result = await service.resolveNames(['a', 'b']);
-
-      expect(result).toEqual([
+      await expect(service.resolveNames(['a', 'b'])).resolves.toEqual([
         { id: 'a', name: 'name-a', webViewLink: 'http://view/a' },
         { id: 'b', name: 'name-b', webViewLink: 'http://view/b' },
       ]);
-      // One lookup per id, fetching only id + name + link — never the parents walk.
-      expect(files.get).toHaveBeenCalledTimes(2);
       expect(files.get).toHaveBeenCalledWith({ fileId: 'a', fields: 'id, name, webViewLink' });
     });
 
     it('falls back to an empty name / null link for ids the app cannot see', async () => {
-      files.get
-        .mockResolvedValueOnce({ data: { id: 'ok', name: 'Visible', webViewLink: 'http://view' } })
-        .mockRejectedValueOnce(new Error('404 Not Found'));
+      withAllowedRoots('ok');
+      files.get.mockImplementation(({ fileId, fields }: { fileId: string; fields: string }) => {
+        if (fields === 'id, parents, trashed') {
+          return Promise.resolve({ data: { id: fileId, parents: [] } });
+        }
+        return fileId === 'ok'
+          ? Promise.resolve({ data: { id: 'ok', name: 'Visible', webViewLink: 'http://view' } })
+          : Promise.reject(new Error('404 Not Found'));
+      });
 
-      const result = await service.resolveNames(['ok', 'hidden']);
-
-      expect(result).toEqual([
+      await expect(service.resolveNames(['ok', 'hidden'])).resolves.toEqual([
         { id: 'ok', name: 'Visible', webViewLink: 'http://view' },
         { id: 'hidden', name: '', webViewLink: null },
+      ]);
+    });
+
+    it('does not leak the name of a file outside the authorized tree', async () => {
+      withAllowedRoots('root-1');
+      // The id resolves in Drive (the grant covers the whole account) but hangs off another tree.
+      files.get.mockImplementation(({ fileId, fields }: { fileId: string; fields: string }) =>
+        Promise.resolve(
+          fields === 'id, parents, trashed'
+            ? { data: { id: fileId, parents: ['somewhere-else'] } }
+            : { data: { id: fileId, name: 'Tax return 2025.pdf', webViewLink: 'http://view' } },
+        ),
+      );
+
+      await expect(service.resolveNames(['outsider'])).resolves.toEqual([
+        { id: 'outsider', name: '', webViewLink: null },
       ]);
     });
   });
@@ -313,7 +330,6 @@ describe('GoogleDriveProvider', () => {
       await expect(service.createFolderArchive('root-1')).rejects.toBeInstanceOf(
         BadRequestException,
       );
-      // Rejected before any metadata lookup or archive stream is opened.
       expect(files.get).not.toHaveBeenCalled();
     });
 
@@ -324,6 +340,414 @@ describe('GoogleDriveProvider', () => {
       });
 
       await expect(service.createFolderArchive('doc')).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('listRoots (liveness pruning)', () => {
+    const row = { id: 'f1', folderId: 'drive-1', name: 'Photos', createdAt: new Date() };
+    // The rows are mapped to the wire entity on the way out, which serializes `createdAt`.
+    const entity = { ...row, createdAt: row.createdAt.toISOString() };
+
+    /**
+     * Scripts the authorized-root rows independently of `getAllowedFolderIds`.
+     **/
+    const withRootRows = () => {
+      prisma.allowedFolder.findMany.mockResolvedValue([row]);
+    };
+
+    it('returns a root that still exists in Drive', async () => {
+      withRootRows();
+      files.get.mockResolvedValue({ data: { id: 'drive-1', trashed: false } });
+
+      await expect(service.listRoots()).resolves.toEqual([entity]);
+      expect(prisma.allowedFolder.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('hides a trashed root but keeps the authorization (it can be restored in Drive)', async () => {
+      withRootRows();
+      files.get.mockResolvedValue({ data: { id: 'drive-1', trashed: true } });
+
+      await expect(service.listRoots()).resolves.toEqual([]);
+      expect(prisma.allowedFolder.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('drops and unauthorizes a root Drive reports as gone (404)', async () => {
+      withRootRows();
+      files.get.mockRejectedValue(Object.assign(new Error('File not found'), { code: 404 }));
+
+      await expect(service.listRoots()).resolves.toEqual([]);
+      expect(prisma.allowedFolder.deleteMany).toHaveBeenCalledWith({
+        where: { driveAccountId: 'account-1', id: { in: ['f1'] } },
+      });
+    });
+
+    it('keeps a root when the liveness check fails transiently', async () => {
+      withRootRows();
+      // Only a hard 404 is proof; treating a 500 as proof would revoke a working authorization.
+      files.get.mockRejectedValue(Object.assign(new Error('backend error'), { code: 500 }));
+
+      await expect(service.listRoots()).resolves.toEqual([entity]);
+      expect(prisma.allowedFolder.deleteMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('renameItem', () => {
+    it('renames an item inside the authorized tree', async () => {
+      withAllowedRoots('root-1');
+      files.get.mockResolvedValue({ data: { id: 'doc', parents: ['root-1'] } });
+      files.update.mockResolvedValue({
+        data: { id: 'doc', name: 'new.pdf', mimeType: 'application/pdf', size: '10' },
+      });
+
+      await expect(service.renameItem('doc', 'new.pdf')).resolves.toMatchObject({
+        id: 'doc',
+        name: 'new.pdf',
+        isFolder: false,
+        size: 10,
+      });
+      expect(files.update).toHaveBeenCalledWith(
+        expect.objectContaining({ fileId: 'doc', requestBody: { name: 'new.pdf' } }),
+      );
+    });
+
+    it('refuses to rename an authorized root (409)', async () => {
+      withAllowedRoots('root-1');
+
+      await expect(service.renameItem('root-1', 'Renamed')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(files.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to rename an item outside the authorized tree (403)', async () => {
+      withAllowedRoots('root-1');
+      files.get.mockResolvedValue({ data: { id: 'outsider', parents: [] } });
+
+      await expect(service.renameItem('outsider', 'new')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(files.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('moveItem', () => {
+    it('reparents an item, detaching it from its previous parents', async () => {
+      withAllowedRoots('root-1');
+      files.get.mockImplementation(({ fileId }: { fileId: string }) =>
+        Promise.resolve({ data: { id: fileId, parents: ['root-1'] } }),
+      );
+      files.update.mockResolvedValue({
+        data: { id: 'doc', name: 'doc.pdf', mimeType: 'application/pdf' },
+      });
+
+      await expect(service.moveItem('doc', 'sub-1')).resolves.toMatchObject({ id: 'doc' });
+      expect(files.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileId: 'doc',
+          addParents: 'sub-1',
+          removeParents: 'root-1',
+        }),
+      );
+    });
+
+    it('rejects moving an item into itself (400)', async () => {
+      withAllowedRoots('root-1');
+
+      await expect(service.moveItem('doc', 'doc')).rejects.toBeInstanceOf(BadRequestException);
+      expect(files.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to move an authorized root (409)', async () => {
+      withAllowedRoots('root-1');
+
+      await expect(service.moveItem('root-1', 'sub-1')).rejects.toBeInstanceOf(ConflictException);
+      expect(files.update).not.toHaveBeenCalled();
+    });
+
+    it('validates the destination too, not just the item (403)', async () => {
+      withAllowedRoots('root-1');
+      // Checking only the source would let an operator move an authorized file out into the rest of the Drive.
+      files.get.mockImplementation(({ fileId }: { fileId: string }) =>
+        Promise.resolve({
+          data: { id: fileId, parents: fileId === 'doc' ? ['root-1'] : [] },
+        }),
+      );
+
+      await expect(service.moveItem('doc', 'elsewhere')).rejects.toBeInstanceOf(ForbiddenException);
+      expect(files.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('downloadFile', () => {
+    it('returns the stream with the file metadata', async () => {
+      withAllowedRoots('root-1');
+      const stream = { pipe: jest.fn() };
+      files.get.mockImplementation(({ alt, fields }: { alt?: string; fields?: string }) => {
+        if (alt === 'media') return Promise.resolve({ data: stream });
+        if (fields === 'name, mimeType, size') {
+          return Promise.resolve({
+            data: { name: 'doc.pdf', mimeType: 'application/pdf', size: '2048' },
+          });
+        }
+        return Promise.resolve({ data: { id: 'doc', parents: ['root-1'] } });
+      });
+
+      await expect(service.downloadFile('doc')).resolves.toMatchObject({
+        stream,
+        name: 'doc.pdf',
+        mimeType: 'application/pdf',
+        size: 2048,
+      });
+    });
+
+    it('refuses to stream a folder as a file (400)', async () => {
+      withAllowedRoots('root-1');
+      files.get.mockImplementation(({ fields }: { fields?: string }) =>
+        Promise.resolve(
+          fields === 'name, mimeType, size'
+            ? { data: { name: 'Sub', mimeType: FOLDER_MIME } }
+            : { data: { id: 'sub', parents: ['root-1'] } },
+        ),
+      );
+
+      await expect(service.downloadFile('sub')).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuses a file outside the authorized tree (403)', async () => {
+      withAllowedRoots('root-1');
+      files.get.mockResolvedValue({ data: { id: 'outsider', parents: [] } });
+
+      await expect(service.downloadFile('outsider')).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  // The only paths reaching Google over raw `fetch`; test/setup-env.ts makes an unstubbed call throw.
+  describe('createResumableUpload', () => {
+    const init = {
+      name: 'big.bin',
+      mimeType: 'application/octet-stream',
+      size: 1024,
+      origin: 'http://localhost:3000',
+    };
+    let fetchMock: jest.Mock;
+
+    beforeEach(() => {
+      fetchMock = jest.fn();
+      global.fetch = fetchMock as unknown as typeof fetch;
+    });
+
+    it('returns the session URL Google puts in the Location header', async () => {
+      withAllowedRoots('root-1');
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({
+          location: 'https://www.googleapis.com/upload/drive/v3/files?upload_id=X',
+        }),
+      });
+
+      await expect(service.createResumableUpload('root-1', init)).resolves.toEqual({
+        uploadUrl: 'https://www.googleapis.com/upload/drive/v3/files?upload_id=X',
+      });
+    });
+
+    it('bakes the validated parent and the browser origin into the session', async () => {
+      withAllowedRoots('root-1');
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ location: 'https://www.googleapis.com/upload/drive/session' }),
+      });
+
+      await service.createResumableUpload('root-1', init);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      // The parent is server-side only: the browser gets a session it cannot repoint elsewhere.
+      expect(JSON.parse(options.body as string)).toEqual({
+        name: 'big.bin',
+        parents: ['root-1'],
+        mimeType: 'application/octet-stream',
+      });
+      expect((options.headers as Record<string, string>)['Origin']).toBe('http://localhost:3000');
+    });
+
+    it('refuses to open a session for a folder outside the authorized tree (403)', async () => {
+      withAllowedRoots('root-1');
+      files.get.mockResolvedValue({ data: { id: 'outsider', parents: [] } });
+
+      await expect(service.createResumableUpload('outsider', init)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('maps a rejected session to a 503', async () => {
+      withAllowedRoots('root-1');
+      fetchMock.mockResolvedValue({ ok: false, status: 403, headers: new Headers() });
+
+      await expect(service.createResumableUpload('root-1', init)).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+    });
+
+    it('maps a 200 without a Location header to a 503', async () => {
+      withAllowedRoots('root-1');
+      fetchMock.mockResolvedValue({ ok: true, status: 200, headers: new Headers() });
+
+      await expect(service.createResumableUpload('root-1', init)).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+    });
+  });
+
+  describe('getUploadStatus', () => {
+    let fetchMock: jest.Mock;
+
+    beforeEach(() => {
+      fetchMock = jest.fn();
+      global.fetch = fetchMock as unknown as typeof fetch;
+    });
+
+    // The URL is request-supplied, so this prefix check is all that stops an SSRF into the internal network.
+    it.each([
+      ['an unrelated host', 'https://evil.example.com/upload/drive/v3/files'],
+      ['plain http', 'http://www.googleapis.com/upload/drive/v3/files'],
+      ['an internal address', 'http://169.254.169.254/latest/meta-data/'],
+      ['a look-alike host', 'https://www.googleapis.com.evil.test/upload/drive/'],
+      [
+        'the prefix buried in a query string',
+        'https://evil.test/?u=https://www.googleapis.com/upload/drive/',
+      ],
+    ])('rejects %s without dialling it (400)', async (_label, url) => {
+      await expect(service.getUploadStatus(url, 100)).rejects.toBeInstanceOf(BadRequestException);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('reports a finished session with the created file id', async () => {
+      fetchMock.mockResolvedValue({
+        status: 200,
+        headers: new Headers(),
+        json: jest.fn().mockResolvedValue({ id: 'file-1' }),
+      });
+
+      await expect(
+        service.getUploadStatus(
+          'https://www.googleapis.com/upload/drive/v3/files?upload_id=X',
+          500,
+        ),
+      ).resolves.toEqual({ complete: true, receivedBytes: 500, fileId: 'file-1' });
+    });
+
+    it('survives a 200 whose body is not JSON', async () => {
+      fetchMock.mockResolvedValue({
+        status: 201,
+        headers: new Headers(),
+        json: jest.fn().mockRejectedValue(new Error('not json')),
+      });
+
+      await expect(
+        service.getUploadStatus('https://www.googleapis.com/upload/drive/v3/files', 500),
+      ).resolves.toEqual({ complete: true, receivedBytes: 500, fileId: null });
+    });
+
+    it('translates a 308 Range header into the received byte count', async () => {
+      // "bytes=0-99" means bytes 0..99 inclusive landed, i.e. 100 bytes.
+      fetchMock.mockResolvedValue({
+        status: 308,
+        headers: new Headers({ range: 'bytes=0-99' }),
+      });
+
+      await expect(
+        service.getUploadStatus('https://www.googleapis.com/upload/drive/v3/files', 500),
+      ).resolves.toEqual({ complete: false, receivedBytes: 100, fileId: null });
+    });
+
+    it('treats a 308 without a Range header as nothing received', async () => {
+      fetchMock.mockResolvedValue({ status: 308, headers: new Headers() });
+
+      await expect(
+        service.getUploadStatus('https://www.googleapis.com/upload/drive/v3/files', 500),
+      ).resolves.toEqual({ complete: false, receivedBytes: 0, fileId: null });
+    });
+
+    it('falls back to 0 when the Range header is unparseable', async () => {
+      fetchMock.mockResolvedValue({
+        status: 308,
+        headers: new Headers({ range: 'bytes=garbage' }),
+      });
+
+      await expect(
+        service.getUploadStatus('https://www.googleapis.com/upload/drive/v3/files', 500),
+      ).resolves.toMatchObject({ receivedBytes: 0 });
+    });
+
+    it('maps any other status to a 503', async () => {
+      fetchMock.mockResolvedValue({ status: 500, headers: new Headers() });
+
+      await expect(
+        service.getUploadStatus('https://www.googleapis.com/upload/drive/v3/files', 500),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    });
+  });
+
+  describe('status (quota caching)', () => {
+    /**
+     * A connected account with one authorized root that Drive still reports as live.
+     **/
+    const connected = () => {
+      googleAuth.getStatus = jest.fn().mockResolvedValue({
+        connected: true,
+        email: 'owner@gmail.com',
+        allowedFolders: [{ id: 'f1', folderId: 'root-1', name: 'test', createdAt: new Date() }],
+      });
+      about.get.mockResolvedValue({ data: { storageQuota: { usage: '100', limit: '1000' } } });
+      files.get.mockResolvedValue({ data: { id: 'root-1', trashed: false } });
+    };
+
+    it('reports the quota from Drive on the first call', async () => {
+      connected();
+
+      await expect(service.status()).resolves.toMatchObject({
+        connected: true,
+        quota: { usage: 100, limit: 1000 },
+      });
+      expect(about.get).toHaveBeenCalledTimes(1);
+    });
+
+    it('serves the quota from cache on the next call', async () => {
+      connected();
+
+      await service.status();
+      await service.status();
+      await service.status();
+
+      // One `about.get` for three polls: the quota is what the cache is for.
+      expect(about.get).toHaveBeenCalledTimes(1);
+    });
+
+    it('still re-checks root liveness on every call', async () => {
+      connected();
+
+      await service.status();
+      const afterFirst = files.get.mock.calls.length;
+      await service.status();
+
+      // Deliberately uncached: a root deleted in Drive has to disappear from the sidebar at once.
+      expect(files.get.mock.calls.length).toBeGreaterThan(afterFirst);
+    });
+
+    it('re-reads the quota once the TTL has passed', async () => {
+      connected();
+      const now = Date.now();
+      const clock = jest.spyOn(Date, 'now');
+
+      clock.mockReturnValue(now);
+      await service.status();
+      clock.mockReturnValue(now + 30_001);
+      await service.status();
+
+      expect(about.get).toHaveBeenCalledTimes(2);
+      clock.mockRestore();
     });
   });
 

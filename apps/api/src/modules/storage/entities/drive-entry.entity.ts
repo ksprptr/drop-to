@@ -1,6 +1,7 @@
+import type { DriveEntry } from '@dropto/types';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class DriveEntryEntity {
+export class DriveEntryEntity implements DriveEntry {
   @ApiProperty({ type: 'string', description: 'Opaque file/folder id (Drive id or S3 ref)' })
   id: string;
 

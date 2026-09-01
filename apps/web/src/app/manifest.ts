@@ -2,6 +2,9 @@ import type { MetadataRoute } from 'next';
 
 import { metadataConfig } from '@/configs/seo/metadata.config';
 
+/** The name comes from the runtime env, so this must not be prerendered at build time. */
+export const dynamic = 'force-dynamic';
+
 /**
  * Web app manifest (PWA); icons live in `public/`.
  **/

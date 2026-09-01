@@ -9,7 +9,6 @@ import {
 } from '@nestjs/common';
 
 import type { S3Config } from '@/config/s3.config';
-import type { PrismaService } from '@/prisma/prisma.service';
 
 import { S3_UNAVAILABLE_MESSAGE, StorageDisconnectedException } from '../storage.errors';
 import { S3StorageProvider } from './s3-storage.provider';
@@ -50,10 +49,9 @@ const baseCfg: S3Config = {
 describe('S3StorageProvider', () => {
   let send: jest.Mock;
   let uploadDone: jest.Mock;
-  let prisma: { uploadLog: { create: jest.Mock } };
 
   const make = (override: Partial<S3Config> = {}) =>
-    new S3StorageProvider({ ...baseCfg, ...override }, prisma as unknown as PrismaService);
+    new S3StorageProvider({ ...baseCfg, ...override });
 
   const sentCmds = () =>
     send.mock.calls.map((call) => call[0] as { cmd: string; input: Record<string, unknown> });
@@ -71,7 +69,6 @@ describe('S3StorageProvider', () => {
       done: uploadDone,
       abort: jest.fn(),
     }));
-    prisma = { uploadLog: { create: jest.fn().mockResolvedValue(undefined) } };
   });
 
   describe('guards (resolve / ensureEnabled)', () => {
@@ -374,12 +371,9 @@ describe('S3StorageProvider', () => {
         size: 100,
         webViewLink: null,
       });
-      expect(prisma.uploadLog.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: 'SUCCESS' }) }),
-      );
     });
 
-    it('logs FAILED and rethrows when the upload fails', async () => {
+    it('rethrows when the upload fails', async () => {
       uploadDone.mockRejectedValue(new Error('nope'));
 
       await expect(
@@ -389,12 +383,6 @@ describe('S3StorageProvider', () => {
           mimeType: 'text/plain',
         }),
       ).rejects.toThrow('nope');
-
-      expect(prisma.uploadLog.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ status: 'FAILED', error: 'nope' }),
-        }),
-      );
     });
   });
 });

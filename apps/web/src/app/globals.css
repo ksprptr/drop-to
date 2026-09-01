@@ -64,3 +64,49 @@
     @apply cursor-not-allowed opacity-50;
   }
 }
+
+/* Wraps the app so the JavaScript-off screen can hide it with a single rule; generates no box. */
+.app-shell {
+  display: contents;
+}
+
+/* JavaScript-off screen — themed with `prefers-color-scheme`, as next-themes never adds `.dark`. */
+.noscript-screen {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0 1rem;
+  text-align: center;
+}
+
+.noscript-eyebrow {
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-green-600);
+}
+
+.noscript-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-zinc-950);
+}
+
+.noscript-text {
+  max-width: 28rem;
+  color: var(--color-zinc-600);
+}
+
+@media (prefers-color-scheme: dark) {
+  .noscript-title {
+    color: var(--color-zinc-50);
+  }
+
+  .noscript-text {
+    color: var(--color-zinc-400);
+  }
+}

@@ -1,15 +1,10 @@
 import type { Config } from 'prettier';
 
-// Mirrors the root workspace config, adding the Tailwind class-sorting plugin.
+import baseConfig from '../../prettier.config.ts';
+
+// The workspace config plus the Tailwind class-sorting plugin (web-only).
 const config: Config = {
-  tabWidth: 2,
-  printWidth: 100,
-  endOfLine: 'auto',
-  arrowParens: 'always',
-  semi: true,
-  singleQuote: true,
-  jsxSingleQuote: true,
-  bracketSameLine: true,
+  ...baseConfig,
   plugins: ['prettier-plugin-tailwindcss'],
 };
 

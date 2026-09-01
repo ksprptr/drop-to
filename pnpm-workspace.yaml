@@ -2,20 +2,25 @@ packages:
   - 'apps/*'
   - 'packages/*'
 overrides:
-  # googleapis 173 pulls google-auth-library ^10.2.0 (10.9.0) while its own
-  # googleapis-common pins 10.5.0 exactly — two copies make the OAuth2Client
-  # types incompatible. Dedupe to a single (latest) version.
+  # googleapis 176 and its googleapis-common both pin google-auth-library 10.5.0, but other
+  # dependents resolve 10.9.0 — without this override pnpm installs both copies and the two
+  # OAuth2Client types stop being assignable. Dedupe to a single (latest) version.
   google-auth-library: 10.9.0
   # Security: force patched transitive versions (advisories on the ranges Next
   # pulled). sharp < 0.35.0 = libvips CVEs (image optimization, production);
   # postcss <= 8.5.17 = arbitrary file read / path traversal (build-time CSS).
   sharp: ^0.35.3
   postcss: ^8.5.23
-  # Build/dev-tooling transitives (Prisma dev, ajv, glob). Patched within-major
-  # (no breaking bump): fast-uri host confusion, brace-expansion 5.x DoS,
-  # @hono/node-server middleware bypass / path traversal, valibot flatten() throw.
-  fast-uri@3: 3.1.4
-  brace-expansion: 5.0.8
+  # Build/dev-tooling transitives (Prisma dev, ajv, glob, eslint). None sit in the running
+  # server's request path; they are pinned so `pnpm audit` stays clean and a vulnerable copy
+  # cannot sneak into a build. Patched within-major only (no breaking bump).
+  # Keep these at or above the advisory's patched version — a stale pin is worse than none,
+  # because it silently holds the vulnerable copy in place.
+  fast-uri@3: 3.1.5
+  brace-expansion: 5.0.9
+  # cross-spawn <7.0.5 ReDoS; tmp <0.2.6 path traversal via unsanitized prefix.
+  cross-spawn: ^7.0.6
+  tmp: ^0.2.6
   '@hono/node-server': ^1.19.17
   valibot: ^1.4.2
   # js-yaml 5.x flow-collection DoS (only the 5.x copy under @nestjs/swagger, dev-only);
@@ -23,6 +28,8 @@ overrides:
   js-yaml@5: 5.2.2
   find-my-way: ^9.6.1
 allowBuilds:
+  # Jest's optional native file watcher — never built here and the suites do not need it.
+  '@parcel/watcher': false
   '@prisma/engines': true
   '@scarf/scarf': false
   '@swc/core': true

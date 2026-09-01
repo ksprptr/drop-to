@@ -1,0 +1,64 @@
+name: CI
+
+# Two-branch flow (dev → prod): fast feedback on every push to dev, and a gate on the PR into prod.
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [prod]
+
+# A newer push to the same branch/PR supersedes the run in flight.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: lint · build · test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # Reads the pnpm version from `packageManager` in package.json, so it cannot drift from local.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # Turborepo's local cache: unchanged packages replay instead of re-running.
+      - name: Restore Turborepo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      # The lint scripts run eslint with --fix, so a fixable violation would be silently repaired and
+      # the step would pass. Failing on a dirty tree is what turns lint back into a real gate.
+      - name: Verify lint changed nothing
+        run: git diff --exit-code
+
+      - name: Build
+        run: pnpm build
+
+      - name: Unit tests (api)
+        run: pnpm --filter api run test
+
+      # Committed template of throwaway values — see the summary for why it is copied, not rebuilt here.
+      - name: Create the API test environment
+        run: cp apps/api/.env.test.example apps/api/.env.test
+
+      - name: E2E tests (api)
+        run: pnpm --filter api run test:e2e

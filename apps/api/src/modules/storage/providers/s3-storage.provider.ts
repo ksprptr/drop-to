@@ -24,7 +24,6 @@ import { Readable } from 'node:stream';
 
 import { type S3Config, s3Config } from '@/config/s3.config';
 import { AllowedFolderEntity } from '@/modules/google-auth/entities/allowed-folder.entity';
-import { PrismaService } from '@/prisma/prisma.service';
 
 import { DriveEntryEntity } from '../entities/drive-entry.entity';
 import { ResolvedNameEntity } from '../entities/resolved-name.entity';
@@ -48,7 +47,6 @@ import {
   StorageDisconnectedException,
 } from '../storage.errors';
 import { finalizeArchiveInBackground, sanitizeZipEntryPath } from '../storage.functions';
-import { logUploadFailure, logUploadSuccess } from '../upload-log.functions';
 
 /** Marker used for zero-byte "folder" objects (a prefix ending in a slash). */
 const FOLDER_SUFFIX = '/';
@@ -146,10 +144,7 @@ export class S3StorageProvider implements StorageProvider {
   // Buckets already reported as gone, so the warning is logged once per disappearance.
   private readonly missingBuckets = new Set<string>();
 
-  constructor(
-    @Inject(s3Config.KEY) private readonly cfg: S3Config,
-    private readonly prismaService: PrismaService,
-  ) {
+  constructor(@Inject(s3Config.KEY) private readonly cfg: S3Config) {
     this.allowedBuckets = new Set(cfg.buckets);
   }
 
@@ -218,7 +213,8 @@ export class S3StorageProvider implements StorageProvider {
       id: encodeId({ bucket, key: '' }),
       folderId: encodeId({ bucket, key: '' }),
       name: bucket,
-      createdAt: new Date(0),
+      // Buckets carry no creation date of their own; the epoch keeps the shape uniform.
+      createdAt: new Date(0).toISOString(),
     }));
   }
 
@@ -309,8 +305,6 @@ export class S3StorageProvider implements StorageProvider {
 
       const size = await this.headSize(ref.bucket, key);
 
-      await logUploadSuccess(this.prismaService, { fileName, folderId, fileId: key, size });
-
       this.logger.log(`Uploaded "${fileName}" into ${ref.bucket}/${key}.`);
 
       return {
@@ -320,7 +314,6 @@ export class S3StorageProvider implements StorageProvider {
         webViewLink: null,
       };
     } catch (error) {
-      await logUploadFailure(this.prismaService, { fileName, folderId, error, signal });
       throw this.toHttpError(error);
     } finally {
       signal?.removeEventListener('abort', onAbort);
@@ -510,9 +503,7 @@ export class S3StorageProvider implements StorageProvider {
   // --- Internals ----------------------------------------------------------------
 
   /**
-   * Probes every configured bucket in parallel and returns the ones that answered. A bucket that
-   * was deleted outside the app is dropped (never offered as a browse root); any other failure
-   * (bad credentials, unreachable endpoint, 5xx) is a whole-backend problem and propagates.
+   * Probes every configured bucket in parallel; a deleted one is dropped, any other failure propagates.
    **/
   private async liveBuckets(): Promise<string[]> {
     const client = this.getClient();
@@ -542,8 +533,7 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Turns an AWS error into a clean HTTP one: a deleted bucket/object → 404, a whole-backend
-   * failure → 424. The cached status is dropped so the next poll re-probes the buckets.
+   * Turns an AWS error into a clean HTTP one: deleted bucket/object → 404, whole-backend failure → 424.
    **/
   private toHttpError(error: unknown): never {
     if (isNotFoundError(error)) {

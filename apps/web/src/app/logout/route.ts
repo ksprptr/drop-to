@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { clearAuthCookies } from '@/common/services/auth/tokens.server';
+import {
+  applyAuthCookies,
+  clearAuthCookies,
+  parseAuthSetCookies,
+} from '@/common/services/auth/tokens.server';
 import { getHttp } from '@/common/services/axios/axios.instance';
 import { isCrossSiteRequest, resolveRequestOrigin } from '@/common/utils/request-origin';
 
@@ -15,15 +19,27 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(new URL('/login', origin));
   }
 
+  let cleared: ReturnType<typeof parseAuthSetCookies> = [];
+
   try {
     const http = await getHttp();
-    await http.post('/auth/logout');
+    const { headers } = await http.post('/auth/logout');
+
+    // The API's own clearing cookies carry the Domain it set them with — forwarding them is what makes the delete land.
+    cleared = parseAuthSetCookies(
+      Array.isArray(headers['set-cookie']) ? headers['set-cookie'] : undefined,
+    );
   } catch {
-    // Clear cookies locally regardless.
+    // Unreachable API — fall through and clear locally below.
   }
 
   const response = NextResponse.redirect(new URL('/login', origin));
-  clearAuthCookies(response.cookies);
+
+  if (cleared.length > 0) {
+    applyAuthCookies(response.cookies, cleared);
+  } else {
+    clearAuthCookies(response.cookies);
+  }
 
   return response;
 }

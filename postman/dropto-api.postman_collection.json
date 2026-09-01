@@ -1,0 +1,1289 @@
+{
+  "info": {
+    "name": "DropTo API \u2014 runtime regression",
+    "description": "End-to-end regression run against a live DropTo API. Mutating requests stay inside the first authorized Drive root and clean up after themselves (the uploaded file and created folder are deleted at the end).\n\nRun:\n  postman collection run postman/dropto-api.postman_collection.json -e postman/local.postman_environment.json --env-var token=<accessToken cookie value>\n\nMust be run from the repo root so the upload fixture path resolves.\n\nNote: the Auth folder spends the /auth/login rate-limit budget (5 attempts / 60 s, 900 s block). Re-running inside 15 minutes answers 429 there; those three assertions accept both codes on purpose.\n\nWARNING: this collection MUTATES the storage it points at. It creates a folder and uploads a file into the FIRST authorized root, then deletes both at the end. Point it at a local API (the default baseUrl) \u2014 against production it writes into the Drive owner's real folder, and a run that fails midway leaves a `__runtime-test-<timestamp>` folder behind.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "host",
+      "value": "http://127.0.0.1:4000"
+    },
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:4000/api/v1"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "rootId",
+      "value": ""
+    },
+    {
+      "key": "folderId",
+      "value": ""
+    },
+    {
+      "key": "fileId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health (public, off the global prefix)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('reports ok with postgres up', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.eql('ok');",
+                  "  pm.expect(b.info.postgres.status).to.eql('up');",
+                  "});",
+                  "pm.test('responds under 1000ms', () => pm.expect(pm.response.responseTime).to.be.below(1000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{host}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "GET /auth/me without a cookie -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "GET /auth/me with a malformed token -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken=not-a-real-jwt"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "GET /auth/me authenticated -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('returns the operator username', () => pm.expect(pm.response.json()).to.have.property('username'));",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "POST /auth/login with an empty body -> 400 (or 429 if the limiter is armed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// /auth/login is limited to 5 attempts / 60 s with a 900 s block, and the guard runs before the",
+                  "// validation pipe \u2014 so a re-run inside 15 minutes legitimately answers 429 instead.",
+                  "pm.test('is rejected (400, or 429 once the limiter is armed)', function () {",
+                  "  pm.expect([400, 429]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /auth/login with an unknown field -> 400 (or 429 if the limiter is armed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// /auth/login is limited to 5 attempts / 60 s with a 900 s block, and the guard runs before the",
+                  "// validation pipe \u2014 so a re-run inside 15 minutes legitimately answers 429 instead.",
+                  "pm.test('is rejected (400 forbidNonWhitelisted, or 429)', function () {",
+                  "  pm.expect([400, 429]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\": \"x\", \"password\": \"y\", \"role\": \"admin\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /auth/login with wrong credentials -> 401 (or 429 if the limiter is armed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// 5 attempts / 60 s with a 900 s block, so a re-run inside 15 minutes legitimately gets 429.",
+                  "// Either way the point holds: bad credentials never yield a session.",
+                  "pm.test('is rejected (401, or 429 once the limiter is armed)', function () {",
+                  "  pm.expect([401, 429]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('sets no auth cookie on a failed login', function () {",
+                  "  const sc = pm.response.headers.get('set-cookie') || '';",
+                  "  pm.expect(sc).to.not.include('accessToken=ey');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\": \"definitely-not-the-operator\", \"password\": \"definitely-not-the-password\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /auth/refresh without a refresh cookie -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Google Auth",
+      "item": [
+        {
+          "name": "GET /google-auth/status -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('reports a connected account', () => pm.expect(pm.response.json()).to.have.property('connected'));",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/google-auth/status"
+          }
+        },
+        {
+          "name": "GET /google-auth/picker-token -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('issues a short-lived access token', () => pm.expect(pm.response.json().accessToken).to.be.a('string').and.not.empty);",
+                  "pm.test('responds under 5000ms', () => pm.expect(pm.response.responseTime).to.be.below(5000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/google-auth/picker-token"
+          }
+        },
+        {
+          "name": "POST /google-auth/folders without the owner cookie -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/google-auth/folders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"folders\": [{\"folderId\": \"injected\", \"name\": \"injected\"}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "DELETE /google-auth/folders/:id without the owner cookie -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A literal id: the owner guard rejects before any lookup, so this must not depend on run order.",
+                  "pm.test('status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/google-auth/folders/not-a-real-folder-id"
+          }
+        },
+        {
+          "name": "DELETE /google-auth/account without the owner cookie -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/google-auth/account"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Storage (generic)",
+      "item": [
+        {
+          "name": "GET /storage/status -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('reports every configured backend', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.be.an('array').with.length.of.at.least(1);",
+                  "  pm.expect(b.map(s => s.backend)).to.include('drive');",
+                  "});",
+                  "pm.test('responds under 5000ms', () => pm.expect(pm.response.responseTime).to.be.below(5000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/status"
+          }
+        },
+        {
+          "name": "GET /storage/nope/folders (unknown backend) -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/nope/folders"
+          }
+        },
+        {
+          "name": "GET /storage/s3/folders while S3 is disabled -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/s3/folders"
+          }
+        },
+        {
+          "name": "GET /storage/drive/folders without a cookie -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/storage/drive/folders"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Drive (browse)",
+      "item": [
+        {
+          "name": "GET /storage/drive/folders -> 200 (captures rootId)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('returns the authorized roots', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.be.an('array').that.is.not.empty;",
+                  "  pm.collectionVariables.set('rootId', b[0].folderId);",
+                  "});",
+                  "pm.test('responds under 5000ms', () => pm.expect(pm.response.responseTime).to.be.below(5000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/folders"
+          }
+        },
+        {
+          "name": "GET /storage/drive/folders/:root/contents -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('returns a page of entries', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.entries).to.be.an('array');",
+                  "  pm.expect(b).to.have.property('nextPageToken');",
+                  "});",
+                  "pm.test('responds under 5000ms', () => pm.expect(pm.response.responseTime).to.be.below(5000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/folders/{{rootId}}/contents"
+          }
+        },
+        {
+          "name": "GET contents of an id outside the authorized tree -> 403/404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('is refused (403 or 404), never 200', () => pm.expect([403,404]).to.include(pm.response.code));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 5000ms', () => pm.expect(pm.response.responseTime).to.be.below(5000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/folders/1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/contents"
+          }
+        },
+        {
+          "name": "GET /storage/drive/names over the 50-id cap -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/names?ids=id-0,id-1,id-2,id-3,id-4,id-5,id-6,id-7,id-8,id-9,id-10,id-11,id-12,id-13,id-14,id-15,id-16,id-17,id-18,id-19,id-20,id-21,id-22,id-23,id-24,id-25,id-26,id-27,id-28,id-29,id-30,id-31,id-32,id-33,id-34,id-35,id-36,id-37,id-38,id-39,id-40,id-41,id-42,id-43,id-44,id-45,id-46,id-47,id-48,id-49,id-50"
+          }
+        },
+        {
+          "name": "GET /storage/drive/names for the root -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('resolves the id to a name', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.be.an('array').with.lengthOf(1);",
+                  "  pm.expect(b[0]).to.have.property('name');",
+                  "});",
+                  "pm.test('responds under 5000ms', () => pm.expect(pm.response.responseTime).to.be.below(5000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/names?ids={{rootId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Drive (mutations, inside the authorized root)",
+      "item": [
+        {
+          "name": "POST subfolder with a slash in the name -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/folders/{{rootId}}/subfolder",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"bad/name\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST subfolder -> 201 (captures folderId)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('creates a folder', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.isFolder).to.be.true;",
+                  "  pm.collectionVariables.set('folderId', b.id);",
+                  "});",
+                  "pm.test('responds under 5000ms', () => pm.expect(pm.response.responseTime).to.be.below(5000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/folders/{{rootId}}/subfolder",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"__runtime-test-{{$timestamp}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST upload a file -> 201 (captures fileId)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('stores the file and reports its size', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.fileName).to.eql('sample.txt');",
+                  "  pm.expect(b.size).to.be.above(0);",
+                  "  pm.collectionVariables.set('fileId', b.fileId);",
+                  "});",
+                  "pm.test('responds under 10000ms', () => pm.expect(pm.response.responseTime).to.be.below(10000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/folders/{{folderId}}/upload",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "postman/fixtures/sample.txt"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST upload with no file attached -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/folders/{{folderId}}/upload"
+          }
+        },
+        {
+          "name": "GET download the uploaded file -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('streams it back with a filename', function () {",
+                  "  pm.expect(pm.response.headers.get('content-disposition')).to.include('sample.txt');",
+                  "});",
+                  "pm.test('body round-trips intact', () => pm.expect(pm.response.text()).to.include('DropTo runtime smoke fixture'));",
+                  "pm.test('responds under 10000ms', () => pm.expect(pm.response.responseTime).to.be.below(10000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/files/{{fileId}}/download"
+          }
+        },
+        {
+          "name": "PATCH rename the file -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('the new name is returned', () => pm.expect(pm.response.json().name).to.eql('renamed.txt'));",
+                  "pm.test('responds under 5000ms', () => pm.expect(pm.response.responseTime).to.be.below(5000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/files/{{fileId}}/rename",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"renamed.txt\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "PATCH rename an authorized root -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/files/{{rootId}}/rename",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"hijacked\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "PATCH move an item into itself -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/files/{{fileId}}/move",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"targetFolderId\": \"{{fileId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "PATCH move the file up into the root -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('responds under 5000ms', () => pm.expect(pm.response.responseTime).to.be.below(5000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/files/{{fileId}}/move",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"targetFolderId\": \"{{rootId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET download the folder as a ZIP -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('is a zip stream', function () {",
+                  "  pm.expect(pm.response.headers.get('content-type')).to.include('zip');",
+                  "  pm.expect(pm.response.headers.get('content-disposition')).to.include('.zip');",
+                  "});",
+                  "pm.test('responds under 15000ms', () => pm.expect(pm.response.responseTime).to.be.below(15000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/folders/{{folderId}}/download"
+          }
+        },
+        {
+          "name": "POST upload-status for a non-Google URL -> 400 (SSRF guard)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 2000ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/upload-status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"uploadUrl\": \"http://169.254.169.254/latest/meta-data/\", \"size\": 100}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST upload-session over the size cap -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/folders/{{rootId}}/upload-session",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"huge.bin\", \"mimeType\": \"application/octet-stream\", \"size\": 99999999999}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "DELETE the uploaded file -> 204 (cleanup)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 204', () => pm.response.to.have.status(204));",
+                  "pm.test('responds under 5000ms', () => pm.expect(pm.response.responseTime).to.be.below(5000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/files/{{fileId}}"
+          }
+        },
+        {
+          "name": "DELETE the created folder -> 204 (cleanup)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 204', () => pm.response.to.have.status(204));",
+                  "pm.test('responds under 5000ms', () => pm.expect(pm.response.responseTime).to.be.below(5000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/files/{{folderId}}"
+          }
+        },
+        {
+          "name": "DELETE an authorized root -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error body has the { status, message } shape', function () {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('status');",
+                  "  pm.expect(b).to.have.property('message');",
+                  "});",
+                  "pm.test('responds under 5000ms', () => pm.expect(pm.response.responseTime).to.be.below(5000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "accessToken={{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/storage/drive/files/{{rootId}}"
+          }
+        }
+      ]
+    }
+  ]
+}
