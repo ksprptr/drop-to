@@ -16,9 +16,7 @@ interface Props {
 /**
  * Title for the route — "Page not found" when the URL names no backend.
  **/
-// Dynamic on purpose: `notFound()` below streams the not-found head, but the client re-applies this
-// segment's metadata after hydration, so a static `title: 'Workspace'` would win back the tab title
-// on a 404. Deciding it here keeps the served and the hydrated title the same.
+// Dynamic: the client re-applies this segment's metadata after hydration and would win the tab title back on a 404.
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { backend } = await params;
 
@@ -34,9 +32,7 @@ export default async function WorkspaceBrowsePage({ params }: Props) {
   const user = await getCurrentUser();
   const { backend, ids } = await params;
 
-  // A URL that names no backend is not a workspace at all, so it gets the real 404 route: HTTP 404
-  // and the "Page not found" title. A folder that does not resolve is different — that stays inside
-  // the workspace (see `folderNotFound` below), because the sidebar and storage are still valid.
+  // A URL naming no backend is not a workspace, so it gets the real 404; an unresolved folder stays in the workspace.
   if (backend !== 'drive' && backend !== 's3') {
     notFound();
   }

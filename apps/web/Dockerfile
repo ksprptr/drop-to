@@ -27,12 +27,10 @@ COPY packages/types ./packages/types
 # Root tsconfig that apps/web/tsconfig.json extends.
 COPY tsconfig.base.json ./
 
-ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_GOOGLE_API_KEY
 ARG NEXT_PUBLIC_GOOGLE_APP_ID
 # Public origin, baked into the prerendered SEO metadata (canonical / OpenGraph URLs).
 ARG APP_URL
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_GOOGLE_API_KEY=$NEXT_PUBLIC_GOOGLE_API_KEY
 ENV NEXT_PUBLIC_GOOGLE_APP_ID=$NEXT_PUBLIC_GOOGLE_APP_ID
 ENV APP_URL=$APP_URL

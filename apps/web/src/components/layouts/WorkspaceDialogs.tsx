@@ -16,8 +16,7 @@ interface Props {
 /**
  * Longest name a folder/file may be given.
  **/
-// Matches what Drive's own UI accepts and what every mainstream filesystem stores (255 bytes), so a
-// downloaded file keeps its name. One under the API's `@MaxLength(256)`, which stays the backstop.
+// Matches Drive's UI and every mainstream filesystem (255 bytes); one under the API's `@MaxLength(256)` backstop.
 const MAX_NAME_LENGTH = 255;
 
 /**

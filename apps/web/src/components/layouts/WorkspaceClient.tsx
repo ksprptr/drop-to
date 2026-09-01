@@ -1,11 +1,10 @@
 'use client';
 
 import type { StorageBackend, StorageStatus } from '@dropto/types';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
-  claimDriveOwnerAction,
   disconnectAction,
   revokeDriveOwnerAction,
   saveFoldersAction,
@@ -66,6 +65,8 @@ function WorkspaceInner({
   initialNotFound,
 }: Props) {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const toast = useToast();
   const { openPicker } = usePicker();
   const { setDownloads } = useUploadActions();
@@ -197,22 +198,17 @@ function WorkspaceInner({
 
     if (searchParams.get('connected') === '1') {
       toast.success('Google account connected successfully.');
-      const ownerToken = searchParams.get('ownerToken');
-      void (async () => {
-        if (ownerToken) {
-          await claimDriveOwnerAction(ownerToken);
-        }
-        await loadStatus();
-      })();
+      void loadStatus();
     }
     const error = searchParams.get('error');
     if (error) {
       toast.error(`Failed to connect the Google account (${error}).`);
     }
     if (searchParams.get('connected') || searchParams.get('error')) {
-      window.history.replaceState(null, '', window.location.pathname);
+      // Through the router: a raw replaceState leaves the App Router's canonical URL stale and a Server Action restores it.
+      router.replace(pathname, { scroll: false });
     }
-  }, [searchParams, toast, loadStatus]);
+  }, [searchParams, toast, loadStatus, router, pathname]);
 
   // A new folder starts unfiltered.
   useEffect(() => {

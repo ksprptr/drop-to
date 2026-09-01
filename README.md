@@ -126,7 +126,6 @@ Building the images without compose:
 docker build -f apps/api/Dockerfile -t dropto-api .
 docker build -f apps/web/Dockerfile -t dropto-web . \
   --build-arg APP_URL=https://dropto.example.com \
-  --build-arg NEXT_PUBLIC_API_URL=https://api.dropto.example.com/api/v1 \
   --build-arg NEXT_PUBLIC_GOOGLE_API_KEY=... \
   --build-arg NEXT_PUBLIC_GOOGLE_APP_ID=...
 ```
@@ -163,8 +162,7 @@ network directly — for example to open the workspace from your phone.
 | `DB_*`                                             | Postgres name / user / password; creates the DB **and** is handed to the API            |
 | `REDIS_*`                                          | Redis password, user and key prefix (the rate limiter's store)                          |
 | `APP_URL`                                          | Public origin of the web app — canonical / OpenGraph / manifest URLs. **Build time**    |
-| `NEXT_PUBLIC_API_URL`                              | Public API base; used by the browser only for the Google OAuth redirect. **Build time** |
-| `COOKIE_DOMAIN`                                    | Auth-cookie domain; a shared parent domain in production                                |
+| `COOKIE_DOMAIN`                                    | Auth-cookie domain. Leave unset — cookies stay host-only on the web app's origin         |
 | `APP_NAME`                                         | Display name of the instance (optional, default `DropTo`). Runtime                      |
 | `NEXT_PUBLIC_GOOGLE_API_KEY` / `_APP_ID`           | Google Picker API key and project number. **Build time**                                |
 | `WEB_PORT` / `API_PORT` / `DB_PORT` / `REDIS_PORT` | Host ports the containers publish on (compose only)                                     |
@@ -175,7 +173,7 @@ network directly — for example to open the workspace from your phone.
 | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | `APP_PORT`, `NODE_ENV`                                                                 | Listen port and environment                                                     |
 | `WEB_APP_URL`, `CORS_ALLOWED_ORIGINS`                                                  | Where the web app lives, and who may call the API                               |
-| `COOKIE_DOMAIN`, `TRUST_PROXY_HOPS`                                                    | Cookie domain; trusted proxy hops, so the rate limiter sees the real IP         |
+| `COOKIE_DOMAIN`, `TRUST_PROXY_HOPS`                                                    | Cookie domain (leave unset); trusted proxy hops, so the rate limiter sees the real IP |
 | `JWT_ACCESS_SECRET`                                                                    | Signs access tokens (refresh tokens are opaque, hashed in the DB)               |
 | `TOKEN_ENCRYPTION_KEY`                                                                 | 64 hex chars — AES-256-GCM key for the stored Drive refresh token               |
 | `AUTH_USERNAME`, `AUTH_PASSWORD`                                                       | The single operator account you log in with                                     |
@@ -236,13 +234,19 @@ Run the bundled compose stack behind a reverse proxy / TLS of your choice (Caddy
 Coolify, Cloudflare Tunnel, ...) and point the env vars at wherever you host it:
 
 - `APP_URL` → the public web origin (e.g. `https://dropto.example.com`) — **build arg**
-- `NEXT_PUBLIC_API_URL` → the public API base (e.g. `https://api.dropto.example.com/api/v1`) —
-  **build arg**, because the browser is redirected there during the Google OAuth flow
 - `WEB_APP_URL` and `CORS_ALLOWED_ORIGINS` (API) → the same public web origin
-- `COOKIE_DOMAIN` → a shared parent of both hosts (e.g. `.example.com`), so the web app and the API
-  can read the same auth cookies
-- `GOOGLE_REDIRECT_URI` → `<public API URL>/api/v1/google-auth/google/callback`, and the same value
-  in the Google Cloud OAuth client
+- `GOOGLE_REDIRECT_URI` → `<public web origin>/api/oauth/google/callback`, and the same value in the
+  Google Cloud OAuth client
+- `API_URL` (web) → the API's internal address, e.g. `http://dropto-api:4000/api/v1`
+- `COOKIE_DOMAIN` → **leave it unset.** The browser only ever talks to the web app, so the auth
+  cookies stay host-only on that one origin. Set it only if you deliberately publish the API on its
+  own host — and note that on a shared parent every sibling subdomain then receives the session
+  cookie.
+
+**The API needs no public route.** Every browser request goes to the web app, which talks to the API
+server-to-server over the compose network (`API_URL=http://dropto-api:4000/api/v1`) — including both
+legs of the Google OAuth handshake, proxied by `apps/web/src/app/api/oauth`. Publishing the API is
+optional, and leaving it unpublished is the tighter default.
 - `TRUST_PROXY_HOPS` → the number of proxies in front of the API, so the rate limiter keys on the
   real client IP
 

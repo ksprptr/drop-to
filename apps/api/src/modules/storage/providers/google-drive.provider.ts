@@ -52,9 +52,7 @@ const ITEM_MISSING_MESSAGE = 'This item no longer exists in Google Drive.';
 const PAGE_SIZE = 100;
 
 /** How long the reported storage quota stays trusted. */
-// Only the quota is cached. It is one `about.get` per status poll for a number that moves slowly, so
-// a stale reading is invisible; root liveness deliberately is NOT cached, because that check is the
-// whole point of the poll (an e2e caught a cached root lingering after it was deleted in Drive).
+// Only the quota is cached; root liveness must stay live (an e2e caught a cached deleted root lingering).
 const QUOTA_CACHE_TTL_MS = 30_000;
 
 /** How long a folder's parent list stays trusted. Ancestry changes only when a folder is moved. */

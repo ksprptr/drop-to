@@ -5,10 +5,15 @@ import { NextResponse } from 'next/server';
 import {
   ACCESS_EXP_SKEW_MS,
   ACCESS_TOKEN_COOKIE,
+  OAUTH_STATE_COOKIE,
   REFRESH_TOKEN_COOKIE,
 } from '@/common/constants/auth.constants';
 import { refreshSession } from '@/common/services/auth/refresh.server';
-import { applyAuthCookies, type ParsedSetCookie } from '@/common/services/auth/tokens.server';
+import {
+  applyAuthCookies,
+  type CookieWriter,
+  type ParsedSetCookie,
+} from '@/common/services/auth/tokens.server';
 import { forwardedForHeader } from '@/common/utils/client-ip.functions';
 import { isAccessTokenFresh } from '@/common/utils/jwt.functions';
 import { appServerConfig } from '@/configs/app/app.server-config';
@@ -86,6 +91,9 @@ export const apiAuthHeaders = async (
   return result;
 };
 
+/** Lifetime of the re-emitted OAuth `state` cookie — mirrors the API's own 10 minutes. */
+const OAUTH_STATE_MAX_AGE_S = 10 * 60;
+
 const DOWNLOAD_HEADERS = ['content-type', 'content-disposition', 'content-length', 'accept-ranges'];
 
 /**
@@ -111,6 +119,110 @@ export const proxyDownload = async (path: string, signal: AbortSignal): Promise<
     headers: outHeaders,
   });
   applyAuthCookies(response.cookies, session.rotated);
+
+  return response;
+};
+
+interface OAuthDestination {
+  url: URL;
+  cookies?: { name: string; value: string; options: Parameters<CookieWriter['set']>[2] }[];
+}
+
+interface OAuthRedirectOptions {
+  cookieHeader: string | null;
+  isAllowedTarget?: (target: URL) => boolean;
+  rebaseOn?: string;
+  transformDestination?: (destination: URL) => OAuthDestination;
+  fallbackUrl: string;
+  unauthorizedUrl: string;
+  rotated?: ParsedSetCookie[];
+}
+
+/**
+ * Runs one leg of the Google OAuth handshake through this origin instead of the API's.
+ **/
+export const proxyOAuthLeg = async (
+  path: string,
+  {
+    cookieHeader,
+    isAllowedTarget,
+    rebaseOn,
+    transformDestination,
+    fallbackUrl,
+    unauthorizedUrl,
+    rotated = [],
+  }: OAuthRedirectOptions,
+): Promise<NextResponse> => {
+  let apiResponse: Response;
+
+  try {
+    apiResponse = await fetch(apiUrl(path), {
+      headers: await apiAuthHeaders(undefined, cookieHeader ?? undefined),
+      redirect: 'manual',
+    });
+  } catch {
+    return NextResponse.redirect(`${fallbackUrl}?error=api_unreachable`);
+  }
+
+  if (apiResponse.status === 401 || apiResponse.status === 403) {
+    return NextResponse.redirect(unauthorizedUrl);
+  }
+
+  const location = apiResponse.headers.get('location');
+  let target: URL | null = null;
+
+  try {
+    target = location ? new URL(location) : null;
+  } catch {
+    target = null;
+  }
+
+  if (!target) {
+    return NextResponse.redirect(`${fallbackUrl}?error=oauth_failed`);
+  }
+
+  const destination = rebaseOn
+    ? new URL(`${target.pathname}${target.search}`, rebaseOn)
+    : isAllowedTarget?.(target)
+      ? target
+      : null;
+
+  if (!destination) {
+    return NextResponse.redirect(`${fallbackUrl}?error=oauth_failed`);
+  }
+
+  // Claimed cookies go on this response, like the state nonce below — the one place they are certain to land.
+  const claimed = transformDestination?.(destination);
+  const response = NextResponse.redirect((claimed?.url ?? destination).toString());
+
+  for (const { name, value, options } of claimed?.cookies ?? []) {
+    response.cookies.set(name, value, options);
+  }
+
+  for (const raw of apiResponse.headers.getSetCookie()) {
+    const [pair, ...attrs] = raw.split(';');
+    const eq = pair.indexOf('=');
+    if (eq === -1 || pair.slice(0, eq).trim() !== OAUTH_STATE_COOKIE) {
+      continue;
+    }
+
+    const value = pair.slice(eq + 1).trim();
+    const clearing = attrs.some((attr) => /^\s*max-age=0\s*$/i.test(attr)) || value === '';
+
+    if (clearing) {
+      response.cookies.delete(OAUTH_STATE_COOKIE);
+    } else {
+      response.cookies.set(OAUTH_STATE_COOKIE, value, {
+        httpOnly: true,
+        secure: appServerConfig.nodeEnv.isProduction,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: OAUTH_STATE_MAX_AGE_S,
+      });
+    }
+  }
+
+  applyAuthCookies(response.cookies, rotated);
 
   return response;
 };

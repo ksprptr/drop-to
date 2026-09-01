@@ -2,7 +2,6 @@ import 'server-only';
 import type { ResponseCookies } from 'next/dist/server/web/spec-extension/cookies';
 
 import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/common/constants/auth.constants';
-import { appServerConfig } from '@/configs/app/app.server-config';
 
 /** Both `cookies()` and `NextResponse.cookies` satisfy this shape. */
 export interface CookieWriter {
@@ -10,16 +9,74 @@ export interface CookieWriter {
   delete: (name: string) => void;
 }
 
+/** An auth cookie exactly as the API issued it — every attribute travels with it. */
 export interface ParsedSetCookie {
   name: string;
   value: string;
+  domain?: string;
+  path?: string;
   maxAge?: number;
+  expires?: Date;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: 'lax' | 'strict' | 'none';
 }
 
 const AUTH_COOKIE_NAMES = new Set([ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE]);
 
 /**
- * Parses `Set-Cookie` headers, keeping only the auth cookies.
+ * Reads one `Set-Cookie` attribute list into the options a cookie writer takes.
+ **/
+const parseAttributes = (attrs: string[]): Omit<ParsedSetCookie, 'name' | 'value'> => {
+  const parsed: Omit<ParsedSetCookie, 'name' | 'value'> = {};
+
+  for (const attr of attrs) {
+    const [rawKey, ...rest] = attr.split('=');
+    const key = rawKey.trim().toLowerCase();
+    const value = rest.join('=').trim();
+
+    switch (key) {
+      case 'domain':
+        parsed.domain = value || undefined;
+        break;
+      case 'path':
+        parsed.path = value;
+        break;
+      case 'max-age': {
+        const maxAge = Number(value);
+        if (Number.isFinite(maxAge)) {
+          parsed.maxAge = maxAge;
+        }
+        break;
+      }
+      case 'expires': {
+        const expires = new Date(value);
+        if (!Number.isNaN(expires.getTime())) {
+          parsed.expires = expires;
+        }
+        break;
+      }
+      case 'httponly':
+        parsed.httpOnly = true;
+        break;
+      case 'secure':
+        parsed.secure = true;
+        break;
+      case 'samesite': {
+        const sameSite = value.toLowerCase();
+        if (sameSite === 'lax' || sameSite === 'strict' || sameSite === 'none') {
+          parsed.sameSite = sameSite;
+        }
+        break;
+      }
+    }
+  }
+
+  return parsed;
+};
+
+/**
+ * Parses `Set-Cookie` headers, keeping the auth cookies with every attribute intact.
  **/
 export const parseAuthSetCookies = (setCookies: string[] | undefined): ParsedSetCookie[] => {
   if (!setCookies) {
@@ -40,49 +97,35 @@ export const parseAuthSetCookies = (setCookies: string[] | undefined): ParsedSet
       continue;
     }
 
-    const value = namePart.slice(eq + 1).trim();
-    const maxAgeAttr = attrs
-      .map((attr) => attr.trim())
-      .find((attr) => attr.toLowerCase().startsWith('max-age='));
-    const maxAge = maxAgeAttr ? Number(maxAgeAttr.split('=')[1]) : undefined;
-
-    parsed.push({ name, value, maxAge: Number.isFinite(maxAge) ? maxAge : undefined });
+    parsed.push({
+      name,
+      value: namePart.slice(eq + 1).trim(),
+      ...parseAttributes(attrs),
+    });
   }
 
   return parsed;
 };
 
 /**
- * Writes auth cookies (httpOnly, secure + domain in production).
+ * Writes auth cookies onto this response, exactly as the API issued them.
  **/
 export const applyAuthCookies = (writer: CookieWriter, cookiesToSet: ParsedSetCookie[]): void => {
-  const { isProduction } = appServerConfig.nodeEnv;
-
-  for (const { name, value, maxAge } of cookiesToSet) {
-    writer.set(name, value, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'lax',
-      path: '/',
-      domain: isProduction ? appServerConfig.cookieDomain : undefined,
-      maxAge,
-    });
+  for (const { name, value, ...attributes } of cookiesToSet) {
+    writer.set(name, value, attributes);
   }
 };
 
 /**
- * Clears every auth cookie (logout / failed refresh).
+ * Clears every auth cookie when the API gave us no `Set-Cookie` to forward.
  **/
 export const clearAuthCookies = (writer: CookieWriter): void => {
-  const { isProduction } = appServerConfig.nodeEnv;
-
   for (const name of AUTH_COOKIE_NAMES) {
     writer.set(name, '', {
       httpOnly: true,
-      secure: isProduction,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      domain: isProduction ? appServerConfig.cookieDomain : undefined,
       maxAge: 0,
     });
   }
