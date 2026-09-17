@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * Workspace route — resolves the browse location (and breadcrumb) from the URL, server-side.
  **/
 export default async function WorkspaceBrowsePage({ params }: Props) {
-  const user = await getCurrentUser();
+  await getCurrentUser();
   const { backend, ids } = await params;
 
   // A URL naming no backend is not a workspace, so it gets the real 404; an unresolved folder stays in the workspace.
@@ -81,7 +81,6 @@ export default async function WorkspaceBrowsePage({ params }: Props) {
   return (
     <WorkspaceClient
       appName={appServerConfig.name}
-      username={user.username}
       initialStatuses={statuses}
       initialBackend={isConnected ? (backend as StorageBackend) : null}
       initialPath={folderNotFound ? [] : initialPath}

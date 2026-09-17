@@ -1,8 +1,8 @@
 import { registerAs } from '@nestjs/config';
 
 export const authConfig = registerAs('auth', () => ({
-  username: process.env['AUTH_USERNAME']!,
-  password: process.env['AUTH_PASSWORD']!,
+  // A bcrypt hash, never the plaintext — the password itself never reaches the env or the logs.
+  passwordHash: process.env['AUTH_PASSWORD']!,
   // Parent domain to share auth cookies across subdomains; unset = host-only.
   cookieDomain: process.env['COOKIE_DOMAIN'] || undefined,
 }));

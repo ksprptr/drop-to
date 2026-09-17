@@ -128,7 +128,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status is 200', () => pm.response.to.have.status(200));",
-                  "pm.test('returns the operator username', () => pm.expect(pm.response.json()).to.have.property('username'));",
+                  "pm.test('confirms the session', () => pm.expect(pm.response.json()).to.have.property('authenticated'));",
                   "pm.test('responds under 3000ms', () => pm.expect(pm.response.responseTime).to.be.below(3000));"
                 ]
               }
@@ -222,7 +222,7 @@
             "url": "{{baseUrl}}/auth/login",
             "body": {
               "mode": "raw",
-              "raw": "{\"username\": \"x\", \"password\": \"y\", \"role\": \"admin\"}",
+              "raw": "{\"password\": \"y\", \"role\": \"admin\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -232,7 +232,7 @@
           }
         },
         {
-          "name": "POST /auth/login with wrong credentials -> 401 (or 429 if the limiter is armed)",
+          "name": "POST /auth/login with a wrong password -> 401 (or 429 if the limiter is armed)",
           "event": [
             {
               "listen": "test",
@@ -264,7 +264,7 @@
             "url": "{{baseUrl}}/auth/login",
             "body": {
               "mode": "raw",
-              "raw": "{\"username\": \"definitely-not-the-operator\", \"password\": \"definitely-not-the-password\"}",
+              "raw": "{\"password\": \"definitely-not-the-password\"}",
               "options": {
                 "raw": {
                   "language": "json"

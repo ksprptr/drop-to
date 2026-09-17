@@ -67,14 +67,13 @@ import { PrismaModule } from './prisma/prisma.module';
           );
         }
 
-        // The operator password is the entire authn boundary — reject short/placeholder values.
+        // AUTH_PASSWORD holds a bcrypt hash, never the plaintext — a pasted password must fail loudly.
         const authPassword = String(config['AUTH_PASSWORD'] ?? '');
-        if (
-          authPassword.length < 12 ||
-          /^(password|admin|change_me|changeme|your[_-]|example)$/i.test(authPassword)
-        ) {
+        if (!/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(authPassword)) {
           throw new Error(
-            'Weak AUTH_PASSWORD: use a strong value (>= 12 chars, not a common placeholder).',
+            'AUTH_PASSWORD must be a bcrypt hash of the operator password, not the password itself. ' +
+              'Generate one with: pnpm --filter api exec node -e ' +
+              `"import('bcryptjs').then((b) => b.hash('your-password', 12)).then(console.log)"`,
           );
         }
 

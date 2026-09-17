@@ -16,13 +16,12 @@ interface Props {
 }
 
 /**
- * Login screen — posts credentials via the `login` action, then navigates to `/`.
+ * Login screen — posts the operator password via the `login` action, then navigates to `/`.
  **/
 export default function LoginForm({ appName }: Props) {
   const router = useRouter();
   const toast = useToast();
 
-  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -38,18 +37,18 @@ export default function LoginForm({ appName }: Props) {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    if (submitting || !username.trim() || !password) {
+    if (submitting || !password) {
       return;
     }
 
     setSubmitting(true);
-    const result = await login(username.trim(), password);
+    const result = await login(password);
     if (result.ok) {
       router.replace('/');
       router.refresh();
       return;
     }
-    toast.error(result.error ?? 'Invalid username or password.');
+    toast.error(result.error ?? 'Invalid password.');
     setSubmitting(false);
   };
 
@@ -65,7 +64,9 @@ export default function LoginForm({ appName }: Props) {
             <Icon icon='CloudArrowUp' className='h-6 w-6' />
           </div>
           <h1 className='text-lg font-semibold'>{appName}</h1>
-          <p className='mt-1 text-sm text-zinc-600 dark:text-zinc-400'>Sign in to continue</p>
+          <p className='mt-1 text-sm text-zinc-600 dark:text-zinc-400'>
+            Enter your password to continue
+          </p>
         </div>
 
         <form
@@ -73,27 +74,20 @@ export default function LoginForm({ appName }: Props) {
           onKeyDownCapture={handleKeyDown}
           className='flex flex-col gap-y-4'>
           <Input
-            name='username'
-            label='Username'
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            autoComplete='username'
-            autoFocus
-          />
-          <Input
             name='password'
             type='password'
             label='Password'
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             autoComplete='current-password'
+            autoFocus
           />
           <Button
             type='submit'
             variant='primary'
             fullWidth
             loading={submitting}
-            disabled={!username.trim() || !password}
+            disabled={!password}
             className='mt-1'>
             {submitting ? 'Signing in…' : 'Sign in'}
           </Button>

@@ -26,9 +26,9 @@ describe('AuthService', () => {
     };
   };
 
+  // Bcrypt hash of 'secret' at cost 4 — the app only compares, and a low cost keeps the spec fast.
   const authCfg = {
-    username: 'operator',
-    password: 'secret',
+    passwordHash: '$2b$04$E4oTYNA69uEnxT53ghPnFun7RAYNHeTnDQ88/OXn1jYNSFgCJyF7W',
     cookieDomain: undefined,
   } as AuthConfig;
 
@@ -71,8 +71,8 @@ describe('AuthService', () => {
   });
 
   describe('login', () => {
-    it('issues a pair (opaque refresh secret + new row) for valid credentials', async () => {
-      await expect(service.login({ username: 'operator', password: 'secret' })).resolves.toEqual({
+    it('issues a pair (opaque refresh secret + new row) for the right password', async () => {
+      await expect(service.login({ password: 'secret' })).resolves.toEqual({
         accessToken: 'access-token',
         refreshToken: 'raw-secret',
       });
@@ -84,16 +84,10 @@ describe('AuthService', () => {
       );
     });
 
-    it('rejects a wrong username', async () => {
-      await expect(
-        service.login({ username: 'intruder', password: 'secret' }),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
-    });
-
     it('rejects a wrong password', async () => {
-      await expect(
-        service.login({ username: 'operator', password: 'nope' }),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(service.login({ password: 'nope' })).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
     });
   });
 
