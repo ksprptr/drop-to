@@ -1,21 +1,21 @@
 import { JwtService } from '@nestjs/jwt';
 import { createCipheriv, randomBytes } from 'node:crypto';
 
-// Matches AUTH_USERNAME in .env.test.
-export const TEST_USERNAME = 'test-admin';
+// Matches OPERATOR_SUBJECT — every session the API issues is subject to the single operator.
+export const TEST_SUBJECT = 'operator';
 
 const jwtService = new JwtService();
 
 /**
  * Signs an access token with the test secret (read from the env loaded by setup-env.ts).
  **/
-export const signAccessToken = (sub: string = TEST_USERNAME): string =>
+export const signAccessToken = (sub: string = TEST_SUBJECT): string =>
   jwtService.sign({ sub, ver: 0 }, { secret: process.env['JWT_ACCESS_SECRET'], expiresIn: 3600 });
 
 /**
  * Builds an `accessToken` cookie header value for an authenticated request.
  **/
-export const accessCookie = (sub: string = TEST_USERNAME): string =>
+export const accessCookie = (sub: string = TEST_SUBJECT): string =>
   `accessToken=${signAccessToken(sub)}`;
 
 /**

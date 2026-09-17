@@ -61,9 +61,9 @@ export interface SaveFoldersPayload {
   folders: Array<{ folderId: string; name: string }>;
 }
 
-/** The authenticated operator returned by `GET /auth/me`. */
+/** Session probe returned by `GET /auth/me` — a single operator, so there is no identity to return. */
 export interface AuthUser {
-  username: string;
+  authenticated: boolean;
 }
 
 /** A storage backend the workspace can browse. */

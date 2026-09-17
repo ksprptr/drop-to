@@ -24,10 +24,10 @@ export interface LoginResult {
 /**
  * Signs the operator in and writes the returned auth cookies to the browser.
  **/
-export async function login(username: string, password: string): Promise<LoginResult> {
+export async function login(password: string): Promise<LoginResult> {
   try {
     const http = await getHttp();
-    const response = await http.post('/auth/login', { username, password });
+    const response = await http.post('/auth/login', { password });
 
     const setCookieHeader = response.headers['set-cookie'];
     const setCookies = parseAuthSetCookies(
@@ -44,7 +44,7 @@ export async function login(username: string, password: string): Promise<LoginRe
   } catch (error) {
     // HTTP response = rejected (bad credentials); no response = API unreachable.
     if (isAxiosError(error) && error.response) {
-      return { ok: false, error: extractApiError(error) ?? 'Invalid username or password.' };
+      return { ok: false, error: extractApiError(error) ?? 'Invalid password.' };
     }
 
     return { ok: false, error: 'The API is currently unavailable.' };

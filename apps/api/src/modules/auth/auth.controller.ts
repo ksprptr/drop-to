@@ -11,11 +11,9 @@ import {
 import type { Request, Response } from 'express';
 
 import { Public } from '@/common/decorators/public.decorator';
-import { RequestUser } from '@/common/decorators/request-user.decorator';
 import { ResponseEntity } from '@/common/entities/response.entity';
 import { AuthTokensHelper } from '@/common/services/auth-tokens/auth-tokens.helper';
 import { RateLimit } from '@/common/services/rate-limit/decorators/rate-limit.decorator';
-import type { RequestUser as RequestUserType } from '@/common/types/auth-user.types';
 import { extractTokenFromCookies } from '@/common/utils/auth-tokens.functions';
 
 import { AuthService } from './auth.service';
@@ -31,7 +29,7 @@ export class AuthController {
   ) {}
 
   @Public()
-  @ApiOperation({ summary: 'Log in with username and password' })
+  @ApiOperation({ summary: 'Log in with the operator password' })
   @ApiOkResponse({ type: ResponseEntity, description: 'Logged in' })
   @ApiBadRequestResponse({ type: ResponseEntity, description: 'Validation failed' })
   @ApiUnauthorizedResponse({ type: ResponseEntity, description: 'Invalid credentials' })
@@ -86,11 +84,12 @@ export class AuthController {
   }
 
   @ApiCookieAuth('accessToken')
-  @ApiOperation({ summary: 'Get the current authenticated operator' })
+  @ApiOperation({ summary: 'Check whether the request carries a valid session' })
   @ApiOkResponse({ type: AuthUserEntity, description: 'Successful' })
   @ApiUnauthorizedResponse({ type: ResponseEntity, description: 'Unauthorized' })
   @Get('me')
-  me(@RequestUser() user: RequestUserType): AuthUserEntity {
-    return { username: user.sub };
+  me(): AuthUserEntity {
+    // The guard already rejected anything without a valid access token, so reaching here is the answer.
+    return { authenticated: true };
   }
 }

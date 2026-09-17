@@ -42,7 +42,6 @@ const DOWNLOAD_PREPARING_MS = 6000;
 interface Props {
   /** Instance name, resolved on the server so the wordmark hydrates identically. */
   appName: string;
-  username: string;
   /** Statuses fetched server-side, for first paint. */
   initialStatuses: StorageStatus[];
   /** Backend from the URL (already validated connected), for first paint without a flash. */
@@ -58,7 +57,6 @@ interface Props {
  **/
 function WorkspaceInner({
   appName,
-  username,
   initialStatuses,
   initialBackend,
   initialPath,
@@ -435,7 +433,6 @@ function WorkspaceInner({
     driveStatus,
     activeBackend,
     loading: loadingStatus,
-    username,
     saving,
     isOwner: driveStatus?.isOwner ?? false,
     onSelectStorage: selectStorage,

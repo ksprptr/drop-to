@@ -61,7 +61,12 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"  
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"        # TOKEN_ENCRYPTION_KEY
 ```
 
-Set `AUTH_USERNAME` / `AUTH_PASSWORD` — that is the account you log in with.
+`AUTH_PASSWORD` is the password you log in with, stored as a **bcrypt hash** (the plaintext never
+goes into the env):
+
+```bash
+pnpm --filter api exec node -e "import('bcryptjs').then((b) => b.hash('your-password', 12)).then(console.log)"
+```
 
 ## Run
 

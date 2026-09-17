@@ -1,14 +1,14 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 
-import { accessCookie, refreshCookie, TEST_USERNAME } from '../helpers/auth.helper';
+import { accessCookie, refreshCookie, TEST_SUBJECT } from '../helpers/auth.helper';
 import { createPrismaMock, PrismaMock, resetPrismaMock } from '../helpers/prisma.mock';
 import { createTestApp } from '../helpers/test-app.helper';
 
 jest.mock('googleapis', () => require('../helpers/googleapis.mock').createGoogleApisMock());
 
-// Matches AUTH_USERNAME / AUTH_PASSWORD in .env.test.
-const CREDENTIALS = { username: 'test-admin', password: 'test-password' };
+// The password .env.test ships the bcrypt hash of.
+const CREDENTIALS = { password: 'test-password' };
 
 /**
  * Asserts a Set-Cookie header array contains a cookie of the given name.
@@ -45,29 +45,27 @@ describe('Auth session (integration)', () => {
     it('rejects invalid credentials with 401', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
-        .send({ username: 'test-admin', password: 'wrong' });
+        .send({ password: 'wrong' });
 
       expect(res.status).toBe(401);
       expect(res.headers['set-cookie']).toBeUndefined();
     });
 
     it('rejects a malformed payload with 400', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/api/v1/auth/login')
-        .send({ username: 'test-admin' });
+      const res = await request(app.getHttpServer()).post('/api/v1/auth/login').send({});
 
       expect(res.status).toBe(400);
     });
   });
 
   describe('GET /api/v1/auth/me', () => {
-    it('returns the operator for a valid access cookie', async () => {
+    it('confirms the session for a valid access cookie', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/auth/me')
         .set('Cookie', accessCookie());
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ username: TEST_USERNAME });
+      expect(res.body).toEqual({ authenticated: true });
     });
 
     it('rejects a request without an access cookie (401)', async () => {
@@ -109,7 +107,7 @@ describe('Auth session (integration)', () => {
       // The presented token's row is already revoked → replay is treated as theft.
       prisma.refreshToken.findUnique.mockResolvedValue({
         id: 'refresh-row-1',
-        subject: TEST_USERNAME,
+        subject: TEST_SUBJECT,
         revokedAt: new Date(),
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       });
@@ -121,7 +119,7 @@ describe('Auth session (integration)', () => {
       expect(res.status).toBe(401);
       // Every live session revoked + token version bumped (kills outstanding access tokens).
       expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
-        where: { subject: TEST_USERNAME, revokedAt: null },
+        where: { subject: TEST_SUBJECT, revokedAt: null },
         data: { revokedAt: expect.any(Date) },
       });
       expect(prisma.authState.upsert).toHaveBeenCalled();

@@ -39,7 +39,7 @@ describe('RequestUser', () => {
   const factory = factoryOf(RequestUser);
 
   it('returns the user the guard attached to the request', () => {
-    const user = { username: 'operator' };
+    const user = { sub: 'operator' };
 
     expect(factory(undefined, buildContext(user))).toBe(user);
   });

@@ -1,5 +1,5 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
-import { timingSafeEqual } from 'node:crypto';
+import { compare } from 'bcryptjs';
 import { Prisma } from 'prisma/generated/prisma/client';
 
 import {
@@ -9,6 +9,7 @@ import {
 import { type AuthConfig, authConfig } from '@/config/auth.config';
 import { PrismaService } from '@/prisma/prisma.service';
 
+import { OPERATOR_SUBJECT } from './auth.constants';
 import { AuthStateService } from './auth-state.service';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseEntity } from './entities/auth-response.entity';
@@ -33,15 +34,14 @@ export class AuthService {
   ) {}
 
   async login(loginDto: LoginDto): Promise<AuthResponseEntity> {
-    const usernameOk = this.safeEqual(loginDto.username, this.authCfg.username);
-    const passwordOk = this.safeEqual(loginDto.password, this.authCfg.password);
+    // bcrypt.compare re-derives the hash with the stored cost/salt, so a wrong password costs the same.
+    const passwordOk = await compare(loginDto.password, this.authCfg.passwordHash);
 
-    // Evaluate both so timing doesn't reveal which field was wrong.
-    if (!usernameOk || !passwordOk) {
+    if (!passwordOk) {
       throw new UnauthorizedException('Invalid credentials.');
     }
 
-    const session = await this.issueSession(this.authCfg.username);
+    const session = await this.issueSession(OPERATOR_SUBJECT);
 
     return { accessToken: session.accessToken, refreshToken: session.refreshToken };
   }
@@ -162,18 +162,5 @@ export class AuthService {
     // operator; with many users move this to a scheduled job (e.g. @nestjs/schedule) so the table
     // is swept independently of request traffic and abandoned sessions are cleaned up too.
     await this.prismaService.refreshToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
-  }
-
-  /**
-   * Constant-time string comparison (also length-safe).
-   **/
-  private safeEqual(provided: string, expected: string): boolean {
-    const providedBuffer = Buffer.from(provided);
-    const expectedBuffer = Buffer.from(expected);
-
-    return (
-      providedBuffer.length === expectedBuffer.length &&
-      timingSafeEqual(providedBuffer, expectedBuffer)
-    );
   }
 }

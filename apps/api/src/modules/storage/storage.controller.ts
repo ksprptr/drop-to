@@ -127,7 +127,14 @@ export class StorageController {
     @Param('backend') backend: string,
     @Query('ids') ids?: string,
   ): Promise<ResolvedNameEntity[]> {
-    const list = [...new Set((ids ?? '').split(',').map((id) => id.trim()).filter(Boolean))];
+    const list = [
+      ...new Set(
+        (ids ?? '')
+          .split(',')
+          .map((id) => id.trim())
+          .filter(Boolean),
+      ),
+    ];
 
     if (list.length > MAX_RESOLVE_IDS) {
       throw new BadRequestException(`At most ${MAX_RESOLVE_IDS} ids can be resolved per request.`);

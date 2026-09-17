@@ -20,7 +20,6 @@ export interface AccountSidebarProps {
   driveStatus: StorageStatus | null;
   activeBackend: StorageBackend | null;
   loading: boolean;
-  username: string;
   saving: boolean;
   isOwner: boolean;
   onSelectStorage: (backend: StorageBackend) => void;
@@ -73,7 +72,7 @@ const SPARKS = [
 /**
  * Easter egg: the session avatar. Clicking it shouts an ever-longer "Pikachuuuu!" and throws a few sparks around.
  **/
-function PikachuAvatar({ username }: { username: string }) {
+function PikachuAvatar() {
   const [burst, setBurst] = useState<{ id: number; clicks: number } | null>(null);
 
   useEffect(() => {
@@ -135,7 +134,7 @@ function PikachuAvatar({ username }: { username: string }) {
         className='inline-flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-green-600/15'>
         <Image
           src='/assets/pikachu.jpg'
-          alt={username}
+          alt='Pikachu'
           width={32}
           height={32}
           className='h-full w-full object-cover'
@@ -154,7 +153,6 @@ export default function AccountSidebarContent({
   driveStatus,
   activeBackend,
   loading,
-  username,
   saving,
   isOwner,
   onSelectStorage,
@@ -321,10 +319,7 @@ export default function AccountSidebarContent({
       </div>
 
       <div className='flex items-center justify-between gap-x-2 border-t border-zinc-300 p-3 dark:border-zinc-700'>
-        <div className='flex min-w-0 items-center gap-x-2'>
-          <PikachuAvatar username={username} />
-          <span className='truncate text-xs font-medium'>{username}</span>
-        </div>
+        <PikachuAvatar />
         <div className='flex shrink-0 items-center gap-x-1'>
           <ThemeToggle />
           <button
