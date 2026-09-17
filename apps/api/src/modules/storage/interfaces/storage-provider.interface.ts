@@ -99,7 +99,10 @@ export interface StorageProvider {
   /**
    * Opens a resumable upload session; browser PUTs bytes directly to the returned URL (token stays server-side).
    **/
-  createResumableUpload(folderId: string, init: ResumableUploadInit): Promise<{ uploadUrl: string }>;
+  createResumableUpload(
+    folderId: string,
+    init: ResumableUploadInit,
+  ): Promise<{ uploadUrl: string }>;
 
   /**
    * Validates + records a resumable upload once the browser finished it; returns the stored file.
