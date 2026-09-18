@@ -135,6 +135,7 @@ function guessMimeType(name: string): string {
 @Injectable()
 export class S3StorageProvider implements StorageProvider {
   readonly backend: StorageBackend = 's3';
+  readonly enabled: boolean;
 
   private readonly logger = new Logger(S3StorageProvider.name);
   private readonly allowedBuckets: Set<string>;
@@ -145,6 +146,7 @@ export class S3StorageProvider implements StorageProvider {
   private readonly missingBuckets = new Set<string>();
 
   constructor(@Inject(s3Config.KEY) private readonly cfg: S3Config) {
+    this.enabled = cfg.enabled;
     this.allowedBuckets = new Set(cfg.buckets);
   }
 

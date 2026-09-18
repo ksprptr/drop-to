@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -13,6 +14,7 @@ import { Auth, drive_v3, google } from 'googleapis';
 import { Readable } from 'node:stream';
 
 import { TtlCache } from '@/common/utils/ttl-cache.functions';
+import { type GoogleConfig, googleConfig } from '@/config/google.config';
 import {
   AllowedFolderEntity,
   toAllowedFolderEntity,
@@ -66,6 +68,7 @@ const ANCESTOR_CACHE_MAX = 500;
 @Injectable()
 export class GoogleDriveProvider implements StorageProvider {
   readonly backend: StorageBackend = 'drive';
+  readonly enabled: boolean;
 
   // Intermediate folders only — the target item is always re-read, so a deleted item still 404s.
   private readonly ancestorCache = new TtlCache<string[]>(
@@ -82,9 +85,17 @@ export class GoogleDriveProvider implements StorageProvider {
   constructor(
     private readonly googleAuthService: GoogleAuthService,
     private readonly prismaService: PrismaService,
-  ) {}
+    @Inject(googleConfig.KEY) private readonly googleCfg: GoogleConfig,
+  ) {
+    this.enabled = googleCfg.enabled;
+  }
 
   async status(): Promise<StorageStatusEntity> {
+    // Switched off in the environment — report it dead rather than touching the database or Google.
+    if (!this.enabled) {
+      return { backend: this.backend, label: LABEL, connected: false, email: null, roots: [] };
+    }
+
     const status = await this.googleAuthService.getStatus();
 
     if (!status.connected) {
@@ -174,7 +185,19 @@ export class GoogleDriveProvider implements StorageProvider {
     }
   }
 
+  /**
+   * Asserts the Drive backend is enabled (else 404).
+   **/
+  private ensureEnabled(): void {
+    if (!this.enabled) {
+      throw new NotFoundException('Google Drive storage is not enabled.');
+    }
+  }
+
   private async getDrive(driveAccountId: string): Promise<drive_v3.Drive> {
+    // Defense in depth behind the registry's 404: every Drive op builds its client here.
+    this.ensureEnabled();
+
     const auth = await this.googleAuthService.getAuthorizedClient(driveAccountId);
 
     // Refresh up front so a dead token surfaces as a clean 424, not a raw googleapis 500.
@@ -496,6 +519,9 @@ export class GoogleDriveProvider implements StorageProvider {
    * Queries how far a resumable session got (server-side, where CORS doesn't hide `Range`) so the browser can resume from `receivedBytes`.
    **/
   async getUploadStatus(uploadUrl: string, size: number): Promise<UploadStatusEntity> {
+    // The one Drive op that never builds a Drive client, so it asserts the kill-switch itself.
+    this.ensureEnabled();
+
     if (!uploadUrl.startsWith('https://www.googleapis.com/upload/drive/')) {
       throw new BadRequestException('Invalid upload URL.');
     }

@@ -36,6 +36,7 @@ import { AllowedFolderEntity } from './entities/allowed-folder.entity';
 import { DriveAccountStatusEntity } from './entities/drive-account-status.entity';
 import { GoogleAuthService } from './google-auth.service';
 import { DriveOwnerGuard } from './guards/drive-owner.guard';
+import { GoogleEnabledGuard } from './guards/google-enabled.guard';
 
 /** Name of the short-lived cookie holding the OAuth `state` nonce (CSRF defense). */
 const OAUTH_STATE_COOKIE = 'oauthState';
@@ -46,6 +47,8 @@ const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;
 @ApiTags('Google Auth')
 @ApiCookieAuth('accessToken')
 @ApiUnauthorizedResponse({ type: ResponseEntity, description: 'Unauthorized' })
+// Class-level: with GOOGLE_ENABLED off the entire OAuth surface 404s, the `@Public()` legs included.
+@UseGuards(GoogleEnabledGuard)
 @Controller('google-auth')
 export class GoogleAuthController {
   constructor(

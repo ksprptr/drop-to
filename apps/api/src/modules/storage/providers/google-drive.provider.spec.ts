@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { google } from 'googleapis';
 
+import type { GoogleConfig } from '@/config/google.config';
 import { GoogleAuthService } from '@/modules/google-auth/google-auth.service';
 import { PrismaService } from '@/prisma/prisma.service';
 
@@ -20,6 +21,16 @@ jest.mock('googleapis', () => ({
 }));
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
+
+/** Google config as the enabled backend sees it; specs override `enabled` to test the kill-switch. */
+const googleCfg = (enabled = true): GoogleConfig =>
+  ({
+    enabled,
+    clientId: 'client-id',
+    clientSecret: 'client-secret',
+    redirectUri: 'http://localhost/callback',
+    scopes: ['openid', 'email', 'https://www.googleapis.com/auth/drive'],
+  }) as GoogleConfig;
 
 describe('GoogleDriveProvider', () => {
   let service: GoogleDriveProvider;
@@ -70,7 +81,44 @@ describe('GoogleDriveProvider', () => {
     service = new GoogleDriveProvider(
       googleAuth as unknown as GoogleAuthService,
       prisma as unknown as PrismaService,
+      googleCfg(),
     );
+  });
+
+  describe('GOOGLE_ENABLED kill-switch', () => {
+    /**
+     * A provider built with the backend switched off in the environment.
+     **/
+    const disabled = () =>
+      new GoogleDriveProvider(
+        googleAuth as unknown as GoogleAuthService,
+        prisma as unknown as PrismaService,
+        googleCfg(false),
+      );
+
+    it('reports the backend as disconnected without touching the database or Google', async () => {
+      await expect(disabled().status()).resolves.toMatchObject({
+        backend: 'drive',
+        connected: false,
+        roots: [],
+      });
+      expect(googleAuth.getActiveAccountId).not.toHaveBeenCalled();
+      expect(google.drive as jest.Mock).not.toHaveBeenCalled();
+    });
+
+    it('404s every browse operation', async () => {
+      await expect(disabled().listRoots()).rejects.toBeInstanceOf(NotFoundException);
+      await expect(disabled().listContents('root-1')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(disabled().deleteItem('file-1')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        disabled().getUploadStatus('https://www.googleapis.com/upload/drive/v3/files?x', 1),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('exposes `enabled` so the registry can hide it', () => {
+      expect(disabled().enabled).toBe(false);
+      expect(service.enabled).toBe(true);
+    });
   });
 
   describe('assertItemAllowed (via listContents)', () => {
