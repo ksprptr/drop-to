@@ -163,6 +163,10 @@ export default function AccountSidebarContent({
 }: AccountSidebarProps) {
   const s3Status = statuses.find((status) => status.backend === 's3') ?? null;
   const connectedStorages = statuses.filter((status) => status.connected);
+  // The API omits a backend switched off in its environment, so its whole section disappears with it.
+  const hasDrive = statuses.some((status) => status.backend === 'drive');
+  const hasS3 = s3Status !== null;
+  const noBackends = !loading && statuses.length === 0;
 
   return (
     <>
@@ -179,108 +183,128 @@ export default function AccountSidebarContent({
       </div>
 
       <div className='flex min-h-0 flex-1 flex-col gap-y-5 overflow-y-auto p-4'>
-        <div>
-          <SectionLabel>Google account</SectionLabel>
+        {noBackends && (
+          <div className='rounded-xl bg-zinc-100 p-3 dark:bg-zinc-900'>
+            <p className='text-xs font-medium text-zinc-950 dark:text-zinc-50'>
+              No storage backend available
+            </p>
+            <p className='mt-1.5 text-[11px] text-zinc-600 dark:text-zinc-400'>
+              Switch one on in the API environment (GOOGLE_ENABLED / S3_ENABLED) — and check that
+              the API is reachable.
+            </p>
+          </div>
+        )}
 
-          {loading ? (
-            <div className='flex items-center gap-x-2 px-1 py-2 text-sm text-zinc-600 dark:text-zinc-400'>
-              <LoadingIndicator />
-              Loading…
-            </div>
-          ) : !driveStatus?.connected ? (
-            <div className='flex flex-col gap-y-3 rounded-xl bg-zinc-100 p-3 dark:bg-zinc-900'>
-              <p
-                className={`text-xs ${
-                  driveStatus?.error
-                    ? 'font-medium text-amber-600 dark:text-amber-500'
-                    : 'text-zinc-600 dark:text-zinc-400'
-                }`}>
-                {driveStatus?.error ??
-                  'No account connected. Connect a Google account to pick folders and upload.'}
-              </p>
-              <a
-                href={getGoogleAuthUrl()}
-                className='bg-primary-600 hover:bg-primary-700 inline-flex items-center justify-center gap-x-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition'>
-                <Icon icon='LinkIcon' className='h-4 w-4' />
-                {driveStatus?.error ? 'Reconnect Drive' : 'Connect Drive'}
-              </a>
-            </div>
-          ) : (
-            <div className='flex flex-col gap-y-3'>
+        {hasDrive && (
+          <div>
+            <SectionLabel>Google account</SectionLabel>
+
+            {loading ? (
+              <div className='flex items-center gap-x-2 px-1 py-2 text-sm text-zinc-600 dark:text-zinc-400'>
+                <LoadingIndicator />
+                Loading…
+              </div>
+            ) : !driveStatus?.connected ? (
+              <div className='flex flex-col gap-y-3 rounded-xl bg-zinc-100 p-3 dark:bg-zinc-900'>
+                <p
+                  className={`text-xs ${
+                    driveStatus?.error
+                      ? 'font-medium text-amber-600 dark:text-amber-500'
+                      : 'text-zinc-600 dark:text-zinc-400'
+                  }`}>
+                  {driveStatus?.error ??
+                    'No account connected. Connect a Google account to pick folders and upload.'}
+                </p>
+                <a
+                  href={getGoogleAuthUrl()}
+                  className='bg-primary-600 hover:bg-primary-700 inline-flex items-center justify-center gap-x-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition'>
+                  <Icon icon='LinkIcon' className='h-4 w-4' />
+                  {driveStatus?.error ? 'Reconnect Drive' : 'Connect Drive'}
+                </a>
+              </div>
+            ) : (
+              <div className='flex flex-col gap-y-3'>
+                <div className='flex items-center gap-x-2 rounded-xl bg-zinc-100 p-2.5 dark:bg-zinc-900'>
+                  <div className='bg-primary-600/15 text-primary-600 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full'>
+                    <Icon icon='CheckBadge' className='h-5 w-5' />
+                  </div>
+                  <div className='min-w-0 leading-tight'>
+                    <p className='truncate text-xs font-medium'>{driveStatus.email}</p>
+                    <p className='text-[10px] text-zinc-600 dark:text-zinc-400'>Connected</p>
+                  </div>
+                </div>
+
+                {driveStatus.quota && driveStatus.quota.limit !== null && (
+                  <StorageMeter usage={driveStatus.quota.usage} limit={driveStatus.quota.limit} />
+                )}
+
+                {isOwner ? (
+                  <div className='flex flex-col gap-y-2'>
+                    <Button
+                      variant='secondary'
+                      fullWidth
+                      onClick={onManageFolders}
+                      loading={saving}>
+                      <Icon icon='FolderPlus' className='h-4 w-4' />
+                      Manage folders
+                    </Button>
+                    <Button variant='soft-danger' fullWidth onClick={onDisconnect}>
+                      <Icon icon='ArrowRightStartOnRectangle' className='h-4 w-4' />
+                      Disconnect
+                    </Button>
+                  </div>
+                ) : (
+                  <a
+                    href={getGoogleAuthUrl()}
+                    className='inline-flex w-full items-center justify-center gap-x-2 rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900'>
+                    <Icon icon='LockClosed' className='h-4 w-4' />
+                    Verify with Google to manage
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {hasS3 && (
+          <div>
+            <SectionLabel>S3 storage</SectionLabel>
+
+            {loading ? (
+              <div className='flex items-center gap-x-2 px-1 py-2 text-sm text-zinc-600 dark:text-zinc-400'>
+                <LoadingIndicator />
+                Loading…
+              </div>
+            ) : !s3Status?.connected ? (
+              <div className='flex flex-col gap-y-1.5 rounded-xl bg-zinc-100 p-3 dark:bg-zinc-900'>
+                <p
+                  className={`text-xs font-medium ${
+                    s3Status?.error
+                      ? 'text-amber-600 dark:text-amber-500'
+                      : 'text-zinc-950 dark:text-zinc-50'
+                  }`}>
+                  {s3Status?.error ? 'S3 storage unavailable' : 'No S3 storage connected'}
+                </p>
+                <p className='text-[11px] text-zinc-600 dark:text-zinc-400'>
+                  {s3Status?.error ??
+                    'Configure the S3 buckets in the API environment to browse them.'}
+                </p>
+              </div>
+            ) : (
               <div className='flex items-center gap-x-2 rounded-xl bg-zinc-100 p-2.5 dark:bg-zinc-900'>
                 <div className='bg-primary-600/15 text-primary-600 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full'>
-                  <Icon icon='CheckBadge' className='h-5 w-5' />
+                  <Icon icon='CircleStack' className='h-5 w-5' />
                 </div>
                 <div className='min-w-0 leading-tight'>
-                  <p className='truncate text-xs font-medium'>{driveStatus.email}</p>
+                  <p className='truncate text-xs font-medium'>
+                    {s3Status.roots.length} bucket{s3Status.roots.length === 1 ? '' : 's'}
+                  </p>
                   <p className='text-[10px] text-zinc-600 dark:text-zinc-400'>Connected</p>
                 </div>
               </div>
-
-              {driveStatus.quota && driveStatus.quota.limit !== null && (
-                <StorageMeter usage={driveStatus.quota.usage} limit={driveStatus.quota.limit} />
-              )}
-
-              {isOwner ? (
-                <div className='flex flex-col gap-y-2'>
-                  <Button variant='secondary' fullWidth onClick={onManageFolders} loading={saving}>
-                    <Icon icon='FolderPlus' className='h-4 w-4' />
-                    Manage folders
-                  </Button>
-                  <Button variant='soft-danger' fullWidth onClick={onDisconnect}>
-                    <Icon icon='ArrowRightStartOnRectangle' className='h-4 w-4' />
-                    Disconnect
-                  </Button>
-                </div>
-              ) : (
-                <a
-                  href={getGoogleAuthUrl()}
-                  className='inline-flex w-full items-center justify-center gap-x-2 rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900'>
-                  <Icon icon='LockClosed' className='h-4 w-4' />
-                  Verify with Google to manage
-                </a>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <SectionLabel>S3 storage</SectionLabel>
-
-          {loading ? (
-            <div className='flex items-center gap-x-2 px-1 py-2 text-sm text-zinc-600 dark:text-zinc-400'>
-              <LoadingIndicator />
-              Loading…
-            </div>
-          ) : !s3Status?.connected ? (
-            <div className='flex flex-col gap-y-1.5 rounded-xl bg-zinc-100 p-3 dark:bg-zinc-900'>
-              <p
-                className={`text-xs font-medium ${
-                  s3Status?.error
-                    ? 'text-amber-600 dark:text-amber-500'
-                    : 'text-zinc-950 dark:text-zinc-50'
-                }`}>
-                {s3Status?.error ? 'S3 storage unavailable' : 'No S3 storage connected'}
-              </p>
-              <p className='text-[11px] text-zinc-600 dark:text-zinc-400'>
-                {s3Status?.error ??
-                  'Enable and configure S3 in the API environment to browse buckets.'}
-              </p>
-            </div>
-          ) : (
-            <div className='flex items-center gap-x-2 rounded-xl bg-zinc-100 p-2.5 dark:bg-zinc-900'>
-              <div className='bg-primary-600/15 text-primary-600 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full'>
-                <Icon icon='CircleStack' className='h-5 w-5' />
-              </div>
-              <div className='min-w-0 leading-tight'>
-                <p className='truncate text-xs font-medium'>
-                  {s3Status.roots.length} bucket{s3Status.roots.length === 1 ? '' : 's'}
-                </p>
-                <p className='text-[10px] text-zinc-600 dark:text-zinc-400'>Connected</p>
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {!loading && connectedStorages.length > 0 && (
           <div className='min-h-0'>

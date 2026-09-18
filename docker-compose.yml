@@ -16,13 +16,17 @@
 
 services:
   dropto-pg:
-    image: postgres:17-alpine
+    image: postgres:${POSTGRES_VERSION:-18}-alpine
     container_name: dropto-pg
     restart: unless-stopped
     environment:
       POSTGRES_USER: '${DB_USER}'
       POSTGRES_PASSWORD: '${DB_PASS}'
       POSTGRES_DB: '${DB_NAME}'
+      # Pinned on purpose: the postgres:18 image moved its default PGDATA to
+      # /var/lib/postgresql/18/docker. Setting it keeps one layout across majors, so the volume
+      # mount below stays correct on 17 and 18 alike.
+      PGDATA: /var/lib/postgresql/data
     ports:
       # Loopback only — nothing outside this host needs to reach the database.
       - '127.0.0.1:${DB_PORT:-5432}:5432'

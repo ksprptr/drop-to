@@ -66,6 +66,9 @@ export interface StorageProvider {
   /** The backend key this provider serves ('drive' | 's3'). */
   readonly backend: StorageBackend;
 
+  /** Whether the backend is switched on in the environment; a disabled one is hidden and unreachable. */
+  readonly enabled: boolean;
+
   /**
    * Backend usability + browse roots for the sidebar; never throws (returns `connected: false`).
    **/

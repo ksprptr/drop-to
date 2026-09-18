@@ -84,7 +84,13 @@ export class StorageController {
   @ApiOkResponse({ type: [StorageStatusEntity], description: 'Per-backend status' })
   @Get('status')
   async getStatuses(@Req() req: Request): Promise<StorageStatusEntity[]> {
+    // Only the enabled backends — a disabled one is absent from the sidebar entirely, not shown as dead.
     const statuses = await Promise.all(this.registry.all().map((provider) => provider.status()));
+
+    if (!statuses.some((status) => status.backend === 'drive')) {
+      return statuses;
+    }
+
     const ownerToken = (req.cookies as Record<string, string> | undefined)?.[DRIVE_OWNER_COOKIE];
     const isOwner = await this.googleAuthService.isVerifiedOwner(ownerToken);
 

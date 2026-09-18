@@ -32,7 +32,7 @@ describe('Storage (integration)', () => {
       expect(res.status).toBe(401);
     });
 
-    it('reports every backend; S3 is disabled and Drive is not connected in tests', async () => {
+    it('reports only the enabled backends (S3 is disabled in tests) ', async () => {
       prisma.driveAccount.findFirst.mockResolvedValue(null);
 
       const res = await request(app.getHttpServer())
@@ -41,12 +41,11 @@ describe('Storage (integration)', () => {
 
       expect(res.status).toBe(200);
       const backends = res.body.map((status: { backend: string }) => status.backend);
-      expect(backends).toEqual(['drive', 's3']);
+      // A backend switched off in the environment is absent entirely, not listed as disconnected.
+      expect(backends).toEqual(['drive']);
 
       const drive = res.body.find((status: { backend: string }) => status.backend === 'drive');
-      const s3 = res.body.find((status: { backend: string }) => status.backend === 's3');
       expect(drive).toMatchObject({ label: 'Google Drive', connected: false, roots: [] });
-      expect(s3).toMatchObject({ label: 'S3 Storage', connected: false, roots: [] });
     });
   });
 

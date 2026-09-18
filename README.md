@@ -9,6 +9,7 @@
 - [Setup](#setup)
 - [Run](#run)
 - [Connecting storage](#connecting-storage)
+- [Documentation](#documentation)
 - [Deployment](#deployment)
 - [License](#license)
 
@@ -92,7 +93,11 @@ pnpm --filter api run prisma:migrate:deploy   # first run only
 pnpm dev                                      # api :4000, web :3000
 ```
 
-Other scripts from the root: `pnpm build`, `pnpm lint`, `pnpm test`, `pnpm format`.
+Checks:
+
+```bash
+pnpm build && pnpm lint && pnpm test
+```
 
 | App     | Port | Health                           |
 | ------- | ---- | -------------------------------- |
@@ -103,20 +108,25 @@ Swagger is served at http://localhost:4000/swagger in development only.
 
 ## Connecting storage
 
+Both backends are switched on per instance in `apps/api/.env` (`GOOGLE_ENABLED`, `S3_ENABLED`) and
+are independent — run either one, both, or neither. A backend that is off is absent from the UI
+entirely, and needs no credentials.
+
 ### Google Drive
 
 One-time Google Cloud setup:
 
-1. Create a project — the **project number** is the Picker `App ID` (`NEXT_PUBLIC_GOOGLE_APP_ID`).
+1. Create a project — the **project number** is the Picker `App ID`.
 2. Enable the **Google Drive API** and the **Google Picker API**.
 3. OAuth consent screen (External): add the scope `https://www.googleapis.com/auth/drive` and the
    Drive owner's email as a test user.
 4. Create an **OAuth client ID** (Web application):
    - Authorized redirect URI: `<web origin>/api/oauth/google/callback`
    - Authorized JavaScript origin: the web app's URL
-5. Create an **API key** restricted to the Picker API → `NEXT_PUBLIC_GOOGLE_API_KEY`.
-6. Log in and use **Connect Drive** in the sidebar. The folders the owner picks are the only ones the
-   app will ever touch.
+5. Create an **API key** restricted to the Picker API.
+6. Put the client id/secret, the project number and the API key into the env files, then log in and
+   use **Connect Drive** in the sidebar. The folders the owner picks are the only ones the app will
+   ever touch.
 
 > **Publish the app, or Drive keeps disconnecting.** While the consent screen sits in _Testing_,
 > Google expires the refresh token after 7 days. Hit **Publish app** and the expiry is gone —
@@ -128,22 +138,31 @@ the authorized folders is enforced by the API on every request.
 
 ### S3 / S3-compatible
 
-Set `S3_ENABLED="true"` and fill in the `S3_*` variables in `apps/api/.env`. Each bucket in
-`S3_BUCKETS` becomes a browse root. For MinIO and R2 also set `S3_ENDPOINT` and usually
-`S3_FORCE_PATH_STYLE="true"`. No UI step — the buckets appear in the sidebar on the next load.
+Fill in the `S3_*` variables in `apps/api/.env`. Each configured bucket becomes a browse root, and
+S3-compatible stores (MinIO, Cloudflare R2) need their endpoint set as well. No UI step — the
+buckets appear in the sidebar on the next load.
+
+## Documentation
+
+Guides that are too long for this file live in [`docs/`](./docs):
+
+- [Upgrading Postgres](./docs/upgrading-postgres.md) — the database ships as **Postgres 18**
+  (`POSTGRES_VERSION` in the root `.env`); moving an existing 17 instance to it is a dump and
+  restore, not a version bump.
 
 ## Deployment
 
-Run the compose stack behind a reverse proxy of your choice (Caddy, Traefik, nginx, Coolify,
-Cloudflare Tunnel) and point these at your domain:
+| Description | Values                      |
+| ----------- | --------------------------- |
+| **Server:** | Coolify                     |
+| **URL:**    | https://dropto.ksprptr.dev/ |
 
-- `APP_URL` and the `NEXT_PUBLIC_*` values — **build args**, inlined into the bundle
-- `WEB_APP_URL`, `CORS_ALLOWED_ORIGINS` (API) — the public web origin
-- `GOOGLE_REDIRECT_URI` — `<public web origin>/api/oauth/google/callback`, same value in the Google
-  Cloud OAuth client
-- `API_URL` (web) — the API's internal address, e.g. `http://dropto-api:4000/api/v1`
-- `TRUST_PROXY_HOPS` — proxies in front of the API, so the rate limiter keys on the real client IP
-- `COOKIE_DOMAIN` — **leave unset**; cookies stay host-only on the web origin
+Run the compose stack behind a reverse proxy of your choice (Caddy, Traefik, nginx, Coolify,
+Cloudflare Tunnel). Every published port is bound to `127.0.0.1` for a proxy on the same host; drop
+that prefix in `docker-compose.yml` to expose them directly.
+
+`APP_URL` and the `NEXT_PUBLIC_*` values are baked into the bundle at build time, so set them as
+**build-time** variables as well as runtime ones, and keep the two identical.
 
 **The API needs no public route.** Every browser request goes to the web app, which reaches the API
 server-to-server over the compose network — including both legs of the Google OAuth handshake.
@@ -151,9 +170,6 @@ server-to-server over the compose network — including both legs of the Google 
 > **Serve it over HTTPS.** With `NODE_ENV=production` the auth cookies are `Secure`, so a browser
 > stores them only on `https://` origins (plus `http://localhost`). Behind plain http, login
 > silently fails — the request succeeds and the cookies are dropped.
-
-Compose binds every published port to `127.0.0.1`, expecting a reverse proxy on the same host; drop
-that prefix in `docker-compose.yml` to expose them directly.
 
 ## License
 

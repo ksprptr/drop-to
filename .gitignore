@@ -38,6 +38,10 @@ pnpm-debug.log*
 coverage/
 .nyc_output/
 
+# Database dumps (see docs/upgrading-postgres.md) — deliberately narrow, so Prisma's migration
+# .sql files stay tracked.
+dropto-backup*.sql
+
 # Misc
 *.tsbuildinfo
 

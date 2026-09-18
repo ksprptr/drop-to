@@ -21,7 +21,9 @@ export default async function WorkspaceRootPage({ searchParams }: Props) {
     statuses = [];
   }
 
-  const backend = statuses.find((status) => status.connected)?.backend ?? 'drive';
+  // Fall back to the first backend the API reports (Drive may be switched off) before the hard default.
+  const backend =
+    statuses.find((status) => status.connected)?.backend ?? statuses[0]?.backend ?? 'drive';
 
   // Preserve query (e.g. the Google OAuth `?connected`/`?error` callback params).
   const params = new URLSearchParams();
