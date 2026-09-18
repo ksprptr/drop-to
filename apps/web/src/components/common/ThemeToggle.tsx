@@ -91,7 +91,7 @@ export default function ThemeToggle() {
                   }}
                   className={`flex w-full items-center gap-x-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
                     selected
-                      ? 'bg-green-600/10 text-green-700 dark:text-green-400'
+                      ? 'bg-primary-600/10 text-primary-700 dark:text-primary-400'
                       : 'text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-900'
                   }`}>
                   <Icon icon={option.icon} className='h-4 w-4' />

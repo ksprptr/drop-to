@@ -1,5 +1,21 @@
 @import 'tailwindcss';
 
+/* Accent ramp behind every `primary-*` utility. `APP_PRIMARY_COLOR` derives the `--app-primary-*`
+   overrides from one hex and the layout puts them on <html>; unset, the ramp stays Tailwind green. */
+@theme {
+  --color-primary-50: var(--app-primary-50, var(--color-green-50));
+  --color-primary-100: var(--app-primary-100, var(--color-green-100));
+  --color-primary-200: var(--app-primary-200, var(--color-green-200));
+  --color-primary-300: var(--app-primary-300, var(--color-green-300));
+  --color-primary-400: var(--app-primary-400, var(--color-green-400));
+  --color-primary-500: var(--app-primary-500, var(--color-green-500));
+  --color-primary-600: var(--app-primary-600, var(--color-green-600));
+  --color-primary-700: var(--app-primary-700, var(--color-green-700));
+  --color-primary-800: var(--app-primary-800, var(--color-green-800));
+  --color-primary-900: var(--app-primary-900, var(--color-green-900));
+  --color-primary-950: var(--app-primary-950, var(--color-green-950));
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
@@ -36,7 +52,7 @@
   [role='button']:focus-visible,
   [role='menuitem']:focus-visible,
   [tabindex]:not([tabindex='-1']):focus-visible {
-    @apply ring-2 ring-green-600 ring-offset-2 ring-offset-zinc-50 outline-none dark:ring-offset-zinc-900;
+    @apply ring-primary-600 ring-2 ring-offset-2 ring-offset-zinc-50 outline-none dark:ring-offset-zinc-900;
   }
 
   ::-webkit-scrollbar {
@@ -53,7 +69,7 @@
   }
 
   input[type='checkbox']:checked {
-    @apply border-green-600 bg-green-600;
+    @apply border-primary-600 bg-primary-600;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6'/%3E%3C/svg%3E");
     background-size: 100% 100%;
     background-position: center;
@@ -87,7 +103,7 @@
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--color-green-600);
+  color: var(--color-primary-600);
 }
 
 .noscript-title {

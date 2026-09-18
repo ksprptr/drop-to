@@ -74,9 +74,9 @@ function FileRow({
         onKeyDown={(event) => onKeyDown(event, entry)}
         className={`grid ${gridCols} w-full cursor-pointer items-center gap-x-3 rounded-lg px-3 py-2 text-left transition ${
           isDropTarget
-            ? 'bg-green-600/15 ring-2 ring-green-600 ring-inset'
+            ? 'bg-primary-600/15 ring-primary-600 ring-2 ring-inset'
             : checked || selected
-              ? 'bg-green-600/10'
+              ? 'bg-primary-600/10'
               : 'hover:bg-zinc-200 dark:hover:bg-zinc-800'
         }`}>
         {canModify && (
@@ -90,12 +90,12 @@ function FileRow({
               className='hidden h-4 w-4 max-sm:block'
             />
             {/* Desktop: a check indicator (no checkbox) for selected rows. */}
-            {checked && <Icon icon='Check' className='hidden h-4 w-4 text-green-600 sm:block' />}
+            {checked && <Icon icon='Check' className='text-primary-600 hidden h-4 w-4 sm:block' />}
           </span>
         )}
         <span className='flex min-w-0 items-center gap-x-2.5'>
           {entry.isFolder ? (
-            <Icon icon='Folder' className='h-5 w-5 shrink-0 text-green-600' />
+            <Icon icon='Folder' className='text-primary-600 h-5 w-5 shrink-0' />
           ) : (
             <Icon
               icon={fileIcon(entry.mimeType)}

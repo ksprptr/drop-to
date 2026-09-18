@@ -25,7 +25,7 @@
 - The Drive refresh token is AES-256-GCM encrypted in Postgres; the browser never talks to Google or
   the API directly
 - Strict CSP, IP-keyed rate limiting, read-only non-root containers
-- Rebrandable through `APP_NAME`
+- Rebrandable through `APP_NAME` and `APP_PRIMARY_COLOR`
 
 ## Projects
 

@@ -139,7 +139,9 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-/** Skip Next internals, route handlers and static assets; the proxy runs on navigations only. */
+// Skip Next internals, route handlers and static assets; the proxy runs on navigations only.
+// The generated icons carry no extension, so they need naming — without that the browser's
+// favicon request would be bounced to /login like any other page.
 export const config: ProxyConfig = {
-  matcher: '/((?!_next|api|.*\\..*).*)',
+  matcher: '/((?!_next|api|icon$|apple-icon$|.*\\..*).*)',
 };

@@ -107,7 +107,7 @@ export default function Breadcrumb({
       <button
         type='button'
         onClick={() => onNavigate(index)}
-        className={`min-w-0 truncate hover:text-green-600 ${
+        className={`hover:text-primary-600 min-w-0 truncate ${
           index === crumbs.length - 1
             ? 'font-medium text-zinc-950 dark:text-zinc-50'
             : 'text-zinc-600 dark:text-zinc-400'
@@ -135,7 +135,7 @@ export default function Breadcrumb({
             }
             setPickerOpen((open) => !open);
           }}
-          className={`flex shrink-0 items-center gap-x-1 hover:text-green-600 ${
+          className={`hover:text-primary-600 flex shrink-0 items-center gap-x-1 ${
             atRoots
               ? 'font-medium text-zinc-950 dark:text-zinc-50'
               : 'text-zinc-600 dark:text-zinc-400'
@@ -174,7 +174,7 @@ export default function Breadcrumb({
                         }}
                         className={`flex items-center gap-x-2.5 rounded-lg px-3 py-2 text-left font-medium transition ${
                           active
-                            ? 'bg-green-600/10 text-green-600'
+                            ? 'bg-primary-600/10 text-primary-600'
                             : disabled
                               ? 'cursor-not-allowed text-zinc-400 dark:text-zinc-600'
                               : 'text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700'
@@ -214,7 +214,7 @@ export default function Breadcrumb({
                 setOverflowOpen((open) => !open);
               }}
               title='Show hidden folders'
-              className='rounded px-1 font-medium text-zinc-600 hover:text-green-600 dark:text-zinc-400'>
+              className='hover:text-primary-600 rounded px-1 font-medium text-zinc-600 dark:text-zinc-400'>
               …
             </button>
           </span>
@@ -248,7 +248,7 @@ export default function Breadcrumb({
                       setOverflowOpen(false);
                     }}
                     className='flex items-center gap-x-2 rounded-lg px-3 py-2 text-left text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700'>
-                    <Icon icon='Folder' className='h-4 w-4 shrink-0 text-green-600' />
+                    <Icon icon='Folder' className='text-primary-600 h-4 w-4 shrink-0' />
                     <span className='truncate'>{crumb.name || 'Loading…'}</span>
                   </button>
                 ))}

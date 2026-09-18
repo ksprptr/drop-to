@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Poppins } from 'next/font/google';
 import { headers } from 'next/headers';
-import type { PropsWithChildren } from 'react';
+import type { CSSProperties, PropsWithChildren } from 'react';
 
 import { resolveForwardedOrigin } from '@/common/utils/request-origin';
 import ThemeProvider from '@/components/providers/ThemeProvider';
@@ -63,7 +63,11 @@ export const viewport: Viewport = {
  **/
 export default function RootLayout({ children }: Readonly<PropsWithChildren>) {
   return (
-    <html lang='en' data-scroll-behavior='smooth' suppressHydrationWarning>
+    <html
+      lang='en'
+      data-scroll-behavior='smooth'
+      style={appServerConfig.primaryColor.variables as CSSProperties | undefined}
+      suppressHydrationWarning>
       <head>
         <meta name='apple-mobile-web-app-title' content={metadataConfig.shortTitle} />
       </head>

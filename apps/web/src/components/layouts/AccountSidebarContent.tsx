@@ -131,7 +131,7 @@ function PikachuAvatar() {
         }}
         transition={{ duration: 0.6 }}
         title='Pika pika!'
-        className='inline-flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-green-600/15'>
+        className='bg-primary-600/15 inline-flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full'>
         <Image
           src='/assets/pikachu.jpg'
           alt='Pikachu'
@@ -167,7 +167,7 @@ export default function AccountSidebarContent({
   return (
     <>
       <div className='flex h-16 shrink-0 items-center gap-x-2.5 border-b border-zinc-300 px-5 dark:border-zinc-700'>
-        <div className='inline-flex h-8 w-8 items-center justify-center rounded-lg bg-green-600 text-white'>
+        <div className='bg-primary-600 inline-flex h-8 w-8 items-center justify-center rounded-lg text-white'>
           <Icon icon='CloudArrowUp' className='h-5 w-5' />
         </div>
         <div className='leading-tight'>
@@ -200,7 +200,7 @@ export default function AccountSidebarContent({
               </p>
               <a
                 href={getGoogleAuthUrl()}
-                className='inline-flex items-center justify-center gap-x-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-green-700'>
+                className='bg-primary-600 hover:bg-primary-700 inline-flex items-center justify-center gap-x-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition'>
                 <Icon icon='LinkIcon' className='h-4 w-4' />
                 {driveStatus?.error ? 'Reconnect Drive' : 'Connect Drive'}
               </a>
@@ -208,7 +208,7 @@ export default function AccountSidebarContent({
           ) : (
             <div className='flex flex-col gap-y-3'>
               <div className='flex items-center gap-x-2 rounded-xl bg-zinc-100 p-2.5 dark:bg-zinc-900'>
-                <div className='inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-600/15 text-green-600'>
+                <div className='bg-primary-600/15 text-primary-600 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full'>
                   <Icon icon='CheckBadge' className='h-5 w-5' />
                 </div>
                 <div className='min-w-0 leading-tight'>
@@ -269,7 +269,7 @@ export default function AccountSidebarContent({
             </div>
           ) : (
             <div className='flex items-center gap-x-2 rounded-xl bg-zinc-100 p-2.5 dark:bg-zinc-900'>
-              <div className='inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-600/15 text-green-600'>
+              <div className='bg-primary-600/15 text-primary-600 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full'>
                 <Icon icon='CircleStack' className='h-5 w-5' />
               </div>
               <div className='min-w-0 leading-tight'>
@@ -295,14 +295,14 @@ export default function AccountSidebarContent({
                     onClick={() => onSelectStorage(storage.backend)}
                     className={`relative flex items-center gap-x-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
                       active
-                        ? 'text-green-600'
+                        ? 'text-primary-600'
                         : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'
                     }`}>
                     {active && (
                       <motion.span
                         layoutId='storage-switcher-pill'
                         transition={{ type: 'spring', stiffness: 800, damping: 44 }}
-                        className='absolute inset-0 rounded-lg bg-green-600/10 dark:bg-green-600/15'
+                        className='bg-primary-600/10 dark:bg-primary-600/15 absolute inset-0 rounded-lg'
                       />
                     )}
                     <Icon
