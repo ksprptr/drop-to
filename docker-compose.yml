@@ -138,8 +138,9 @@ services:
     environment:
       NODE_ENV: 'production'
       PORT: '3000'
-      # Runtime, so renaming the instance needs no rebuild.
+      # Runtime, so rebranding the instance needs no rebuild.
       APP_NAME: '${APP_NAME:-DropTo}'
+      APP_PRIMARY_COLOR: '${APP_PRIMARY_COLOR:-}'
       APP_URL: '${APP_URL:-http://localhost:3000}'
       # Server-to-server, over the compose network — never leaves the host.
       API_URL: 'http://dropto-api:4000/api/v1'

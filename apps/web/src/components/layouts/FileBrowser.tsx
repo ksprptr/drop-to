@@ -585,7 +585,7 @@ export default function FileBrowser({
                   if (event.key === 'Escape') closeSearch();
                 }}
                 placeholder='Search this folder'
-                className='w-full rounded-lg border border-zinc-300 bg-zinc-50 py-1.5 pr-8 pl-8 text-sm text-zinc-950 transition placeholder:text-zinc-500 focus:outline-2 focus:-outline-offset-1 focus:outline-green-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50'
+                className='focus:outline-primary-600 w-full rounded-lg border border-zinc-300 bg-zinc-50 py-1.5 pr-8 pl-8 text-sm text-zinc-950 transition placeholder:text-zinc-500 focus:outline-2 focus:-outline-offset-1 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50'
               />
               {searchQuery && (
                 <button
@@ -622,7 +622,7 @@ export default function FileBrowser({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
               transition={{ duration: 0.12 }}
-              className='pointer-events-none absolute inset-2 z-10 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-green-600 text-green-600 backdrop-blur-md dark:bg-zinc-900/60'>
+              className='border-primary-600 text-primary-600 pointer-events-none absolute inset-2 z-10 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed backdrop-blur-md dark:bg-zinc-900/60'>
               <Icon
                 icon={dragKind === 'move' ? 'ArrowsPointingIn' : 'ArrowDownTray'}
                 className='h-8 w-8'
@@ -953,7 +953,7 @@ function SortHeader({
     <button
       type='button'
       onClick={() => onToggle(column)}
-      className={`flex items-center gap-x-1 text-[11px] font-semibold tracking-wide uppercase hover:text-green-600 ${
+      className={`hover:text-primary-600 flex items-center gap-x-1 text-[11px] font-semibold tracking-wide uppercase ${
         active ? 'text-zinc-950 dark:text-zinc-50' : 'text-zinc-600 dark:text-zinc-400'
       }`}>
       {label}
@@ -980,7 +980,7 @@ function MenuItem({
     tone === 'danger'
       ? 'text-red-500 hover:bg-red-500/10'
       : tone === 'primary'
-        ? 'text-green-600 hover:bg-green-600/10'
+        ? 'text-primary-600 hover:bg-primary-600/10'
         : 'text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700';
 
   return (

@@ -1,9 +1,12 @@
 import { ImageResponse } from 'next/og';
 
+import { appServerConfig } from '@/configs/app/app.server-config';
+import { withAlpha } from '@/configs/app/primary-color.config';
 import { metadataConfig } from '@/configs/seo/metadata.config';
 
 const wordmark = metadataConfig.title;
 const subtitle = metadataConfig.tagline;
+const primary = appServerConfig.primaryColor.hex;
 
 /**
  * Loads a Poppins weight from Google Fonts as TTF/OTF data for Satori (`text` subsets it).
@@ -44,10 +47,10 @@ export async function GET() {
             width: 168,
             height: 168,
             borderRadius: 42,
-            backgroundColor: '#16a34a',
+            backgroundColor: primary,
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 24px 70px rgba(22,163,74,0.4)',
+            boxShadow: `0 24px 70px ${withAlpha(primary, 0.4)}`,
           }}>
           <svg
             width='96'

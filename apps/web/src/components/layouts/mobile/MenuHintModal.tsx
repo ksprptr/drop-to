@@ -16,7 +16,7 @@ export default function MenuHintModal({ open, onDismiss }: Props) {
   return (
     <Modal open={open} onClose={onDismiss} maxWidth='max-w-sm'>
       <div className='flex flex-col items-center text-center'>
-        <span className='inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-green-600/10 text-green-600'>
+        <span className='bg-primary-600/10 text-primary-600 inline-flex h-12 w-12 items-center justify-center rounded-2xl'>
           <Icon icon='ArrowsRightLeft' className='h-6 w-6' />
         </span>
 

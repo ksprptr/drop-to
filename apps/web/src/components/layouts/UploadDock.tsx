@@ -45,7 +45,7 @@ function IndeterminateBar() {
   return (
     <div className='h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-900'>
       <motion.div
-        className='h-full w-1/3 rounded-full bg-green-600'
+        className='bg-primary-600 h-full w-1/3 rounded-full'
         animate={{ x: ['-100%', '300%'] }}
         transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
       />
@@ -64,12 +64,12 @@ function ProgressBar({ task }: { task: UploadTask }) {
   return (
     <div className='h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-900'>
       {task.status === 'done' ? (
-        <div className='h-full w-full rounded-full bg-green-600' />
+        <div className='bg-primary-600 h-full w-full rounded-full' />
       ) : task.status === 'canceled' ? (
         <div className='h-full w-full rounded-full bg-red-500' />
       ) : (
         <motion.div
-          className={`h-full rounded-full ${task.status === 'error' ? 'bg-red-500' : 'bg-green-600'}`}
+          className={`h-full rounded-full ${task.status === 'error' ? 'bg-red-500' : 'bg-primary-600'}`}
           initial={false}
           animate={{ width: `${task.percent}%` }}
           transition={{ type: 'spring', stiffness: 260, damping: 30 }}

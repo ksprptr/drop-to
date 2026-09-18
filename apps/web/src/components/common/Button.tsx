@@ -28,9 +28,9 @@ export default function Button({
   className,
 }: Props) {
   const variants: Record<NonNullable<Props['variant']>, string> = {
-    primary: 'bg-green-600 hover:bg-green-700 disabled:bg-green-600 text-white',
+    primary: 'bg-primary-600 hover:bg-primary-700 disabled:bg-primary-600 text-white',
     secondary:
-      'bg-green-600/10 hover:bg-green-600/20 text-green-700 dark:bg-green-600/20 dark:hover:bg-green-600/30 dark:text-green-400',
+      'bg-primary-600/10 hover:bg-primary-600/20 text-primary-700 dark:bg-primary-600/20 dark:hover:bg-primary-600/30 dark:text-primary-400',
     danger: 'bg-red-500/90 hover:bg-red-500 text-white',
     'soft-danger': 'bg-red-500/10 hover:bg-red-500/20 text-red-500',
     transparent:

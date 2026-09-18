@@ -1,8 +1,12 @@
 import 'server-only';
 
+import { type PrimaryColor, resolvePrimaryColor } from '@/configs/app/primary-color.config';
+
 interface AppServerConfig {
   /** Display name of this instance — the wordmarks, the titles, the manifest and the OG image. */
   name: string;
+  /** Accent color of this instance — the `primary-*` ramp, the icons and the OG image. */
+  primaryColor: PrimaryColor;
   nodeEnv: {
     isProduction: boolean;
   };
@@ -17,6 +21,7 @@ interface AppServerConfig {
 // `name` is read per request and passed as a prop — a NEXT_PUBLIC_* would inline at build and hydrate mismatched.
 export const appServerConfig: AppServerConfig = {
   name: process.env.APP_NAME?.trim() || 'DropTo',
+  primaryColor: resolvePrimaryColor(process.env.APP_PRIMARY_COLOR),
   nodeEnv: {
     isProduction: process.env.NODE_ENV === 'production',
   },

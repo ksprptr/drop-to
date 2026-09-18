@@ -95,7 +95,7 @@ export default function PreviewPanel({
               ) : (
                 <Icon
                   icon={entry.isFolder ? 'Folder' : 'Document'}
-                  className={`h-16 w-16 ${entry.isFolder ? 'text-green-600' : 'text-zinc-600 dark:text-zinc-400'}`}
+                  className={`h-16 w-16 ${entry.isFolder ? 'text-primary-600' : 'text-zinc-600 dark:text-zinc-400'}`}
                 />
               )}
             </div>

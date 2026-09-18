@@ -41,6 +41,6 @@ export const metadataConfig: MetadataConfig = {
   ],
   colors: {
     background: '#fafafa',
-    theme: '#16a34a',
+    theme: appServerConfig.primaryColor.hex,
   },
 };
