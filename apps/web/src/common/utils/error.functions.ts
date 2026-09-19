@@ -30,6 +30,18 @@ export const extractApiErrorMessage = (error: unknown): string => {
 };
 
 /**
+ * True when the API rejected the request as unauthenticated (a dead session), not merely failed.
+ **/
+export const isUnauthorizedError = (error: unknown): boolean =>
+  isAxiosError(error) && error.response?.status === 401;
+
+/**
+ * True when the failure came from the API call itself, rather than from the framework.
+ **/
+export const isApiFailure = (error: unknown): boolean =>
+  error instanceof ApiUnavailableError || isAxiosError(error);
+
+/**
  * True when the request was cancelled (e.g. an aborted upload).
  **/
 export const isCanceledError = (error: unknown): boolean => isCancel(error);

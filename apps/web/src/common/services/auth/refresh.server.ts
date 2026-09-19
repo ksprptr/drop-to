@@ -6,6 +6,8 @@ import { getHttp } from '@/common/services/axios/axios.instance';
 
 export interface RefreshContext {
   refreshToken: string;
+  /** Skip the memo — the caller already knows the memoised pair is the one the API rejected. */
+  force?: boolean;
 }
 
 // Single-flight + memo, both keyed by the OLD refresh token, so one API refresh per token.
@@ -36,7 +38,7 @@ export const refreshSession = async (ctx: RefreshContext): Promise<ParsedSetCook
   const key = ctx.refreshToken;
 
   const cached = memo.get(key);
-  if (cached && cached.expiresAt > Date.now()) {
+  if (!ctx.force && cached && cached.expiresAt > Date.now()) {
     return cached.tokens;
   }
 
