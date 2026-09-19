@@ -5,6 +5,9 @@ export const REFRESH_LOCK_COOKIE = 'refresh_lock';
 export const DRIVE_OWNER_COOKIE = 'driveOwner';
 export const OAUTH_STATE_COOKIE = 'oauthState';
 
+/** Marks the login page as reached from a session the API turned out to reject. */
+export const SESSION_EXPIRED_REASON = 'session-expired';
+
 /** How long the Drive owner-proof stays valid in the browser. */
 export const DRIVE_OWNER_MAX_AGE_S = 30 * 24 * 60 * 60;
 
