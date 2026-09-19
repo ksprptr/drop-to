@@ -28,25 +28,42 @@ export interface PassthroughSession {
   rotated: ParsedSetCookie[];
 }
 
+interface PassthroughOptions {
+  /** Refresh even though the access token's `exp` still looks fine (it was rejected). */
+  force?: boolean;
+  /** Carry on from a pair an earlier attempt already rotated, rather than the request's. */
+  previous?: PassthroughSession;
+}
+
 /**
  * Resolves the session for a streaming route handler, refreshing up front since these bypass the proxy's proactive refresh.
  **/
-export const resolveSessionForPassthrough = async (): Promise<PassthroughSession> => {
+export const resolveSessionForPassthrough = async ({
+  force = false,
+  previous,
+}: PassthroughOptions = {}): Promise<PassthroughSession> => {
   const cookieStore = await cookies();
   let accessValue = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
   let refreshValue = cookieStore.get(REFRESH_TOKEN_COOKIE)?.value;
-  let rotated: ParsedSetCookie[] = [];
+  let rotated: ParsedSetCookie[] = previous?.rotated ?? [];
 
-  if (refreshValue && !isAccessTokenFresh(accessValue, ACCESS_EXP_SKEW_MS)) {
+  // The request's cookies are whatever the browser sent; an earlier attempt in this same request
+  // may already have rotated past them, and replaying the superseded token would be a reuse.
+  for (const { name, value } of rotated) {
+    if (name === ACCESS_TOKEN_COOKIE) accessValue = value;
+    if (name === REFRESH_TOKEN_COOKIE) refreshValue = value;
+  }
+
+  if (refreshValue && (force || !isAccessTokenFresh(accessValue, ACCESS_EXP_SKEW_MS))) {
     try {
-      rotated = await refreshSession({ refreshToken: refreshValue });
+      rotated = await refreshSession({ refreshToken: refreshValue, force });
       for (const { name, value } of rotated) {
         if (name === ACCESS_TOKEN_COOKIE) accessValue = value;
         if (name === REFRESH_TOKEN_COOKIE) refreshValue = value;
       }
     } catch {
       // Refresh failed — fall through with the stale token; the API returns 401 and the client re-authenticates.
-      rotated = [];
+      rotated = previous?.rotated ?? [];
     }
   }
 
@@ -100,11 +117,23 @@ const DOWNLOAD_HEADERS = ['content-type', 'content-disposition', 'content-length
  * Streams a GET download from the API back to the browser, forwarding key headers and rotated cookies.
  **/
 export const proxyDownload = async (path: string, signal: AbortSignal): Promise<NextResponse> => {
-  const session = await resolveSessionForPassthrough();
-  const apiResponse = await fetch(apiUrl(path), {
-    headers: await apiAuthHeaders(undefined, session.cookieHeader ?? undefined),
-    signal,
-  });
+  let session = await resolveSessionForPassthrough();
+  const send = async () =>
+    fetch(apiUrl(path), {
+      headers: await apiAuthHeaders(undefined, session.cookieHeader ?? undefined),
+      signal,
+    });
+
+  let apiResponse = await send();
+
+  // A 401 on a token that still looked fresh means revoked, not expired — a sign-out anywhere bumps
+  // the API's global token version, while this session's refresh token stays good. Renders recover
+  // through the proxy's re-auth leg, but a download never passes through it, so it re-auths here.
+  if (apiResponse.status === 401) {
+    await apiResponse.body?.cancel();
+    session = await resolveSessionForPassthrough({ force: true, previous: session });
+    apiResponse = await send();
+  }
 
   const outHeaders = new Headers();
   for (const name of DOWNLOAD_HEADERS) {

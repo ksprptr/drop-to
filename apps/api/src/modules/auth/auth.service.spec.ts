@@ -136,6 +136,60 @@ describe('AuthService', () => {
       expect(authState.bumpTokenVersion).toHaveBeenCalledTimes(1);
     });
 
+    it('treats a replay inside the grace window as a concurrent refresh, not as theft', async () => {
+      // Two requests raced with the same token: the first rotated it, the second arrives moments
+      // later. Signing everyone out here is the failure mode — every session shares one subject.
+      const replaced = {
+        ...liveRow(),
+        revokedAt: new Date(Date.now() - 1_000),
+        replacedByTokenId: 'row-9',
+      };
+      const replacement = { ...liveRow(), id: 'row-9' };
+      prisma.refreshToken.findUnique
+        .mockResolvedValueOnce(replaced)
+        .mockResolvedValueOnce(replacement);
+
+      await expect(service.refreshTokens('raced')).resolves.toEqual({
+        accessToken: 'access-token',
+        refreshToken: 'raw-secret',
+      });
+      // The chain continues from the replacement; nothing is mass-revoked and no version is bumped.
+      expect(prisma.refreshToken.update).toHaveBeenCalledWith({
+        where: { id: 'row-9' },
+        data: { revokedAt: expect.any(Date), replacedByTokenId: 'row-2' },
+      });
+      expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
+      expect(authState.bumpTokenVersion).not.toHaveBeenCalled();
+    });
+
+    it('still treats a late replay as theft, even with a live replacement', async () => {
+      const replaced = {
+        ...liveRow(),
+        revokedAt: new Date(Date.now() - 60_000),
+        replacedByTokenId: 'row-9',
+      };
+      prisma.refreshToken.findUnique
+        .mockResolvedValueOnce(replaced)
+        .mockResolvedValueOnce({ ...liveRow(), id: 'row-9' });
+
+      await expect(service.refreshTokens('stolen')).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(authState.bumpTokenVersion).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats a replay as theft when the replacement is itself already revoked', async () => {
+      const replaced = {
+        ...liveRow(),
+        revokedAt: new Date(Date.now() - 1_000),
+        replacedByTokenId: 'row-9',
+      };
+      prisma.refreshToken.findUnique
+        .mockResolvedValueOnce(replaced)
+        .mockResolvedValueOnce({ ...liveRow(), id: 'row-9', revokedAt: new Date() });
+
+      await expect(service.refreshTokens('stolen')).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(authState.bumpTokenVersion).toHaveBeenCalledTimes(1);
+    });
+
     it('rejects a token past its sliding idle window', async () => {
       prisma.refreshToken.findUnique.mockResolvedValue({
         ...liveRow(),
