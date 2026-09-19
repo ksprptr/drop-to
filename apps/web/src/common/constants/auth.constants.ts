@@ -8,6 +8,16 @@ export const OAUTH_STATE_COOKIE = 'oauthState';
 /** Marks the login page as reached from a session the API turned out to reject. */
 export const SESSION_EXPIRED_REASON = 'session-expired';
 
+/* Forces the proxy to refresh even though the access token's `exp` still looks fine. */
+export const REAUTH_PARAM = '__reauth';
+
+/** One-shot guard so a re-auth that does not stick ends the session instead of looping. */
+export const REAUTH_GUARD_COOKIE = 'reauthGuard';
+export const REAUTH_GUARD_MAX_AGE_S = 10;
+
+/** The proxy stamps the request's path+query here so a render can redirect back to itself. */
+export const REQUEST_URL_HEADER = 'x-dropto-url';
+
 /** How long the Drive owner-proof stays valid in the browser. */
 export const DRIVE_OWNER_MAX_AGE_S = 30 * 24 * 60 * 60;
 
