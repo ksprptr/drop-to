@@ -224,6 +224,7 @@ describe('S3StorageProvider', () => {
 
       const put = sentCmds().find((c) => c.cmd === 'put');
       expect(put?.input).toMatchObject({ Bucket: BUCKET, Key: 'dir/New/' });
+      expect(put?.input.Body).toEqual(Buffer.alloc(0));
       expect(result).toMatchObject({ name: 'New', isFolder: true });
     });
   });
