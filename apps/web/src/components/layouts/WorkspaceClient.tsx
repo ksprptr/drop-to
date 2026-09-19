@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   disconnectAction,
+  logout,
   revokeDriveOwnerAction,
   saveFoldersAction,
 } from '@/actions/auth/auth.actions';
@@ -417,10 +418,11 @@ function WorkspaceInner({
     }
   }, [loadStatus, toast]);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
     setLoggingOut(true);
-    // /logout revokes the session, clears cookies and redirects (full navigation).
-    window.location.href = '/logout';
+    // The action revokes the session, clears the cookies and redirects to /login server-side.
+    // A POST, so nothing can prefetch or link its way into signing the operator out.
+    await logout();
   }, []);
 
   const rootLabel = activeStatus?.label ?? 'Home';

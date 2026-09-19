@@ -1,10 +1,11 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { useRouter } from 'next/navigation';
-import { type FormEvent, type KeyboardEvent, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { type FormEvent, type KeyboardEvent, useEffect, useState } from 'react';
 
 import { login } from '@/actions/auth/auth.actions';
+import { SESSION_EXPIRED_REASON } from '@/common/constants/auth.constants';
 import Button from '@/components/common/Button';
 import Icon from '@/components/common/Icon';
 import Input from '@/components/common/Input';
@@ -20,10 +21,20 @@ interface Props {
  **/
 export default function LoginForm({ appName }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const toast = useToast();
 
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const sessionExpired = searchParams.get('reason') === SESSION_EXPIRED_REASON;
+
+  useEffect(() => {
+    if (sessionExpired) {
+      toast.error('Your session expired. Sign in again.');
+    }
+    // `toast` is stable; listing it in the deps would re-run this every render and stack toasts.
+  }, [sessionExpired]);
 
   // Submit explicitly on Enter — some password managers swallow the implicit submit.
   const handleKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
