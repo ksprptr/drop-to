@@ -117,6 +117,15 @@ export function usePicker() {
 
   const openPicker = useCallback(
     async (onPicked: (folders: PickedFolder[]) => void): Promise<void> => {
+      const apiKey = getEnvString({ key: 'NEXT_PUBLIC_GOOGLE_API_KEY' });
+      const appId = getEnvString({ key: 'NEXT_PUBLIC_GOOGLE_APP_ID' });
+
+      if (!apiKey) {
+        throw new Error(
+          'The Google Picker is not configured — NEXT_PUBLIC_GOOGLE_API_KEY is missing from the web build.',
+        );
+      }
+
       await ensurePicker();
 
       const tokenResult = await pickerTokenAction();
@@ -124,8 +133,6 @@ export function usePicker() {
         throw new Error(tokenResult.error ?? 'Failed to authorize the Google Picker.');
       }
       const token = tokenResult.data;
-      const apiKey = getEnvString({ key: 'NEXT_PUBLIC_GOOGLE_API_KEY' });
-      const appId = getEnvString({ key: 'NEXT_PUBLIC_GOOGLE_APP_ID' });
       const picker = window.google!.picker;
 
       const view = new picker.DocsView(picker.ViewId.FOLDERS)
