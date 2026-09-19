@@ -282,7 +282,7 @@ export class S3StorageProvider implements StorageProvider {
     const key = `${ref.key}${name}${FOLDER_SUFFIX}`;
 
     await this.guard(() =>
-      client.send(new PutObjectCommand({ Bucket: ref.bucket, Key: key, Body: '' })),
+      client.send(new PutObjectCommand({ Bucket: ref.bucket, Key: key, Body: Buffer.alloc(0) })),
     );
 
     return this.toFolderEntry(ref.bucket, key);
