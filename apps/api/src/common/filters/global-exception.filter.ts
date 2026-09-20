@@ -1,4 +1,13 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ConflictException,
+  ExceptionFilter,
+  HttpException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client';
 import type { Request, Response } from 'express';
 
 /**
@@ -28,6 +37,35 @@ const safeUrl = (url: string): string => {
 };
 
 /**
+ * Prisma constraint failures worth a specific status; anything else stays a 500.
+ **/
+// The messages are ours on purpose: Prisma's own carry the model, field and constraint names, and
+// this response goes to the client. Unmapped codes fall through and are logged as unhandled.
+const PRISMA_ERROR_RESPONSES: Record<string, () => HttpException> = {
+  // Unique constraint violated.
+  P2002: () => new ConflictException('This already exists.'),
+  // Foreign key constraint violated.
+  P2003: () => new ConflictException('This item is still referenced by something else.'),
+  // Record required by the operation was not found (e.g. deleted by a concurrent request).
+  P2025: () => new NotFoundException('This item no longer exists.'),
+};
+
+/**
+ * The exception as an HttpException, mapping known Prisma failures; null when it is neither.
+ **/
+const asHttpException = (exception: unknown): HttpException | null => {
+  if (exception instanceof HttpException) {
+    return exception;
+  }
+
+  if (exception instanceof PrismaClientKnownRequestError) {
+    return PRISMA_ERROR_RESPONSES[exception.code]?.() ?? null;
+  }
+
+  return null;
+};
+
+/**
  * Normalizes every exception to `{ status, message }`; unknown errors → 500.
  **/
 @Catch()
@@ -39,9 +77,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    if (exception instanceof HttpException) {
-      const status = exception.getStatus();
-      const message = this.extractHttpExceptionMessage(exception);
+    const httpException = asHttpException(exception);
+
+    if (httpException) {
+      const status = httpException.getStatus();
+      const message = this.extractHttpExceptionMessage(httpException);
 
       const log =
         status >= 500 ? this.logger.error.bind(this.logger) : this.logger.warn.bind(this.logger);
