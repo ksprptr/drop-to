@@ -171,7 +171,7 @@ export default function AccountSidebarContent({
   return (
     <>
       <div className='flex h-16 shrink-0 items-center gap-x-2.5 border-b border-zinc-300 px-5 dark:border-zinc-700'>
-        <div className='bg-primary-600 inline-flex h-8 w-8 items-center justify-center rounded-lg text-white'>
+        <div className='bg-primary-600 text-primary-foreground inline-flex h-8 w-8 items-center justify-center rounded-lg'>
           <Icon icon='CloudArrowUp' className='h-5 w-5' />
         </div>
         <div className='leading-tight'>
@@ -217,7 +217,7 @@ export default function AccountSidebarContent({
                 </p>
                 <a
                   href={getGoogleAuthUrl()}
-                  className='bg-primary-600 hover:bg-primary-700 inline-flex items-center justify-center gap-x-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition'>
+                  className='bg-primary-600 hover:bg-primary-700 text-primary-foreground inline-flex items-center justify-center gap-x-2 rounded-lg px-3 py-2 text-sm font-medium transition'>
                   <Icon icon='LinkIcon' className='h-4 w-4' />
                   {driveStatus?.error ? 'Reconnect Drive' : 'Connect Drive'}
                 </a>

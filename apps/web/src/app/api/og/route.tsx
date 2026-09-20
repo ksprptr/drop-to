@@ -57,7 +57,7 @@ export async function GET() {
             height='96'
             viewBox='0 0 24 24'
             fill='none'
-            stroke='white'
+            stroke={appServerConfig.primaryColor.foreground}
             strokeWidth={2}
             strokeLinecap='round'
             strokeLinejoin='round'>

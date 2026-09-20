@@ -14,7 +14,7 @@ export default function NotFoundContent() {
       </p>
       <Link
         href='/'
-        className='bg-primary-600 hover:bg-primary-700 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 ease-out'>
+        className='bg-primary-600 hover:bg-primary-700 text-primary-foreground rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors duration-150 ease-out'>
         Back to the workspace
       </Link>
     </main>
