@@ -18,10 +18,7 @@ export interface DriveEntry {
   modifiedTime: string | null;
   iconLink: string | null;
   webViewLink: string | null;
-  /**
-   * The file's public share URL, or null when it has none. Only folder listings compute it (every
-   * other route leaves it undefined), since it costs a lookup the rest of the surface has no use for.
-   */
+  /** The file's public share URL, or null; only folder listings populate it (a lookup nothing else needs). */
   publicUrl?: string | null;
 }
 

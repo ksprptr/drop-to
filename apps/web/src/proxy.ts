@@ -23,7 +23,7 @@ import {
   type ParsedSetCookie,
 } from '@/common/services/auth/tokens.server';
 import { isAccessTokenFresh } from '@/common/utils/jwt.functions';
-import { isCrossSiteRequest, resolveRequestOrigin } from '@/common/utils/request-origin';
+import { isCrossSiteRequest, resolveRequestOrigin } from '@/common/utils/request-origin.functions';
 import { appServerConfig } from '@/configs/app/app.server-config';
 
 /** Routes reachable without a valid session. */
@@ -43,7 +43,9 @@ const withRequestUrl = (request: NextRequest, headers?: Headers): Headers => {
   return stamped;
 };
 
-/** The same URL without the one-shot re-auth flag. */
+/**
+ * The same URL without the one-shot re-auth flag.
+ **/
 const cleanReauthUrl = (request: NextRequest): URL => {
   const url = new URL(
     request.nextUrl.pathname + request.nextUrl.search,
@@ -54,7 +56,9 @@ const cleanReauthUrl = (request: NextRequest): URL => {
   return url;
 };
 
-/** `NextResponse.next()` with the URL stamp every render needs. */
+/**
+ * `NextResponse.next()` with the URL stamp every render needs.
+ **/
 const nextWithUrl = (request: NextRequest): NextResponse =>
   NextResponse.next({ request: { headers: withRequestUrl(request) } });
 

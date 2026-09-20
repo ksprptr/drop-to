@@ -11,9 +11,7 @@ interface AppIconOptions {
 }
 
 /**
- * Renders the app badge — the cloud-upload glyph on the instance's accent color — at `size` px.
- * Shared by the favicon, the apple touch icon and the manifest icons, so `APP_PRIMARY_COLOR`
- * recolors all of them at once. No webfont is involved, so nothing is fetched to draw it.
+ * Renders the app badge (cloud-upload glyph on the accent) at `size` px — favicon, apple icon and manifest share it.
  **/
 export function renderAppIcon(size: number, { radius }: AppIconOptions = {}): ImageResponse {
   const glyphSize = Math.round(size * 0.62);
