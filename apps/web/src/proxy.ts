@@ -27,7 +27,8 @@ import { isCrossSiteRequest, resolveRequestOrigin } from '@/common/utils/request
 import { appServerConfig } from '@/configs/app/app.server-config';
 
 /** Routes reachable without a valid session. */
-const PUBLIC_PATHS = ['/login'];
+// `/f` is the public share-link route: its whole purpose is to serve people who have no session.
+const PUBLIC_PATHS = ['/login', '/f'];
 
 const isPublicPath = (pathname: string): boolean =>
   PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
@@ -125,6 +126,11 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   // A render hit 401 on a token whose `exp` still looks fine — refresh even though it looks fresh.
   const forceRefresh = request.nextUrl.searchParams.has(REAUTH_PARAM);
+
+  // Share links are public for everyone, the operator included — never redirect them away.
+  if (pathname === '/f' || pathname.startsWith('/f/')) {
+    return nextWithUrl(request);
+  }
 
   // Public routes: bounce authenticated users to the workspace, else let them through.
   if (isPublicPath(pathname)) {

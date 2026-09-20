@@ -19,6 +19,8 @@ interface Props {
   onDownload: (entry: ViewEntry) => void;
   onRename: (entry: ViewEntry) => void;
   onCopyLink: (entry: ViewEntry) => void;
+  onCopyPublicLink: (entry: ViewEntry) => void;
+  onRemovePublicLink: (entry: ViewEntry) => void;
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -42,6 +44,8 @@ export default function PreviewPanel({
   onDownload,
   onRename,
   onCopyLink,
+  onCopyPublicLink,
+  onRemovePublicLink,
 }: Props) {
   // Per-entry image-failure, so switching items retries fresh.
   const [failedId, setFailedId] = useState<string | null>(null);
@@ -124,6 +128,52 @@ export default function PreviewPanel({
                   <Icon icon='Pencil' className='h-4 w-4' />
                   Rename
                 </Button>
+              )}
+              {/* Sharing state is spelled out rather than implied by a button label: the share and
+                  unshare actions would otherwise sit in the same spot, and a click meant to check
+                  whether a link is gone would silently mint a new one. */}
+              {!isRoot && !entry.isFolder && (
+                <div className='flex flex-col gap-y-2 rounded-lg border border-zinc-300 p-3 dark:border-zinc-700'>
+                  <div className='flex items-center gap-x-2'>
+                    <Icon
+                      icon={entry.publicUrl ? 'GlobeIcon' : 'LockClosed'}
+                      className={`h-4 w-4 ${entry.publicUrl ? 'text-primary-600' : 'text-zinc-600 dark:text-zinc-400'}`}
+                    />
+                    <span className='text-xs font-semibold'>
+                      {entry.publicUrl ? 'Shared publicly' : 'Not shared'}
+                    </span>
+                  </div>
+
+                  {entry.publicUrl ? (
+                    <>
+                      <a
+                        href={entry.publicUrl}
+                        target='_blank'
+                        rel='noreferrer'
+                        className='text-primary-600 text-xs wrap-break-word underline-offset-2 hover:underline'>
+                        {entry.publicUrl}
+                      </a>
+                      <Button variant='normal' fullWidth onClick={() => onCopyPublicLink(entry)}>
+                        <Icon icon='LinkIcon' className='h-4 w-4' />
+                        Copy public link
+                      </Button>
+                      <Button variant='danger' fullWidth onClick={() => onRemovePublicLink(entry)}>
+                        <Icon icon='LinkSlash' className='h-4 w-4' />
+                        Stop sharing
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <p className='text-xs text-zinc-600 dark:text-zinc-400'>
+                        Anyone with the link will be able to download this file.
+                      </p>
+                      <Button variant='normal' fullWidth onClick={() => onCopyPublicLink(entry)}>
+                        <Icon icon='Share' className='h-4 w-4' />
+                        Create public link
+                      </Button>
+                    </>
+                  )}
+                </div>
               )}
               {entry.webViewLink && (
                 <Button variant='normal' fullWidth onClick={() => onCopyLink(entry)}>

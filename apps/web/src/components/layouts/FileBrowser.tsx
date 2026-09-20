@@ -89,6 +89,10 @@ interface Props {
   onOpenInDrive?: () => void;
   /** Copies a specific entry's Drive link (row menu); only shown when the entry has a link. */
   onCopyEntryLink?: (entry: ViewEntry) => void;
+  /** Mints the entry's public share link on first use, copies it afterwards (files only). */
+  onCopyPublicLink?: (entry: ViewEntry) => void;
+  /** Revokes the entry's public share link; only shown once it has one. */
+  onRemovePublicLink?: (entry: ViewEntry) => void;
   /** Whether this pane can accept an in-progress drag-to-move. */
   acceptMove?: boolean;
   onMoveDragStart?: (ids: string[]) => void;
@@ -151,6 +155,8 @@ export default function FileBrowser({
   onCopyLink,
   onOpenInDrive,
   onCopyEntryLink,
+  onCopyPublicLink,
+  onRemovePublicLink,
   acceptMove = false,
   onMoveDragStart,
   onMoveDragEnd,
@@ -899,6 +905,20 @@ export default function FileBrowser({
                   label='Rename'
                   onClick={() => runMenuAction(onRename, menu.entry)}
                 />
+                {!menu.entry.isFolder && onCopyPublicLink && (
+                  <MenuItem
+                    icon='Share'
+                    label={menu.entry.publicUrl ? 'Copy public link' : 'Create public link'}
+                    onClick={() => runMenuAction(onCopyPublicLink, menu.entry)}
+                  />
+                )}
+                {menu.entry.publicUrl && onRemovePublicLink && (
+                  <MenuItem
+                    icon='LinkSlash'
+                    label='Stop sharing'
+                    onClick={() => runMenuAction(onRemovePublicLink, menu.entry)}
+                  />
+                )}
                 {menu.entry.webViewLink && onCopyEntryLink && (
                   <MenuItem
                     icon='LinkIcon'

@@ -3,6 +3,7 @@ import type {
   DriveEntry,
   DriveEntryPage,
   ListContentsQuery,
+  PublicLink,
   ResumableUploadSession,
   ResumableUploadStatus,
   StorageBackend,
@@ -167,4 +168,25 @@ export const moveItem = async (
   });
 
   return data;
+};
+
+/**
+ * Creates (or replaces) the public share link of a file.
+ **/
+export const createPublicLink = async (
+  backend: StorageBackend,
+  id: string,
+): Promise<PublicLink> => {
+  const http = await getHttp();
+  const { data } = await http.post<PublicLink>(`/storage/${backend}/files/${seg(id)}/public-link`);
+
+  return data;
+};
+
+/**
+ * Revokes the public share link of a file.
+ **/
+export const deletePublicLink = async (backend: StorageBackend, id: string): Promise<void> => {
+  const http = await getHttp();
+  await http.delete(`/storage/${backend}/files/${seg(id)}/public-link`);
 };
