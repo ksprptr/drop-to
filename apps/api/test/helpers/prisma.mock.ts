@@ -25,6 +25,12 @@ export interface PrismaMock {
     updateMany: jest.Mock;
     deleteMany: jest.Mock;
   };
+  publicLink: {
+    findUnique: jest.Mock;
+    findMany: jest.Mock;
+    upsert: jest.Mock;
+    deleteMany: jest.Mock;
+  };
 }
 
 /**
@@ -75,6 +81,13 @@ export const createPrismaMock = (): PrismaMock => {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
+    // Default: nothing is shared publicly, so listings come back with `publicUrl: null`.
+    publicLink: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+      upsert: jest.fn(),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
   };
 
   return mock;
@@ -105,4 +118,8 @@ export const resetPrismaMock = (mock: PrismaMock): void => {
   mock.refreshToken.update.mockReset().mockResolvedValue(undefined);
   mock.refreshToken.updateMany.mockReset().mockResolvedValue({ count: 1 });
   mock.refreshToken.deleteMany.mockReset().mockResolvedValue({ count: 0 });
+  mock.publicLink.findUnique.mockReset().mockResolvedValue(null);
+  mock.publicLink.findMany.mockReset().mockResolvedValue([]);
+  mock.publicLink.upsert.mockReset();
+  mock.publicLink.deleteMany.mockReset().mockResolvedValue({ count: 0 });
 };

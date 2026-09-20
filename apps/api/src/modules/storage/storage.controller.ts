@@ -45,12 +45,14 @@ import { RenameItemDto } from './dto/rename-item.dto';
 import { UploadStatusDto } from './dto/upload-status.dto';
 import { DriveEntryEntity } from './entities/drive-entry.entity';
 import { DriveEntryPageEntity } from './entities/drive-entry-page.entity';
+import { PublicLinkEntity } from './entities/public-link.entity';
 import { ResolvedNameEntity } from './entities/resolved-name.entity';
 import { ResumableUploadSessionEntity } from './entities/resumable-upload-session.entity';
 import { StorageStatusEntity } from './entities/storage-status.entity';
 import { UploadResultEntity } from './entities/upload-result.entity';
 import { UploadStatusEntity } from './entities/upload-status.entity';
-import { sanitizeUploadFilename } from './storage.functions';
+import { PublicLinkService } from './public-link.service';
+import { contentDisposition, sanitizeUploadFilename } from './storage.functions';
 import { StorageRegistry } from './storage.registry';
 
 /**
@@ -76,6 +78,7 @@ export class StorageController {
   constructor(
     private readonly registry: StorageRegistry,
     private readonly googleAuthService: GoogleAuthService,
+    private readonly publicLinkService: PublicLinkService,
     @Inject(appConfig.KEY) private readonly appCfg: AppConfig,
     @Inject(uploadConfig.KEY) private readonly uploadCfg: UploadConfig,
   ) {}
@@ -121,7 +124,20 @@ export class StorageController {
     const sortKey = sort === 'modified' || sort === 'size' ? sort : 'name';
     const sortDir = dir === 'desc' ? 'desc' : 'asc';
 
-    return this.registry.resolve(backend).listContents(id, { pageToken, search, sortKey, sortDir });
+    const page = await this.registry
+      .resolve(backend)
+      .listContents(id, { pageToken, search, sortKey, sortDir });
+
+    // One lookup for the whole page, so the browser knows which files are already shared publicly.
+    const urls = await this.publicLinkService.urlsForItems(
+      backend,
+      page.entries.filter((entry) => !entry.isFolder).map((entry) => entry.id),
+    );
+
+    return {
+      ...page,
+      entries: page.entries.map((entry) => ({ ...entry, publicUrl: urls.get(entry.id) ?? null })),
+    };
   }
 
   @ApiOperation({ summary: 'Resolve display names for a set of ids (breadcrumb rebuild)' })
@@ -162,7 +178,7 @@ export class StorageController {
     const { stream, name, mimeType, size } = await this.registry.resolve(backend).downloadFile(id);
 
     res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', this.contentDisposition(name));
+    res.setHeader('Content-Disposition', contentDisposition('attachment', name));
     res.setHeader('Accept-Ranges', 'none');
     // A known Content-Length gives the browser real download progress.
     if (size !== null) {
@@ -185,20 +201,11 @@ export class StorageController {
     const { archive, name } = await this.registry.resolve(backend).createFolderArchive(id);
 
     res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', this.contentDisposition(`${name}.zip`));
+    res.setHeader('Content-Disposition', contentDisposition('attachment', `${name}.zip`));
     res.setHeader('Accept-Ranges', 'none');
     res.flushHeaders();
 
     archive.pipe(res);
-  }
-
-  /**
-   * Content-Disposition with an ASCII fallback + UTF-8 variant for non-ASCII names.
-   **/
-  private contentDisposition(fileName: string): string {
-    const asciiFallback = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '');
-
-    return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
   }
 
   @ApiOperation({ summary: 'Create a subfolder' })
@@ -383,6 +390,30 @@ export class StorageController {
     @Body() moveItemDto: MoveItemDto,
   ): Promise<DriveEntryEntity> {
     return this.registry.resolve(backend).moveItem(id, moveItemDto.targetFolderId);
+  }
+
+  @ApiOperation({ summary: 'Create (or replace) the public share link of a file' })
+  @ApiCreatedResponse({ type: PublicLinkEntity, description: 'Link created' })
+  @ApiForbiddenResponse({ type: ResponseEntity, description: 'Item outside authorized scope' })
+  @BackendParam()
+  @Post(':backend/files/:id/public-link')
+  async createPublicLink(
+    @Param('backend') backend: string,
+    @Param('id') id: string,
+  ): Promise<PublicLinkEntity> {
+    return this.publicLinkService.create(backend, id);
+  }
+
+  @ApiOperation({ summary: 'Revoke the public share link of a file' })
+  @ApiNoContentResponse({ description: 'No content' })
+  @HttpCode(204)
+  @BackendParam()
+  @Delete(':backend/files/:id/public-link')
+  async removePublicLink(
+    @Param('backend') backend: string,
+    @Param('id') id: string,
+  ): Promise<void> {
+    await this.publicLinkService.remove(backend, id);
   }
 
   @ApiOperation({ summary: 'Delete a file or subfolder' })

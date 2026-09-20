@@ -46,7 +46,11 @@ import {
   S3_UNAVAILABLE_MESSAGE,
   StorageDisconnectedException,
 } from '../storage.errors';
-import { finalizeArchiveInBackground, sanitizeZipEntryPath } from '../storage.functions';
+import {
+  finalizeArchiveInBackground,
+  guessMimeType,
+  sanitizeZipEntryPath,
+} from '../storage.functions';
 
 /** Marker used for zero-byte "folder" objects (a prefix ending in a slash). */
 const FOLDER_SUFFIX = '/';
@@ -56,30 +60,6 @@ const ITEM_MISSING_MESSAGE = 'This item no longer exists in the S3 storage.';
 
 // Cache the probed status; the sidebar polls often and we don't want to re-probe/re-log every request.
 const STATUS_CACHE_TTL_MS = 30_000;
-
-/** Common extension → MIME map so previews (images especially) work in the UI. */
-const MIME_BY_EXT: Record<string, string> = {
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  svg: 'image/svg+xml',
-  bmp: 'image/bmp',
-  avif: 'image/avif',
-  mp4: 'video/mp4',
-  webm: 'video/webm',
-  mov: 'video/quicktime',
-  mp3: 'audio/mpeg',
-  wav: 'audio/wav',
-  ogg: 'audio/ogg',
-  pdf: 'application/pdf',
-  zip: 'application/zip',
-  json: 'application/json',
-  txt: 'text/plain',
-  csv: 'text/csv',
-  md: 'text/markdown',
-};
 
 /** A decoded S3 item: bucket + key (prefix ending in `/` for folders, `''` for a bucket root). */
 interface S3Ref {
@@ -117,16 +97,6 @@ function baseName(key: string): string {
   const slash = trimmed.lastIndexOf('/');
 
   return slash === -1 ? trimmed : trimmed.slice(slash + 1);
-}
-
-/**
- * Guesses a MIME type from a file name extension (octet-stream when unknown).
- **/
-function guessMimeType(name: string): string {
-  const dot = name.lastIndexOf('.');
-  const ext = dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
-
-  return MIME_BY_EXT[ext] ?? 'application/octet-stream';
 }
 
 /**

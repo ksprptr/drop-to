@@ -18,6 +18,21 @@ export interface DriveEntry {
   modifiedTime: string | null;
   iconLink: string | null;
   webViewLink: string | null;
+  /**
+   * The file's public share URL, or null when it has none. Only folder listings compute it (every
+   * other route leaves it undefined), since it costs a lookup the rest of the surface has no use for.
+   */
+  publicUrl?: string | null;
+}
+
+/** A public, unauthenticated share link to one stored file — anyone holding `url` can fetch it. */
+export interface PublicLink {
+  /** The bearer secret in the URL; kept so the operator can re-copy the link without minting a new one. */
+  token: string;
+  /** The full, shareable URL (points at the web app, which resolves the token). */
+  url: string;
+  fileName: string;
+  createdAt: string;
 }
 
 /** One page of folder contents; `nextPageToken` is the cursor for the next page (null = last page). */
