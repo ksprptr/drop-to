@@ -34,7 +34,7 @@ export default function Button({
     sm: 'gap-x-1.5 px-2.5 py-1.5 text-xs',
   };
   const variants: Record<NonNullable<Props['variant']>, string> = {
-    primary: 'bg-primary-600 hover:bg-primary-700 disabled:bg-primary-600 text-white',
+    primary: 'bg-primary-600 hover:bg-primary-700 disabled:bg-primary-600 text-primary-foreground',
     secondary:
       'bg-primary-600/10 hover:bg-primary-600/20 text-primary-700 dark:bg-primary-600/20 dark:hover:bg-primary-600/30 dark:text-primary-400',
     danger: 'bg-red-500/90 hover:bg-red-500 text-white',

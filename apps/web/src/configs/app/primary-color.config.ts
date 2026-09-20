@@ -3,6 +3,11 @@
 /** Tailwind's `green-600`, the palette DropTo shipped with — used whenever the env is unset. */
 const DEFAULT_PRIMARY_HEX = '#00a63e';
 
+/** Ink laid over a solid `primary-600` fill: white by default, near-black (zinc-950) when the accent is light. */
+const WHITE_FOREGROUND = '#ffffff';
+const DARK_FOREGROUND = '#18181b';
+const DARK_FOREGROUND_RGB: [number, number, number] = [24, 24, 27];
+
 /** The shade `APP_PRIMARY_COLOR` stands for; every other shade is interpolated around it. */
 const ANCHOR_SHADE = 600;
 
@@ -28,6 +33,8 @@ const SHADES = Object.keys(REFERENCE_RAMP).map(Number) as Shade[];
 export interface PrimaryColor {
   /** The accent's `600` shade in hex — for everything that cannot read a CSS variable. */
   hex: string;
+  /** Readable ink for text/glyphs on a solid `600` fill (white, or near-black when the accent is light). */
+  foreground: string;
   /** `--app-primary-*` overrides for <html>, or `undefined` on the built-in green (globals.css falls back to it). */
   variables?: Record<string, string>;
 }
@@ -81,6 +88,30 @@ function rgbToOklch([r, g, b]: [number, number, number]) {
 const round = (value: number, decimals: number): number => Number(value.toFixed(decimals));
 
 /**
+ * WCAG relative luminance (0–1) of an sRGB triple.
+ **/
+const relativeLuminance = ([r, g, b]: [number, number, number]): number =>
+  0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+
+/**
+ * WCAG contrast ratio between two relative luminances (1–21, order-independent).
+ **/
+const contrastRatio = (a: number, b: number): number =>
+  (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+
+/**
+ * Readable ink for a solid fill of `rgb`: white unless near-black reads better against it, so a light
+ * accent never leaves white text on a near-white button.
+ **/
+function foregroundFor(rgb: [number, number, number]): string {
+  const background = relativeLuminance(rgb);
+  const onWhite = contrastRatio(background, 1);
+  const onDark = contrastRatio(background, relativeLuminance(DARK_FOREGROUND_RGB));
+
+  return onDark > onWhite ? DARK_FOREGROUND : WHITE_FOREGROUND;
+}
+
+/**
  * Builds the `--app-primary-*` ramp around the hex: the reference curve gives each step's lightness/chroma, the hex the hue.
  **/
 function buildRamp(rgb: [number, number, number]): Record<string, string> {
@@ -114,12 +145,21 @@ export function resolvePrimaryColor(value: string | undefined): PrimaryColor {
   const rgb = value ? parseHex(value) : null;
 
   if (!rgb) {
-    return { hex: DEFAULT_PRIMARY_HEX };
+    return { hex: DEFAULT_PRIMARY_HEX, foreground: WHITE_FOREGROUND };
   }
 
   const hex = `#${rgb.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
 
-  return hex === DEFAULT_PRIMARY_HEX ? { hex } : { hex, variables: buildRamp(rgb) };
+  // The shipped green keeps its white text untouched (no ramp, globals.css green fallback).
+  if (hex === DEFAULT_PRIMARY_HEX) {
+    return { hex, foreground: WHITE_FOREGROUND };
+  }
+
+  const foreground = foregroundFor(rgb);
+  const variables = buildRamp(rgb);
+  variables['--app-primary-foreground'] = foreground;
+
+  return { hex, foreground, variables };
 }
 
 /**
