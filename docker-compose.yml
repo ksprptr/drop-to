@@ -108,7 +108,11 @@ services:
       - no-new-privileges:true
     ports:
       # The browser hits this directly during the Google OAuth redirect, so it must be reachable
-      # from wherever the operator's browser runs. Drop the 127.0.0.1 prefix to expose it on the LAN.
+      # from wherever the operator's browser runs. Drop the 127.0.0.1 prefix to expose it on the LAN
+      # — but only behind a reverse proxy that sets X-Forwarded-For to the real client IP. The
+      # rate limiter keys on that IP (TRUST_PROXY_HOPS=1 trusts one proxy hop); exposed directly,
+      # a caller can rotate X-Forwarded-For to hand itself a fresh limit bucket and defeat the
+      # login brute-force protection.
       - '127.0.0.1:${API_PORT:-4000}:4000'
     networks:
       - dropto_net
@@ -148,7 +152,6 @@ services:
       APP_URL: '${APP_URL:-http://localhost:3000}'
       # Server-to-server, over the compose network — never leaves the host.
       API_URL: 'http://dropto-api:4000/api/v1'
-      COOKIE_DOMAIN: '${COOKIE_DOMAIN:-localhost}'
     ports:
       # Bound to loopback for a same-host reverse proxy; drop the prefix to expose it directly.
       - '127.0.0.1:${WEB_PORT:-3000}:3000'
