@@ -6,7 +6,7 @@ import {
   OAUTH_STATE_COOKIE,
 } from '@/common/constants/auth.constants';
 import { proxyOAuthLeg } from '@/common/services/api/passthrough.server';
-import { resolveRequestOrigin } from '@/common/utils/request-origin';
+import { resolveRequestOrigin } from '@/common/utils/request-origin.functions';
 import { appServerConfig } from '@/configs/app/app.server-config';
 
 /**

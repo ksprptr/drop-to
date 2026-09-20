@@ -33,8 +33,7 @@ export default function LoginForm({ appName }: Props) {
     if (sessionExpired) {
       toast.error('Your session expired. Sign in again.');
     }
-    // `toast` is stable; listing it in the deps would re-run this every render and stack toasts.
-  }, [sessionExpired]);
+  }, [sessionExpired, toast]);
 
   // Submit explicitly on Enter — some password managers swallow the implicit submit.
   const handleKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {

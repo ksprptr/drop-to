@@ -3,6 +3,7 @@ import type {
   DriveEntry,
   DriveEntryPage,
   ListContentsQuery,
+  PublicLink,
   ResumableUploadSession,
   ResumableUploadStatus,
   StorageBackend,
@@ -11,7 +12,7 @@ import type {
 } from '@dropto/types';
 
 import { getHttp } from '@/common/services/axios/axios.instance';
-import { seg } from '@/common/utils/storage-path';
+import { seg } from '@/common/utils/storage-path.functions';
 
 /**
  * Fetches the status of every storage backend (Drive + S3).
@@ -167,4 +168,25 @@ export const moveItem = async (
   });
 
   return data;
+};
+
+/**
+ * Creates (or replaces) the public share link of a file.
+ **/
+export const createPublicLink = async (
+  backend: StorageBackend,
+  id: string,
+): Promise<PublicLink> => {
+  const http = await getHttp();
+  const { data } = await http.post<PublicLink>(`/storage/${backend}/files/${seg(id)}/public-link`);
+
+  return data;
+};
+
+/**
+ * Revokes the public share link of a file.
+ **/
+export const deletePublicLink = async (backend: StorageBackend, id: string): Promise<void> => {
+  const http = await getHttp();
+  await http.delete(`/storage/${backend}/files/${seg(id)}/public-link`);
 };

@@ -23,11 +23,12 @@ import {
   type ParsedSetCookie,
 } from '@/common/services/auth/tokens.server';
 import { isAccessTokenFresh } from '@/common/utils/jwt.functions';
-import { isCrossSiteRequest, resolveRequestOrigin } from '@/common/utils/request-origin';
+import { isCrossSiteRequest, resolveRequestOrigin } from '@/common/utils/request-origin.functions';
 import { appServerConfig } from '@/configs/app/app.server-config';
 
 /** Routes reachable without a valid session. */
-const PUBLIC_PATHS = ['/login'];
+// `/f` is the public share-link route: its whole purpose is to serve people who have no session.
+const PUBLIC_PATHS = ['/login', '/f'];
 
 const isPublicPath = (pathname: string): boolean =>
   PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
@@ -42,7 +43,9 @@ const withRequestUrl = (request: NextRequest, headers?: Headers): Headers => {
   return stamped;
 };
 
-/** The same URL without the one-shot re-auth flag. */
+/**
+ * The same URL without the one-shot re-auth flag.
+ **/
 const cleanReauthUrl = (request: NextRequest): URL => {
   const url = new URL(
     request.nextUrl.pathname + request.nextUrl.search,
@@ -53,7 +56,9 @@ const cleanReauthUrl = (request: NextRequest): URL => {
   return url;
 };
 
-/** `NextResponse.next()` with the URL stamp every render needs. */
+/**
+ * `NextResponse.next()` with the URL stamp every render needs.
+ **/
 const nextWithUrl = (request: NextRequest): NextResponse =>
   NextResponse.next({ request: { headers: withRequestUrl(request) } });
 
@@ -125,6 +130,11 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   // A render hit 401 on a token whose `exp` still looks fine — refresh even though it looks fresh.
   const forceRefresh = request.nextUrl.searchParams.has(REAUTH_PARAM);
+
+  // Share links are public for everyone, the operator included — never redirect them away.
+  if (pathname === '/f' || pathname.startsWith('/f/')) {
+    return nextWithUrl(request);
+  }
 
   // Public routes: bounce authenticated users to the workspace, else let them through.
   if (isPublicPath(pathname)) {

@@ -152,6 +152,40 @@ export const proxyDownload = async (path: string, signal: AbortSignal): Promise<
   return response;
 };
 
+/**
+ * Serves a public share link: fetches it from the API with no session at all and streams it back.
+ **/
+// The one passthrough that must never carry the operator's cookies — the caller is an anonymous
+// visitor, and forwarding a session here would let a shared link act with the operator's rights.
+export const proxyPublicFile = async (path: string, signal: AbortSignal): Promise<NextResponse> => {
+  const headersList = await headers();
+  const outbound = new Headers();
+
+  // The visitor's IP, so the API rate-limits per viewer instead of lumping everyone behind this server.
+  const forwardedFor = forwardedForHeader(headersList);
+  if (forwardedFor) {
+    outbound.set('x-forwarded-for', forwardedFor);
+  }
+
+  const apiResponse = await fetch(apiUrl(path), { headers: outbound, signal });
+
+  const outHeaders = new Headers();
+  for (const name of DOWNLOAD_HEADERS) {
+    const value = apiResponse.headers.get(name);
+    if (value) {
+      outHeaders.set(name, value);
+    }
+  }
+  outHeaders.set('x-content-type-options', 'nosniff');
+  // Mirrors the API: a cached copy would keep answering after the operator revoked the link.
+  outHeaders.set('cache-control', 'no-store');
+
+  return new NextResponse(apiResponse.body, {
+    status: apiResponse.status,
+    headers: outHeaders,
+  });
+};
+
 interface OAuthDestination {
   url: URL;
   cookies?: { name: string; value: string; options: Parameters<CookieWriter['set']>[2] }[];

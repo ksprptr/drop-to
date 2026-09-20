@@ -1,6 +1,16 @@
 import { ArgumentsHost, BadRequestException, NotFoundException } from '@nestjs/common';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client';
 
 import { GlobalExceptionFilter } from './global-exception.filter';
+
+/**
+ * A Prisma known-request error whose message carries model/field names, like the real ones do.
+ **/
+const prismaError = (code: string) =>
+  new PrismaClientKnownRequestError(
+    `Unique constraint failed on the fields: (\`email\`) on model \`DriveAccount\``,
+    { code, clientVersion: '7.10.0' },
+  );
 
 /**
  * Captures the response `status()`/`json()` calls a filter makes.
@@ -99,5 +109,59 @@ describe('GlobalExceptionFilter', () => {
     filter.catch(new NotFoundException('nope'), buildHost('/api/v1/storage/drive/folders').host);
 
     expect(warn.mock.calls[0][0]).toContain('/api/v1/storage/drive/folders');
+  });
+  describe('Prisma errors', () => {
+    it('maps a unique-constraint failure (P2002) to 409', () => {
+      const { host, status, json } = buildHost();
+
+      filter.catch(prismaError('P2002'), host);
+
+      expect(status).toHaveBeenCalledWith(409);
+      expect(json).toHaveBeenCalledWith({ status: 409, message: 'This already exists.' });
+    });
+
+    it('maps a foreign-key failure (P2003) to 409', () => {
+      const { host, status } = buildHost();
+
+      filter.catch(prismaError('P2003'), host);
+
+      expect(status).toHaveBeenCalledWith(409);
+    });
+
+    // The race this exists for: `disconnect()` reads the account, then deletes it, and a concurrent
+    // request can remove it in between — a 404 is the honest answer, not a 500.
+    it('maps a missing record (P2025) to 404', () => {
+      const { host, status, json } = buildHost();
+
+      filter.catch(prismaError('P2025'), host);
+
+      expect(status).toHaveBeenCalledWith(404);
+      expect(json).toHaveBeenCalledWith({ status: 404, message: 'This item no longer exists.' });
+    });
+
+    // Prisma's own messages name the model, field and constraint; that must not reach the client.
+    it('never leaks Prisma internals into the response', () => {
+      const { host, json } = buildHost();
+
+      filter.catch(prismaError('P2002'), host);
+
+      const body = JSON.stringify(json.mock.calls[0][0]);
+      expect(body).not.toContain('DriveAccount');
+      expect(body).not.toContain('email');
+      expect(body).not.toContain('Unique constraint');
+    });
+
+    it('leaves an unmapped Prisma code as an unhandled 500', () => {
+      const { host, status, json } = buildHost();
+      jest.spyOn(filter['logger'], 'error').mockImplementation(() => undefined);
+
+      filter.catch(prismaError('P2010'), host);
+
+      expect(status).toHaveBeenCalledWith(500);
+      expect(json).toHaveBeenCalledWith({
+        status: 500,
+        message: 'An unexpected error occurred.',
+      });
+    });
   });
 });

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { resolvePathAction } from '@/actions/storage/storage.actions';
 import type { Crumb, SortDir, SortKey, ViewEntry } from '@/common/types/workspace.types';
-import { buildWorkspaceUrl, slugify } from '@/common/utils/storage-url';
+import { buildWorkspaceUrl, slugify } from '@/common/utils/storage-url.functions';
 
 interface Options {
   statuses: StorageStatus[];
@@ -147,7 +147,7 @@ export function useWorkspaceLocation({
     return () => {
       cancelled = true;
     };
-  }, [pathname, statuses, router]);
+  }, [pathname, statuses, router, notFound, onLocationChange]);
   const openFolder = useCallback(
     (entry: ViewEntry) => {
       if (activeBackend === null) {

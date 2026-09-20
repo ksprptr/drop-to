@@ -400,7 +400,8 @@ export const ModelName = {
   AuthState: 'AuthState',
   DriveAccount: 'DriveAccount',
   AllowedFolder: 'AllowedFolder',
-  RefreshToken: 'RefreshToken'
+  RefreshToken: 'RefreshToken',
+  PublicLink: 'PublicLink'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -416,7 +417,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "authState" | "driveAccount" | "allowedFolder" | "refreshToken"
+    modelProps: "authState" | "driveAccount" | "allowedFolder" | "refreshToken" | "publicLink"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -716,6 +717,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    PublicLink: {
+      payload: Prisma.$PublicLinkPayload<ExtArgs>
+      fields: Prisma.PublicLinkFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PublicLinkFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PublicLinkPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PublicLinkFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PublicLinkPayload>
+        }
+        findFirst: {
+          args: Prisma.PublicLinkFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PublicLinkPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PublicLinkFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PublicLinkPayload>
+        }
+        findMany: {
+          args: Prisma.PublicLinkFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PublicLinkPayload>[]
+        }
+        create: {
+          args: Prisma.PublicLinkCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PublicLinkPayload>
+        }
+        createMany: {
+          args: Prisma.PublicLinkCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PublicLinkCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PublicLinkPayload>[]
+        }
+        delete: {
+          args: Prisma.PublicLinkDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PublicLinkPayload>
+        }
+        update: {
+          args: Prisma.PublicLinkUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PublicLinkPayload>
+        }
+        deleteMany: {
+          args: Prisma.PublicLinkDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PublicLinkUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PublicLinkUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PublicLinkPayload>[]
+        }
+        upsert: {
+          args: Prisma.PublicLinkUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PublicLinkPayload>
+        }
+        aggregate: {
+          args: Prisma.PublicLinkAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePublicLink>
+        }
+        groupBy: {
+          args: Prisma.PublicLinkGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PublicLinkGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PublicLinkCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PublicLinkCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -798,6 +873,18 @@ export const RefreshTokenScalarFieldEnum = {
 } as const
 
 export type RefreshTokenScalarFieldEnum = (typeof RefreshTokenScalarFieldEnum)[keyof typeof RefreshTokenScalarFieldEnum]
+
+
+export const PublicLinkScalarFieldEnum = {
+  id: 'id',
+  token: 'token',
+  backend: 'backend',
+  itemId: 'itemId',
+  fileName: 'fileName',
+  createdAt: 'createdAt'
+} as const
+
+export type PublicLinkScalarFieldEnum = (typeof PublicLinkScalarFieldEnum)[keyof typeof PublicLinkScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -1040,6 +1127,7 @@ export type GlobalOmitConfig = {
   driveAccount?: Prisma.DriveAccountOmit
   allowedFolder?: Prisma.AllowedFolderOmit
   refreshToken?: Prisma.RefreshTokenOmit
+  publicLink?: Prisma.PublicLinkOmit
 }
 
 /* Types for Logging */

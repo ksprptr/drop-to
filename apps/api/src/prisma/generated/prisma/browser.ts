@@ -46,3 +46,13 @@ export type AllowedFolder = Prisma.AllowedFolderModel
  * the table is ready for multiple users. Expired rows are pruned on refresh to keep it small.
  */
 export type RefreshToken = Prisma.RefreshTokenModel
+/**
+ * Model PublicLink
+ * A public, unauthenticated share link to one stored file, minted only by an explicit operator
+ * action. `token` is the bearer secret in the URL — unlike a refresh token it is stored in the
+ * clear, because the operator must be able to re-copy the same link later instead of rotating it;
+ * the exposure a leak buys is exactly the files already chosen to be public. Revoking deletes the
+ * row (one link per item, hence the unique pair), keeping with the app holding no history of the
+ * owner's file names — see the `drop_upload_logs` migration.
+ */
+export type PublicLink = Prisma.PublicLinkModel

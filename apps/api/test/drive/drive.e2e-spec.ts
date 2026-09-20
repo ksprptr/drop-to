@@ -384,7 +384,7 @@ describe('Drive (integration)', () => {
     });
 
     it('escapes a non-ASCII filename into an ASCII fallback plus an RFC 5987 variant', async () => {
-      withDownloadableFile('účtenka "2026".txt', 'x');
+      withDownloadableFile('rëçeipt "2026".txt', 'x');
 
       const res = await request(app.getHttpServer())
         .get('/api/v1/storage/drive/files/doc/download')
@@ -392,8 +392,8 @@ describe('Drive (integration)', () => {
 
       const disposition = res.headers['content-disposition'] as string;
       // The quoted fallback must stay ASCII and must not contain a quote that ends it early.
-      expect(disposition).toContain('filename="__tenka 2026.txt"');
-      expect(disposition).toContain("filename*=UTF-8''%C3%BA%C4%8Dtenka");
+      expect(disposition).toContain('filename="r__eipt 2026.txt"');
+      expect(disposition).toContain("filename*=UTF-8''r%C3%AB%C3%A7eipt");
     });
 
     it('refuses a file outside the authorized tree (403)', async () => {

@@ -2,10 +2,6 @@ packages:
   - 'apps/*'
   - 'packages/*'
 overrides:
-  # googleapis 176 and its googleapis-common both pin google-auth-library 10.5.0, but other
-  # dependents resolve 10.9.0 — without this override pnpm installs both copies and the two
-  # OAuth2Client types stop being assignable. Dedupe to a single (latest) version.
-  google-auth-library: 10.9.0
   # Security: force patched transitive versions (advisories on the ranges Next
   # pulled). sharp < 0.35.0 = libvips CVEs (image optimization, production);
   # postcss <= 8.5.17 = arbitrary file read / path traversal (build-time CSS).
@@ -16,7 +12,7 @@ overrides:
   # cannot sneak into a build. Patched within-major only (no breaking bump).
   # Keep these at or above the advisory's patched version — a stale pin is worse than none,
   # because it silently holds the vulnerable copy in place.
-  fast-uri@3: 3.1.5
+  fast-uri@3: 3.1.8
   brace-expansion: 5.0.9
   # cross-spawn <7.0.5 ReDoS; tmp <0.2.6 path traversal via unsanitized prefix.
   cross-spawn: ^7.0.6
@@ -27,6 +23,15 @@ overrides:
   # find-my-way <9.6.1 under Prisma's dev server (not in the request path). Both patched within-major.
   js-yaml@5: 5.2.2
   find-my-way: ^9.6.1
+  # deepmerge-ts <8 stack-exhaustion (GHSA-ggr8-5vv4-36mx); only under @prisma/config, load-time.
+  # Prisma-tooling transitives with no runtime path (build/CLI/dev only), pinned to silence the
+  # advisories. deepmerge-ts <8 = stack exhaustion (GHSA-ggr8-5vv4-36mx) under @prisma/config;
+  # uuid <11.1.1 = buffer bounds (GHSA-w5hq-g745-h8pq) under prisma-dbml-generator's @prisma/internals.
+  # Both verified: prisma generate + migrate status still work (the consumers use uuid's main export,
+  # unaffected by the v3→v11 subpath removal). mysql2's advisories stay: the app runs on the pg
+  # adapter so mysql2 is never loaded, and it is bundled by Prisma where an override risks breakage.
+  deepmerge-ts: ^8.0.0
+  uuid: ^11.1.1
 allowBuilds:
   # Jest's optional native file watcher — never built here and the suites do not need it.
   '@parcel/watcher': false
@@ -37,6 +42,3 @@ allowBuilds:
   prisma: true
   sharp: true
   unrs-resolver: true
-minimumReleaseAgeExclude:
-  - '@nestjs/cli@11.0.24'
-  - '@hono/node-server@1.19.17'

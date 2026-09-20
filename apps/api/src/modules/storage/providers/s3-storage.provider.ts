@@ -46,7 +46,11 @@ import {
   S3_UNAVAILABLE_MESSAGE,
   StorageDisconnectedException,
 } from '../storage.errors';
-import { finalizeArchiveInBackground, sanitizeZipEntryPath } from '../storage.functions';
+import {
+  finalizeArchiveInBackground,
+  guessMimeType,
+  sanitizeZipEntryPath,
+} from '../storage.functions';
 
 /** Marker used for zero-byte "folder" objects (a prefix ending in a slash). */
 const FOLDER_SUFFIX = '/';
@@ -57,29 +61,8 @@ const ITEM_MISSING_MESSAGE = 'This item no longer exists in the S3 storage.';
 // Cache the probed status; the sidebar polls often and we don't want to re-probe/re-log every request.
 const STATUS_CACHE_TTL_MS = 30_000;
 
-/** Common extension → MIME map so previews (images especially) work in the UI. */
-const MIME_BY_EXT: Record<string, string> = {
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  svg: 'image/svg+xml',
-  bmp: 'image/bmp',
-  avif: 'image/avif',
-  mp4: 'video/mp4',
-  webm: 'video/webm',
-  mov: 'video/quicktime',
-  mp3: 'audio/mpeg',
-  wav: 'audio/wav',
-  ogg: 'audio/ogg',
-  pdf: 'application/pdf',
-  zip: 'application/zip',
-  json: 'application/json',
-  txt: 'text/plain',
-  csv: 'text/csv',
-  md: 'text/markdown',
-};
+/** Objects + sub-prefixes fetched per listing request; 1000 is ListObjectsV2's own ceiling. */
+const LIST_PAGE_SIZE = 1000;
 
 /** A decoded S3 item: bucket + key (prefix ending in `/` for folders, `''` for a bucket root). */
 interface S3Ref {
@@ -117,16 +100,6 @@ function baseName(key: string): string {
   const slash = trimmed.lastIndexOf('/');
 
   return slash === -1 ? trimmed : trimmed.slice(slash + 1);
-}
-
-/**
- * Guesses a MIME type from a file name extension (octet-stream when unknown).
- **/
-function guessMimeType(name: string): string {
-  const dot = name.lastIndexOf('.');
-  const ext = dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
-
-  return MIME_BY_EXT[ext] ?? 'application/octet-stream';
 }
 
 /**
@@ -220,47 +193,52 @@ export class S3StorageProvider implements StorageProvider {
     }));
   }
 
-  async listContents(folderId: string, _options: ListContentsOptions = {}): Promise<ContentsPage> {
+  async listContents(folderId: string, options: ListContentsOptions = {}): Promise<ContentsPage> {
     const ref = this.resolve(folderId);
     const client = this.getClient();
 
     const folders: DriveEntryEntity[] = [];
     const files: DriveEntryEntity[] = [];
-    let token: string | undefined;
+    let nextPageToken: string | null = null;
 
     try {
-      do {
-        const res = await client.send(
-          new ListObjectsV2Command({
-            Bucket: ref.bucket,
-            Prefix: ref.key,
-            Delimiter: FOLDER_SUFFIX,
-            ContinuationToken: token,
-          }),
-        );
+      // One page per request, at S3's own maximum. A prefix that fits in a page — which is what a
+      // browsable folder normally is — still arrives whole, so the client's name search and its
+      // sorting keep seeing everything. A bigger one no longer blocks the response until every
+      // object has been walked; the browser pulls the rest through the same infinite scroll Drive
+      // already uses. `search`/`sortKey` stay unused here on purpose: ListObjectsV2 can neither
+      // match a substring nor order by size or date, so those remain the client's job.
+      const res = await client.send(
+        new ListObjectsV2Command({
+          Bucket: ref.bucket,
+          Prefix: ref.key,
+          Delimiter: FOLDER_SUFFIX,
+          MaxKeys: LIST_PAGE_SIZE,
+          ContinuationToken: options.pageToken,
+        }),
+      );
 
-        for (const prefix of res.CommonPrefixes ?? []) {
-          if (prefix.Prefix) {
-            folders.push(this.toFolderEntry(ref.bucket, prefix.Prefix));
-          }
+      for (const prefix of res.CommonPrefixes ?? []) {
+        if (prefix.Prefix) {
+          folders.push(this.toFolderEntry(ref.bucket, prefix.Prefix));
         }
+      }
 
-        for (const object of res.Contents ?? []) {
-          // Skip the folder's own marker object and any nested folder markers.
-          if (!object.Key || object.Key === ref.key || object.Key.endsWith(FOLDER_SUFFIX)) {
-            continue;
-          }
-          files.push(this.toFileEntry(ref.bucket, object.Key, object.Size, object.LastModified));
+      for (const object of res.Contents ?? []) {
+        // Skip the folder's own marker object and any nested folder markers.
+        if (!object.Key || object.Key === ref.key || object.Key.endsWith(FOLDER_SUFFIX)) {
+          continue;
         }
+        files.push(this.toFileEntry(ref.bucket, object.Key, object.Size, object.LastModified));
+      }
 
-        token = res.IsTruncated ? res.NextContinuationToken : undefined;
-      } while (token);
+      nextPageToken = res.IsTruncated ? (res.NextContinuationToken ?? null) : null;
     } catch (error) {
       // Deleted bucket → 404, whole-backend failure → 424 (so the client can prompt a reconnect).
       this.toHttpError(error);
     }
 
-    return { entries: [...folders, ...files], nextPageToken: null };
+    return { entries: [...folders, ...files], nextPageToken };
   }
 
   resolveNames(ids: string[]): Promise<ResolvedNameEntity[]> {

@@ -14,4 +14,5 @@ export const toViewEntries = (entries: DriveEntry[]): ViewEntry[] =>
     mimeType: entry.mimeType,
     modifiedTime: entry.modifiedTime,
     webViewLink: entry.webViewLink,
+    publicUrl: entry.publicUrl ?? null,
   }));

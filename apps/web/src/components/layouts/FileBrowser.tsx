@@ -24,7 +24,13 @@ import type {
   ViewEntry,
 } from '@/common/types/workspace.types';
 import { resolveDropItems } from '@/common/utils/drop-items.functions';
+import {
+  anchoredMenuStyle,
+  MENU_MOTION,
+  POPUP_MENU_CLASS,
+} from '@/common/utils/popup-menu.functions';
 import Icon from '@/components/common/Icon';
+import MenuItem from '@/components/common/MenuItem';
 import LoadingIndicator from '@/components/loadings/LoadingIndicator';
 
 import Breadcrumb, { type BreadcrumbStoragePicker } from './Breadcrumb';
@@ -36,19 +42,10 @@ const MOVE_MIME = 'application/x-dropto-move';
 /** Delay before a typed query re-filters the list; the input itself stays instant. */
 const FILTER_DEBOUNCE_MS = 150;
 
-/** Dropdown-menu open/close animation (fade + zoom + slight slide), shadcn-style. */
-const MENU_MOTION = {
-  initial: { opacity: 0, scale: 0.96, y: -4 },
-  animate: { opacity: 1, scale: 1, y: 0 },
-  exit: { opacity: 0, scale: 0.96, y: -4 },
-  transition: { duration: 0.08, ease: 'easeOut' },
-} as const;
-
-// Popup-menu geometry (px): widths, estimated row-menu height for the flip-up decision, anchor gap.
+// Popup-menu geometry (px): widths plus the estimated row-menu height for the flip-up decision.
 const TOOLBAR_MENU_WIDTH = 176;
 const ROW_MENU_WIDTH = 200;
 const ROW_MENU_EST_HEIGHT = 200;
-const MENU_GAP = 4;
 
 interface Props {
   path: Crumb[];
@@ -89,6 +86,10 @@ interface Props {
   onOpenInDrive?: () => void;
   /** Copies a specific entry's Drive link (row menu); only shown when the entry has a link. */
   onCopyEntryLink?: (entry: ViewEntry) => void;
+  /** Mints the entry's public share link on first use, copies it afterwards (files only). */
+  onCopyPublicLink?: (entry: ViewEntry) => void;
+  /** Revokes the entry's public share link; only shown once it has one. */
+  onRemovePublicLink?: (entry: ViewEntry) => void;
   /** Whether this pane can accept an in-progress drag-to-move. */
   acceptMove?: boolean;
   onMoveDragStart?: (ids: string[]) => void;
@@ -151,6 +152,8 @@ export default function FileBrowser({
   onCopyLink,
   onOpenInDrive,
   onCopyEntryLink,
+  onCopyPublicLink,
+  onRemovePublicLink,
   acceptMove = false,
   onMoveDragStart,
   onMoveDragEnd,
@@ -793,17 +796,12 @@ export default function FileBrowser({
             key='toolbar-menu'
             role='menu'
             onClick={(event) => event.stopPropagation()}
-            style={{
-              left: Math.max(8, toolbarMenu.right - TOOLBAR_MENU_WIDTH),
-              top: toolbarMenu.bottom + MENU_GAP,
-              width: TOOLBAR_MENU_WIDTH,
-              transformOrigin: 'top right',
-            }}
+            style={anchoredMenuStyle(toolbarMenu, TOOLBAR_MENU_WIDTH)}
             initial={MENU_MOTION.initial}
             animate={MENU_MOTION.animate}
             exit={MENU_MOTION.exit}
             transition={MENU_MOTION.transition}
-            className='fixed z-50 flex flex-col gap-y-0.5 rounded-xl border border-zinc-300 bg-zinc-50 p-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-800'>
+            className={POPUP_MENU_CLASS}>
             {canUpload && (
               <MenuItem
                 icon='ArrowUpTray'
@@ -859,27 +857,12 @@ export default function FileBrowser({
             key='row-menu'
             role='menu'
             onClick={(event) => event.stopPropagation()}
-            style={(() => {
-              const width = ROW_MENU_WIDTH;
-              const left = Math.max(8, menu.rect.right - width);
-              const flipUp =
-                typeof window !== 'undefined' &&
-                menu.rect.bottom + ROW_MENU_EST_HEIGHT > window.innerHeight;
-              const transformOrigin = flipUp ? 'bottom right' : 'top right';
-              return flipUp
-                ? {
-                    left,
-                    bottom: window.innerHeight - menu.rect.top + MENU_GAP,
-                    width,
-                    transformOrigin,
-                  }
-                : { left, top: menu.rect.bottom + MENU_GAP, width, transformOrigin };
-            })()}
+            style={anchoredMenuStyle(menu.rect, ROW_MENU_WIDTH, ROW_MENU_EST_HEIGHT)}
             initial={MENU_MOTION.initial}
             animate={MENU_MOTION.animate}
             exit={MENU_MOTION.exit}
             transition={MENU_MOTION.transition}
-            className='fixed z-50 flex flex-col gap-y-0.5 rounded-xl border border-zinc-300 bg-zinc-50 p-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-800'>
+            className={POPUP_MENU_CLASS}>
             {rootMenu && onUnselectRoot ? (
               <MenuItem
                 icon='FolderMinus'
@@ -899,6 +882,20 @@ export default function FileBrowser({
                   label='Rename'
                   onClick={() => runMenuAction(onRename, menu.entry)}
                 />
+                {!menu.entry.isFolder && onCopyPublicLink && (
+                  <MenuItem
+                    icon='Share'
+                    label={menu.entry.publicUrl ? 'Copy public link' : 'Create public link'}
+                    onClick={() => runMenuAction(onCopyPublicLink, menu.entry)}
+                  />
+                )}
+                {menu.entry.publicUrl && onRemovePublicLink && (
+                  <MenuItem
+                    icon='LinkSlash'
+                    label='Stop sharing'
+                    onClick={() => runMenuAction(onRemovePublicLink, menu.entry)}
+                  />
+                )}
                 {menu.entry.webViewLink && onCopyEntryLink && (
                   <MenuItem
                     icon='LinkIcon'
@@ -961,36 +958,6 @@ function SortHeader({
         icon={active ? (sortDir === 'asc' ? 'ChevronUp' : 'ChevronDown') : 'ChevronUpDown'}
         className={`h-3 w-3 ${active ? '' : 'opacity-40'}`}
       />
-    </button>
-  );
-}
-
-function MenuItem({
-  icon,
-  label,
-  onClick,
-  tone = 'default',
-}: {
-  icon: string;
-  label: string;
-  onClick: () => void;
-  tone?: 'default' | 'danger' | 'primary';
-}) {
-  const toneClass =
-    tone === 'danger'
-      ? 'text-red-500 hover:bg-red-500/10'
-      : tone === 'primary'
-        ? 'text-primary-600 hover:bg-primary-600/10'
-        : 'text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700';
-
-  return (
-    <button
-      type='button'
-      role='menuitem'
-      onClick={onClick}
-      className={`flex items-center gap-x-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${toneClass}`}>
-      <Icon icon={icon} className='h-4 w-4 shrink-0' />
-      {label}
     </button>
   );
 }

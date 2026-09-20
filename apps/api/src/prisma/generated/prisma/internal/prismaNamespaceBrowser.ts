@@ -54,7 +54,8 @@ export const ModelName = {
   AuthState: 'AuthState',
   DriveAccount: 'DriveAccount',
   AllowedFolder: 'AllowedFolder',
-  RefreshToken: 'RefreshToken'
+  RefreshToken: 'RefreshToken',
+  PublicLink: 'PublicLink'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -116,6 +117,18 @@ export const RefreshTokenScalarFieldEnum = {
 } as const
 
 export type RefreshTokenScalarFieldEnum = (typeof RefreshTokenScalarFieldEnum)[keyof typeof RefreshTokenScalarFieldEnum]
+
+
+export const PublicLinkScalarFieldEnum = {
+  id: 'id',
+  token: 'token',
+  backend: 'backend',
+  itemId: 'itemId',
+  fileName: 'fileName',
+  createdAt: 'createdAt'
+} as const
+
+export type PublicLinkScalarFieldEnum = (typeof PublicLinkScalarFieldEnum)[keyof typeof PublicLinkScalarFieldEnum]
 
 
 export const SortOrder = {

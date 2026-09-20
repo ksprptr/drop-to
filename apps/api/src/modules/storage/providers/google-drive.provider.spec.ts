@@ -22,7 +22,9 @@ jest.mock('googleapis', () => ({
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
-/** Google config as the enabled backend sees it; specs override `enabled` to test the kill-switch. */
+/**
+ * Google config as the enabled backend sees it; specs override `enabled` to test the kill-switch.
+ **/
 const googleCfg = (enabled = true): GoogleConfig =>
   ({
     enabled,

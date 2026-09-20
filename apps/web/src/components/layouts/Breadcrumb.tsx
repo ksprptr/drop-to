@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { Crumb } from '@/common/types/workspace.types';
+import { MENU_MOTION, POPUP_MENU_CLASS } from '@/common/utils/popup-menu.functions';
 import Icon from '@/components/common/Icon';
 import { STORAGE_ICON } from '@/configs/storage.config';
 
@@ -151,12 +152,12 @@ export default function Breadcrumb({
               {isPicker && pickerOpen && storagePicker && menuPos && (
                 <motion.div
                   ref={menuRef}
-                  initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.96, y: -4 }}
-                  transition={{ duration: 0.08, ease: 'easeOut' }}
+                  initial={MENU_MOTION.initial}
+                  animate={MENU_MOTION.animate}
+                  exit={MENU_MOTION.exit}
+                  transition={MENU_MOTION.transition}
                   style={{ transformOrigin: 'top left', top: menuPos.top, left: menuPos.left }}
-                  className='fixed z-50 flex w-48 flex-col gap-y-0.5 rounded-xl border border-zinc-300 bg-zinc-50 p-1.5 text-sm shadow-xl dark:border-zinc-700 dark:bg-zinc-800'>
+                  className={`${POPUP_MENU_CLASS} w-48 text-sm`}>
                   {storagePicker.storages.map((storage) => {
                     const active = storage.backend === storagePicker.activeBackend;
                     const disabled = !storage.connected;
@@ -229,16 +230,16 @@ export default function Breadcrumb({
             {overflowOpen && overflowPos && (
               <motion.div
                 ref={overflowMenuRef}
-                initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.96, y: -4 }}
-                transition={{ duration: 0.08, ease: 'easeOut' }}
+                initial={MENU_MOTION.initial}
+                animate={MENU_MOTION.animate}
+                exit={MENU_MOTION.exit}
+                transition={MENU_MOTION.transition}
                 style={{
                   transformOrigin: 'top left',
                   top: overflowPos.top,
                   left: overflowPos.left,
                 }}
-                className='fixed z-50 flex max-h-72 w-56 flex-col gap-y-0.5 overflow-y-auto rounded-xl border border-zinc-300 bg-zinc-50 p-1.5 text-sm shadow-xl dark:border-zinc-700 dark:bg-zinc-800'>
+                className={`${POPUP_MENU_CLASS} max-h-72 w-56 overflow-y-auto text-sm`}>
                 {crumbs.slice(1, crumbs.length - 2).map((crumb, i) => (
                   <button
                     key={crumb.id}

@@ -277,6 +277,8 @@ export function useUploadQueue(
       setBatchStatus,
       scheduleRemoveBatch,
       rollbackBatch,
+      setBatches,
+      batchRuntime,
     ],
   );
 

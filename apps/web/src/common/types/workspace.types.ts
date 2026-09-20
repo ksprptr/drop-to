@@ -7,6 +7,8 @@ export interface ViewEntry {
   mimeType: string | null;
   modifiedTime: string | null;
   webViewLink: string | null;
+  /** Public share URL when the file has one, else null. */
+  publicUrl: string | null;
 }
 
 export type SortKey = 'name' | 'modified' | 'size';

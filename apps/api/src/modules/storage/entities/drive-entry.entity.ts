@@ -1,5 +1,5 @@
 import type { DriveEntry } from '@dropto/types';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class DriveEntryEntity implements DriveEntry {
   @ApiProperty({ type: 'string', description: 'Opaque file/folder id (Drive id or S3 ref)' })
@@ -30,4 +30,11 @@ export class DriveEntryEntity implements DriveEntry {
 
   @ApiProperty({ type: 'string', nullable: true, description: 'Web view URL' })
   webViewLink: string | null;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    nullable: true,
+    description: 'Public share URL; only folder listings populate it',
+  })
+  publicUrl?: string | null;
 }

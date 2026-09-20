@@ -164,27 +164,49 @@ describe('S3StorageProvider', () => {
   });
 
   describe('listContents', () => {
-    it('maps folders + files, skips markers, and paginates', async () => {
-      send
-        .mockResolvedValueOnce({
-          CommonPrefixes: [{ Prefix: 'folder1/' }],
-          Contents: [{ Key: 'file1.txt', Size: 10 }, { Key: 'folder1/' }],
-          IsTruncated: true,
-          NextContinuationToken: 'tok',
-        })
-        .mockResolvedValueOnce({
-          Contents: [{ Key: 'file2.txt', Size: 20 }],
-          IsTruncated: false,
-        });
+    it('maps folders + files and skips markers', async () => {
+      send.mockResolvedValue({
+        CommonPrefixes: [{ Prefix: 'folder1/' }],
+        Contents: [{ Key: 'file1.txt', Size: 10 }, { Key: 'folder1/' }],
+        IsTruncated: false,
+      });
 
-      const { entries } = await make().listContents(idOf(BUCKET, ''));
+      const { entries, nextPageToken } = await make().listContents(idOf(BUCKET, ''));
 
       expect(entries.map((e) => [e.name, e.isFolder])).toEqual([
         ['folder1', true],
         ['file1.txt', false],
-        ['file2.txt', false],
       ]);
-      expect(send).toHaveBeenCalledTimes(2);
+      expect(nextPageToken).toBeNull();
+    });
+
+    // One request per page: a huge prefix must not hold the response open while every object is
+    // walked. The browser pulls the rest through the same infinite scroll the Drive backend uses.
+    it('returns one page and hands back the continuation token', async () => {
+      send.mockResolvedValue({
+        Contents: [{ Key: 'file1.txt', Size: 10 }],
+        IsTruncated: true,
+        NextContinuationToken: 'tok',
+      });
+
+      const { entries, nextPageToken } = await make().listContents(idOf(BUCKET, ''));
+
+      expect(entries).toHaveLength(1);
+      expect(nextPageToken).toBe('tok');
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(sentCmds()[0].input).toMatchObject({ MaxKeys: 1000, ContinuationToken: undefined });
+    });
+
+    it('resumes from the page token it is given', async () => {
+      send.mockResolvedValue({ Contents: [{ Key: 'file2.txt', Size: 20 }], IsTruncated: false });
+
+      const { entries, nextPageToken } = await make().listContents(idOf(BUCKET, ''), {
+        pageToken: 'tok',
+      });
+
+      expect(entries.map((e) => e.name)).toEqual(['file2.txt']);
+      expect(nextPageToken).toBeNull();
+      expect(sentCmds()[0].input).toMatchObject({ ContinuationToken: 'tok' });
     });
 
     it('maps a whole-backend failure to a 424 StorageDisconnectedException', async () => {

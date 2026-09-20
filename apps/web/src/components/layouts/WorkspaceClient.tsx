@@ -10,7 +10,11 @@ import {
   revokeDriveOwnerAction,
   saveFoldersAction,
 } from '@/actions/auth/auth.actions';
-import { statusesAction } from '@/actions/storage/storage.actions';
+import {
+  createPublicLinkAction,
+  removePublicLinkAction,
+  statusesAction,
+} from '@/actions/storage/storage.actions';
 import { DESKTOP_QUERY } from '@/common/constants/layout.constants';
 import { useBrowsePane } from '@/common/hooks/useBrowsePane';
 import { useDebouncedValue } from '@/common/hooks/useDebouncedValue';
@@ -80,6 +84,10 @@ function WorkspaceInner({
 
   const handledParams = useRef(false);
 
+  // Stable identity on purpose: the location effect lists it, and an inline arrow would re-run that
+  // effect — and its folder-name lookup — on every render of this component.
+  const clearSelectedOnNavigate = useCallback(() => setSelected(null), [setSelected]);
+
   const {
     activeBackend,
     path,
@@ -97,7 +105,7 @@ function WorkspaceInner({
     initialBackend,
     initialPath,
     initialNotFound,
-    onLocationChange: () => setSelected(null),
+    onLocationChange: clearSelectedOnNavigate,
   });
 
   const driveStatus = statuses.find((status) => status.backend === 'drive') ?? null;
@@ -117,6 +125,8 @@ function WorkspaceInner({
         mimeType: FOLDER_MIME,
         modifiedTime: null,
         webViewLink: null,
+        // Roots are folders; only files can be shared publicly.
+        publicUrl: null,
       })),
     [activeStatus],
   );
@@ -258,6 +268,71 @@ function WorkspaceInner({
     [copyDriveLink],
   );
 
+  // Writes to the clipboard, falling back to showing the link when the browser refuses the write.
+  const copyPublicUrl = useCallback(
+    async (url: string) => {
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success('Public link copied to clipboard.');
+      } catch {
+        // Safari drops clipboard permission across an await, so the link is surfaced instead of lost.
+        toast.success(`Public link ready: ${url}`);
+      }
+    },
+    [toast],
+  );
+
+  // One action for "share this": mints the link on first use, copies it every time after.
+  const handleCopyPublicLink = useCallback(
+    async (entry: ViewEntry) => {
+      if (entry.publicUrl) {
+        await copyPublicUrl(entry.publicUrl);
+        return;
+      }
+      if (!activeBackend) {
+        return;
+      }
+
+      const result = await createPublicLinkAction(activeBackend, entry.id);
+      if (!result.ok || !result.data) {
+        toast.error(result.error ?? 'Could not create a public link.');
+        return;
+      }
+
+      await copyPublicUrl(result.data.url);
+      // Re-read the folder so the list entry carries its link, and re-sync the previewed item —
+      // `selected` is separate state, so without this the details panel keeps its pre-share value.
+      const publicUrl = result.data.url;
+      setSelected((current) =>
+        current && current.id === entry.id ? { ...current, publicUrl } : current,
+      );
+      await reloadPanes();
+    },
+    [activeBackend, copyPublicUrl, reloadPanes, toast],
+  );
+
+  const handleRemovePublicLink = useCallback(
+    async (entry: ViewEntry) => {
+      if (!activeBackend) {
+        return;
+      }
+
+      const result = await removePublicLinkAction(activeBackend, entry.id);
+      if (!result.ok) {
+        toast.error(result.error ?? 'Could not remove the public link.');
+        return;
+      }
+
+      toast.success('Stopped sharing — the link no longer works.');
+      // Re-sync the previewed item alongside the list, so the details panel drops the shared state.
+      setSelected((current) =>
+        current && current.id === entry.id ? { ...current, publicUrl: null } : current,
+      );
+      await reloadPanes();
+    },
+    [activeBackend, reloadPanes, toast],
+  );
+
   // Split pane's current folder link + its toolbar "Copy link" / "Open in Drive" handlers.
   const paneBFolderLink =
     paneB.path.length > 0 ? paneB.path[paneB.path.length - 1].webViewLink : null;
@@ -296,15 +371,15 @@ function WorkspaceInner({
         setSelected(entry);
         setActivePane(pane as 0 | 1);
       }),
-    [],
+    [setActivePane],
   );
 
   const startMoveDrag = useMemo(
     () => [0, 1].map((pane) => (ids: string[]) => setDragMove({ ids, sourcePane: pane as 0 | 1 })),
-    [],
+    [setDragMove],
   );
 
-  const endMoveDrag = useCallback(() => setDragMove(null), []);
+  const endMoveDrag = useCallback(() => setDragMove(null), [setDragMove]);
 
   splitRef.current = split;
 
@@ -374,7 +449,7 @@ function WorkspaceInner({
         setDownloads((current) => current.filter((task) => task.id !== id));
       }, DOWNLOAD_PREPARING_MS);
     },
-    [activeBackend],
+    [activeBackend, setDownloads],
   );
 
   const handleManageFolders = useCallback(async () => {
@@ -503,6 +578,8 @@ function WorkspaceInner({
             onCopyLink={currentFolderLink ? handleCopyLink : undefined}
             onOpenInDrive={currentFolderLink ? handleOpenInDrive : undefined}
             onCopyEntryLink={handleCopyEntryLink}
+            onCopyPublicLink={handleCopyPublicLink}
+            onRemovePublicLink={handleRemovePublicLink}
             searchQuery={search}
             onSearchChange={setSearch}
             hasMore={hasMore}
@@ -569,6 +646,8 @@ function WorkspaceInner({
                 onCopyLink={paneBFolderLink ? handleCopyPaneBLink : undefined}
                 onOpenInDrive={paneBFolderLink ? handleOpenPaneBInDrive : undefined}
                 onCopyEntryLink={handleCopyEntryLink}
+                onCopyPublicLink={handleCopyPublicLink}
+                onRemovePublicLink={handleRemovePublicLink}
                 onMoveIntoFolder={handleMoveIntoFolder}
               />
             </div>
@@ -584,6 +663,8 @@ function WorkspaceInner({
           onDownload={handleDownload}
           onRename={ops.rename.open}
           onCopyLink={handleCopyEntryLink}
+          onCopyPublicLink={handleCopyPublicLink}
+          onRemovePublicLink={handleRemovePublicLink}
         />
       </main>
 

@@ -4,6 +4,7 @@ import type {
   DriveEntry,
   DriveEntryPage,
   ListContentsQuery,
+  PublicLink,
   ResumableUploadSession,
   ResumableUploadStatus,
   StorageBackend,
@@ -12,9 +13,11 @@ import type {
 } from '@dropto/types';
 
 import {
+  createPublicLink,
   createSubfolder,
   createUploadSession,
   deleteItem,
+  deletePublicLink,
   finalizeUpload,
   getStatuses,
   getUploadStatus,
@@ -123,4 +126,24 @@ export async function moveItemAction(
   targetFolderId: string,
 ): Promise<ActionResult<DriveEntry>> {
   return runAction(() => moveItem(backend, id, targetFolderId));
+}
+
+/**
+ * Creates (or replaces) the public share link of a file.
+ **/
+export async function createPublicLinkAction(
+  backend: StorageBackend,
+  id: string,
+): Promise<ActionResult<PublicLink>> {
+  return runAction(() => createPublicLink(backend, id));
+}
+
+/**
+ * Revokes the public share link of a file.
+ **/
+export async function removePublicLinkAction(
+  backend: StorageBackend,
+  id: string,
+): Promise<ActionResult> {
+  return runAction(() => deletePublicLink(backend, id));
 }

@@ -3,7 +3,7 @@ import { Poppins } from 'next/font/google';
 import { headers } from 'next/headers';
 import type { CSSProperties, PropsWithChildren } from 'react';
 
-import { resolveForwardedOrigin } from '@/common/utils/request-origin';
+import { resolveForwardedOrigin } from '@/common/utils/request-origin.functions';
 import ThemeProvider from '@/components/providers/ThemeProvider';
 import ToastProvider from '@/components/providers/ToastProvider';
 import { appServerConfig } from '@/configs/app/app.server-config';

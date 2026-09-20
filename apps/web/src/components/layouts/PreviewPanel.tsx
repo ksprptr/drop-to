@@ -19,6 +19,8 @@ interface Props {
   onDownload: (entry: ViewEntry) => void;
   onRename: (entry: ViewEntry) => void;
   onCopyLink: (entry: ViewEntry) => void;
+  onCopyPublicLink: (entry: ViewEntry) => void;
+  onRemovePublicLink: (entry: ViewEntry) => void;
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -26,6 +28,104 @@ function DetailRow({ label, value }: { label: string; value: string }) {
     <div className='flex items-start justify-between gap-x-3'>
       <span className='shrink-0 text-xs text-zinc-600 dark:text-zinc-400'>{label}</span>
       <span className='min-w-0 text-right text-xs font-medium wrap-break-word'>{value}</span>
+    </div>
+  );
+}
+
+/**
+ * Collapsible public-sharing controls; the header shows the state, the body expands to the actions.
+ **/
+// Mounted with a per-entry key, so it always opens on the current file's real state and resets to
+// closed when the selection changes. Sharing state lives in the DB (the entry's `publicUrl`), not
+// here — this only toggles whether the actions are visible.
+function ShareSection({
+  entry,
+  onCopyPublicLink,
+  onRemovePublicLink,
+}: {
+  entry: ViewEntry;
+  onCopyPublicLink: (entry: ViewEntry) => void;
+  onRemovePublicLink: (entry: ViewEntry) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const shared = !!entry.publicUrl;
+
+  return (
+    <div className='rounded-lg border border-zinc-300 dark:border-zinc-700'>
+      <button
+        type='button'
+        onClick={() => setOpen((value) => !value)}
+        className='flex w-full items-center gap-x-2 px-3 py-2 text-left'>
+        <Icon
+          icon={shared ? 'GlobeIcon' : 'LockClosed'}
+          className={`h-5 w-5 ${shared ? 'text-primary-600' : 'text-zinc-600 dark:text-zinc-400'}`}
+        />
+        <span className='text-sm font-semibold'>{shared ? 'Shared publicly' : 'Not shared'}</span>
+        <Icon
+          icon='ChevronDown'
+          className={`ml-auto h-4 w-4 text-zinc-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            className='overflow-hidden'>
+            <div className='flex flex-col gap-y-2 px-3 pb-3'>
+              {shared ? (
+                <>
+                  <div className='flex gap-x-2'>
+                    <Button
+                      variant='secondary'
+                      size='sm'
+                      fullWidth
+                      onClick={() => onCopyPublicLink(entry)}>
+                      <Icon icon='LinkIcon' className='h-3.5 w-3.5' />
+                      Copy link
+                    </Button>
+                    <Button
+                      variant='secondary'
+                      size='sm'
+                      fullWidth
+                      onClick={() =>
+                        window.open(entry.publicUrl ?? undefined, '_blank', 'noopener,noreferrer')
+                      }>
+                      <Icon icon='ArrowTopRightOnSquare' className='h-3.5 w-3.5' />
+                      Open
+                    </Button>
+                  </div>
+                  <Button
+                    variant='soft-danger'
+                    size='sm'
+                    fullWidth
+                    onClick={() => onRemovePublicLink(entry)}>
+                    <Icon icon='LinkSlash' className='h-3.5 w-3.5' />
+                    Stop sharing
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className='text-xs text-zinc-600 dark:text-zinc-400'>
+                    Anyone with the link will be able to download this file.
+                  </p>
+                  <Button
+                    variant='normal'
+                    size='sm'
+                    fullWidth
+                    onClick={() => onCopyPublicLink(entry)}>
+                    <Icon icon='Share' className='h-3.5 w-3.5' />
+                    Create public link
+                  </Button>
+                </>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -42,6 +142,8 @@ export default function PreviewPanel({
   onDownload,
   onRename,
   onCopyLink,
+  onCopyPublicLink,
+  onRemovePublicLink,
 }: Props) {
   // Per-entry image-failure, so switching items retries fresh.
   const [failedId, setFailedId] = useState<string | null>(null);
@@ -124,6 +226,15 @@ export default function PreviewPanel({
                   <Icon icon='Pencil' className='h-4 w-4' />
                   Rename
                 </Button>
+              )}
+              {/* Collapsed by default so the panel stays calm; the header still shows the state. */}
+              {!isRoot && !entry.isFolder && (
+                <ShareSection
+                  key={entry.id}
+                  entry={entry}
+                  onCopyPublicLink={onCopyPublicLink}
+                  onRemovePublicLink={onRemovePublicLink}
+                />
               )}
               {entry.webViewLink && (
                 <Button variant='normal' fullWidth onClick={() => onCopyLink(entry)}>
