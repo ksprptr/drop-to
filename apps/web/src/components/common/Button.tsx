@@ -6,6 +6,7 @@ import LoadingIndicator from '@/components/loadings/LoadingIndicator';
 interface Props extends ExtendedProps {
   type?: 'button' | 'submit' | 'reset';
   variant?: 'normal' | 'primary' | 'secondary' | 'danger' | 'soft-danger' | 'transparent';
+  size?: 'sm' | 'md';
   disabled?: boolean;
   fullWidth?: boolean;
   onClick?: () => void;
@@ -19,6 +20,7 @@ interface Props extends ExtendedProps {
 export default function Button({
   type = 'button',
   variant = 'normal',
+  size = 'md',
   disabled = false,
   fullWidth = false,
   onClick,
@@ -27,6 +29,10 @@ export default function Button({
   children,
   className,
 }: Props) {
+  const sizes: Record<NonNullable<Props['size']>, string> = {
+    md: 'gap-x-2 px-4 py-2 text-sm',
+    sm: 'gap-x-1.5 px-2.5 py-1.5 text-xs',
+  };
   const variants: Record<NonNullable<Props['variant']>, string> = {
     primary: 'bg-primary-600 hover:bg-primary-700 disabled:bg-primary-600 text-white',
     secondary:
@@ -45,7 +51,7 @@ export default function Button({
       {...(title ? { title } : {})}
       disabled={disabled || loading}
       type={type}
-      className={`inline-flex items-center justify-center gap-x-2 rounded-lg px-4 py-2 text-sm font-medium duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${fullWidth ? 'w-full' : ''} ${className ?? ''}`}>
+      className={`inline-flex items-center justify-center rounded-lg font-medium duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${sizes[size]} ${variants[variant]} ${fullWidth ? 'w-full' : ''} ${className ?? ''}`}>
       {loading && <LoadingIndicator />}
       {children}
     </button>
