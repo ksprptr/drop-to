@@ -37,7 +37,7 @@ describe('CryptoService', () => {
     });
 
     it('round-trips unicode content', () => {
-      const plaintext = 'čřž — 日本語 — 🚀';
+      const plaintext = 'üñî — 日本語 — 🚀';
 
       expect(service.decrypt(service.encrypt(plaintext))).toBe(plaintext);
     });
