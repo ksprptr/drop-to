@@ -11,7 +11,6 @@ import {
   Post,
   Query,
   Req,
-  RequestTimeoutException,
   Res,
 } from '@nestjs/common';
 import {
@@ -28,7 +27,6 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import busboy from 'busboy';
 import type { Request, Response } from 'express';
 
 import { ResponseEntity } from '@/common/entities/response.entity';
@@ -51,8 +49,9 @@ import { ResumableUploadSessionEntity } from './entities/resumable-upload-sessio
 import { StorageStatusEntity } from './entities/storage-status.entity';
 import { UploadResultEntity } from './entities/upload-result.entity';
 import { UploadStatusEntity } from './entities/upload-status.entity';
+import { receiveStreamedUpload } from './helpers/storage.helpers';
 import { PublicLinkService } from './public-link.service';
-import { contentDisposition, sanitizeUploadFilename } from './storage.functions';
+import { contentDisposition } from './storage.functions';
 import { StorageRegistry } from './storage.registry';
 
 /**
@@ -236,70 +235,9 @@ export class StorageController {
   ): Promise<UploadResultEntity> {
     const provider = this.registry.resolve(backend);
 
-    // Abort the upload if the client disconnects mid-stream (req.complete stays false).
-    const abortController = new AbortController();
-    let finished = false;
-    const onClose = () => {
-      if (!finished && !req.complete) {
-        abortController.abort();
-      }
-    };
-    req.on('close', onClose);
-
-    try {
-      return await new Promise<UploadResultEntity>((resolve, reject) => {
-        let bb: ReturnType<typeof busboy>;
-        try {
-          bb = busboy({
-            headers: req.headers,
-            limits: { files: 1, fileSize: this.uploadCfg.maxUploadBytes },
-          });
-        } catch {
-          reject(new BadRequestException('No file provided.'));
-          return;
-        }
-        let handledFile = false;
-
-        bb.on('file', (_field, stream, info) => {
-          handledFile = true;
-          // Re-decode busboy's latin1 filename to UTF-8, then reduce to a single safe path segment.
-          const fileName = sanitizeUploadFilename(
-            Buffer.from(info.filename ?? 'file', 'latin1').toString('utf8'),
-          );
-          const mimeType = info.mimeType || 'application/octet-stream';
-
-          stream.on('limit', () => {
-            reject(new BadRequestException('File exceeds the maximum allowed size.'));
-          });
-
-          // Pipe straight to storage; backpressure throttles the request to the upstream speed.
-          provider
-            .uploadFile(id, { body: stream, fileName, mimeType, signal: abortController.signal })
-            .then(resolve)
-            .catch((error: unknown) => {
-              stream.resume();
-              // A client abort isn't a real failure — surface it as a handled response.
-              reject(
-                abortController.signal.aborted
-                  ? new RequestTimeoutException('Upload canceled.')
-                  : error,
-              );
-            });
-        });
-
-        bb.on('close', () => {
-          if (!handledFile) {
-            reject(new BadRequestException('No file provided.'));
-          }
-        });
-        bb.on('error', reject);
-
-        req.pipe(bb);
-      });
-    } finally {
-      finished = true;
-      req.off('close', onClose);
-    }
+    return receiveStreamedUpload(req, this.uploadCfg.maxUploadBytes, (upload) =>
+      provider.uploadFile(id, upload),
+    );
   }
 
   @ApiOperation({
