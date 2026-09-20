@@ -103,6 +103,16 @@ function FileRow({
             />
           )}
           <span className='min-w-0 truncate text-sm font-medium'>{entry.name}</span>
+          {/* Hard-coded green like the success toast, not `primary`: this is a semantic state, and
+              it has to stay recognisable when the instance's accent is configured to something else. */}
+          {entry.publicUrl && (
+            <span
+              title='Shared publicly — anyone with the link can download this file'
+              className='flex shrink-0 items-center text-green-600 dark:text-green-400'>
+              <Icon icon='GlobeIcon' className='h-4 w-4' />
+              <span className='sr-only'>Shared publicly</span>
+            </span>
+          )}
         </span>
         <span className='hidden text-xs text-zinc-600 sm:block dark:text-zinc-400'>
           {formatDate(entry.modifiedTime)}
