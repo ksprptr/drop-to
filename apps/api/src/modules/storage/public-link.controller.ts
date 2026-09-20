@@ -42,7 +42,10 @@ export class PublicLinkController {
     const inline = isInlineSafeMimeType(mimeType);
 
     res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', contentDisposition(inline ? 'inline' : 'attachment', name));
+    res.setHeader(
+      'Content-Disposition',
+      contentDisposition(inline ? 'inline' : 'attachment', name),
+    );
     // Never let the browser second-guess the type — a sniffed text/html would run as a page here.
     res.setHeader('X-Content-Type-Options', 'nosniff');
     // Uncached on purpose: a cached copy would keep answering after the link is revoked, which is

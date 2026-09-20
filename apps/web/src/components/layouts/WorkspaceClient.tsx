@@ -646,8 +646,8 @@ function WorkspaceInner({
                 onCopyLink={paneBFolderLink ? handleCopyPaneBLink : undefined}
                 onOpenInDrive={paneBFolderLink ? handleOpenPaneBInDrive : undefined}
                 onCopyEntryLink={handleCopyEntryLink}
-            onCopyPublicLink={handleCopyPublicLink}
-            onRemovePublicLink={handleRemovePublicLink}
+                onCopyPublicLink={handleCopyPublicLink}
+                onRemovePublicLink={handleRemovePublicLink}
                 onMoveIntoFolder={handleMoveIntoFolder}
               />
             </div>

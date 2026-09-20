@@ -46,8 +46,9 @@ describe('PublicLinkService', () => {
 
   describe('create', () => {
     it('mints a random token and returns a URL carrying the file name', async () => {
-      prisma.publicLink.upsert.mockImplementation(({ create }: { create: Record<string, unknown> }) =>
-        Promise.resolve({ ...create, createdAt: new Date('2026-01-01T00:00:00.000Z') }),
+      prisma.publicLink.upsert.mockImplementation(
+        ({ create }: { create: Record<string, unknown> }) =>
+          Promise.resolve({ ...create, createdAt: new Date('2026-01-01T00:00:00.000Z') }),
       );
 
       const link = await service.create('s3', ITEM_ID);
@@ -58,8 +59,9 @@ describe('PublicLinkService', () => {
 
     it('percent-encodes a name so it stays a single URL segment', async () => {
       resolveNames.mockResolvedValue([{ id: ITEM_ID, name: 'a b/c?.png' }]);
-      prisma.publicLink.upsert.mockImplementation(({ create }: { create: Record<string, unknown> }) =>
-        Promise.resolve({ ...create, createdAt: new Date() }),
+      prisma.publicLink.upsert.mockImplementation(
+        ({ create }: { create: Record<string, unknown> }) =>
+          Promise.resolve({ ...create, createdAt: new Date() }),
       );
 
       const link = await service.create('s3', ITEM_ID);

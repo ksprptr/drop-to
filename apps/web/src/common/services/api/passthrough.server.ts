@@ -157,10 +157,7 @@ export const proxyDownload = async (path: string, signal: AbortSignal): Promise<
  **/
 // The one passthrough that must never carry the operator's cookies — the caller is an anonymous
 // visitor, and forwarding a session here would let a shared link act with the operator's rights.
-export const proxyPublicFile = async (
-  path: string,
-  signal: AbortSignal,
-): Promise<NextResponse> => {
+export const proxyPublicFile = async (path: string, signal: AbortSignal): Promise<NextResponse> => {
   const headersList = await headers();
   const outbound = new Headers();
 
