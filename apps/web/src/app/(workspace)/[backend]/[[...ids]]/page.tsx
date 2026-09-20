@@ -5,7 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import { getStatuses, resolveNames } from '@/common/services/api/storage.api';
 import { getCurrentUser } from '@/common/services/auth/current-user';
 import type { Crumb } from '@/common/types/workspace.types';
-import { slugify } from '@/common/utils/storage-url';
+import { slugify } from '@/common/utils/storage-url.functions';
 import WorkspaceClient from '@/components/layouts/WorkspaceClient';
 import { appServerConfig } from '@/configs/app/app.server-config';
 

@@ -4,7 +4,7 @@ import {
   proxyOAuthLeg,
   resolveSessionForPassthrough,
 } from '@/common/services/api/passthrough.server';
-import { isCrossSiteRequest, resolveRequestOrigin } from '@/common/utils/request-origin';
+import { isCrossSiteRequest, resolveRequestOrigin } from '@/common/utils/request-origin.functions';
 
 /** Consent screens Google may send the operator to. */
 const GOOGLE_CONSENT_HOSTS = new Set(['accounts.google.com']);

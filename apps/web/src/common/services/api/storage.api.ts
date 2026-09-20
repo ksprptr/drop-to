@@ -12,7 +12,7 @@ import type {
 } from '@dropto/types';
 
 import { getHttp } from '@/common/services/axios/axios.instance';
-import { seg } from '@/common/utils/storage-path';
+import { seg } from '@/common/utils/storage-path.functions';
 
 /**
  * Fetches the status of every storage backend (Drive + S3).

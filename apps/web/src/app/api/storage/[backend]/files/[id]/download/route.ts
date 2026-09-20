@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
 import { proxyDownload } from '@/common/services/api/passthrough.server';
-import { isCrossSiteRequest } from '@/common/utils/request-origin';
-import { assertBackend, seg } from '@/common/utils/storage-path';
+import { isCrossSiteRequest } from '@/common/utils/request-origin.functions';
+import { assertBackend, seg } from '@/common/utils/storage-path.functions';
 
 /**
  * Streams a file download from the API (also the `<img>` source for previews).

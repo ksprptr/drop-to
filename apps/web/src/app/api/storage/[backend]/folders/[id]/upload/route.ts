@@ -6,8 +6,8 @@ import {
   resolveSessionForPassthrough,
 } from '@/common/services/api/passthrough.server';
 import { applyAuthCookies } from '@/common/services/auth/tokens.server';
-import { isCrossSiteRequest } from '@/common/utils/request-origin';
-import { assertBackend, seg } from '@/common/utils/storage-path';
+import { isCrossSiteRequest } from '@/common/utils/request-origin.functions';
+import { assertBackend, seg } from '@/common/utils/storage-path.functions';
 
 /**
  * Proxies a streamed upload to the API: raw body streamed through (no buffering, 10 GiB).

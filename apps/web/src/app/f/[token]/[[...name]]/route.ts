@@ -1,5 +1,5 @@
 import { proxyPublicFile } from '@/common/services/api/passthrough.server';
-import { seg } from '@/common/utils/storage-path';
+import { seg } from '@/common/utils/storage-path.functions';
 
 /**
  * Serves a file behind a public share token — the app's only unauthenticated content route.
