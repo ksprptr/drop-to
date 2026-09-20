@@ -84,6 +84,10 @@ function WorkspaceInner({
 
   const handledParams = useRef(false);
 
+  // Stable identity on purpose: the location effect lists it, and an inline arrow would re-run that
+  // effect — and its folder-name lookup — on every render of this component.
+  const clearSelectedOnNavigate = useCallback(() => setSelected(null), [setSelected]);
+
   const {
     activeBackend,
     path,
@@ -101,7 +105,7 @@ function WorkspaceInner({
     initialBackend,
     initialPath,
     initialNotFound,
-    onLocationChange: () => setSelected(null),
+    onLocationChange: clearSelectedOnNavigate,
   });
 
   const driveStatus = statuses.find((status) => status.backend === 'drive') ?? null;
@@ -296,7 +300,12 @@ function WorkspaceInner({
       }
 
       await copyPublicUrl(result.data.url);
-      // Re-read the folder so the entry now carries its link (the menu switches to "Remove").
+      // Re-read the folder so the list entry carries its link, and re-sync the previewed item —
+      // `selected` is separate state, so without this the details panel keeps its pre-share value.
+      const publicUrl = result.data.url;
+      setSelected((current) =>
+        current && current.id === entry.id ? { ...current, publicUrl } : current,
+      );
       await reloadPanes();
     },
     [activeBackend, copyPublicUrl, reloadPanes, toast],
@@ -315,6 +324,10 @@ function WorkspaceInner({
       }
 
       toast.success('Stopped sharing — the link no longer works.');
+      // Re-sync the previewed item alongside the list, so the details panel drops the shared state.
+      setSelected((current) =>
+        current && current.id === entry.id ? { ...current, publicUrl: null } : current,
+      );
       await reloadPanes();
     },
     [activeBackend, reloadPanes, toast],
@@ -358,15 +371,15 @@ function WorkspaceInner({
         setSelected(entry);
         setActivePane(pane as 0 | 1);
       }),
-    [],
+    [setActivePane],
   );
 
   const startMoveDrag = useMemo(
     () => [0, 1].map((pane) => (ids: string[]) => setDragMove({ ids, sourcePane: pane as 0 | 1 })),
-    [],
+    [setDragMove],
   );
 
-  const endMoveDrag = useCallback(() => setDragMove(null), []);
+  const endMoveDrag = useCallback(() => setDragMove(null), [setDragMove]);
 
   splitRef.current = split;
 
@@ -436,7 +449,7 @@ function WorkspaceInner({
         setDownloads((current) => current.filter((task) => task.id !== id));
       }, DOWNLOAD_PREPARING_MS);
     },
-    [activeBackend],
+    [activeBackend, setDownloads],
   );
 
   const handleManageFolders = useCallback(async () => {
